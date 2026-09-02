@@ -70,6 +70,6 @@ ZoomFrame zoomFlightFrame({
     rotation: 0,
     radii: BorderRadius.lerp(sourceRadii, screenRadii, t)!,
     sourceOpacity: 1 - (t / kZoomCrossFadeWindow).clamp(0, 1),
-    dimming: t,
+    dimming: Curves.easeIn.transform(t),
   );
 }

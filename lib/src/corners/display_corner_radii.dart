@@ -117,9 +117,10 @@ class _DeviceRow {
 /// Display corner radii for iOS devices, read from `UIScreen`'s private
 /// `_displayCornerRadius` by the kylebshr/ScreenCorners project
 /// (https://github.com/kylebshr/ScreenCorners), reproduced here because pure
-/// Dart cannot call into `UIScreen`. Sizes and view paddings are the public
-/// values Apple documents for each device's safe area in portrait; a device
-/// missing from this table has no rounding.
+/// Dart cannot call into `UIScreen`. Sizes and view paddings are the values
+/// `MediaQuery` reports for each device in portrait, at its native scale; a
+/// device missing from this table has no rounding, as does a device running
+/// under Display Zoom, which reports a different logical size.
 final List<_DeviceRow> _iosCornerRadiusTable = <_DeviceRow>[
   // iPhone X, Xs, 11 Pro.
   const _DeviceRow(
@@ -231,7 +232,7 @@ final List<_DeviceRow> _iosCornerRadiusTable = <_DeviceRow>[
     ),
     62,
   ),
-  // iPad Air 11-inch, iPad Pro 11-inch.
+  // iPad Air 11-inch, iPad 10th and 11th generation.
   const _DeviceRow(
     _DeviceKey(
       shortestSide: 820,
@@ -241,7 +242,17 @@ final List<_DeviceRow> _iosCornerRadiusTable = <_DeviceRow>[
     ),
     18,
   ),
-  // iPad Air 13-inch, iPad Pro 13-inch.
+  // iPad Pro 11-inch, 1st through 6th generation.
+  const _DeviceRow(
+    _DeviceKey(
+      shortestSide: 834,
+      longestSide: 1194,
+      devicePixelRatio: 2,
+      notchInset: 24,
+    ),
+    18,
+  ),
+  // iPad Air 13-inch, iPad Pro 12.9-inch.
   const _DeviceRow(
     _DeviceKey(
       shortestSide: 1024,
