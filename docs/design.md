@@ -121,12 +121,14 @@ grab the card at any time during any animation.
 |---|---|---|
 | Push travel to ~90 % of screen | ~120 ms | 60 fps strip, `pinch.mp4` 5.57–5.68 s |
 | Push settle (visual) | ~0.4–0.5 s total | includes dim ramp |
-| Card scale at bottom of a full pan | ~0.45 | `drag.mov` 3.0 s |
+| Card scale mid-pan | ~0.54 | `drag.mov` 3.0 s, card width 370 of 686 px |
+| Card scale at the end of a long, wandering pan | ~0.42 | `drag_land` strip |
 | Card scale mid-pinch | ~0.6 | `pinch.mp4` 1.3 s |
 | On-screen corner radius at scale 0.55–0.6 | ~13–17 pt | consistent with a radius interpolated in the card's own space, so it scales with the card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale during dismissal | 1.0 | no scale-down of the page underneath |
 | Landing from near the target | ~0.2 s | `drag_land` strip |
+| Fitted sheet model applied to a screen-sized card | 0.60 at 0.7 screen heights, 0.55 at the most a finger can travel | `ZoomDismissPhysics.ios26`, section 3.4; cannot reach the 0.42 observed, see the calibration note there |
 
 ### 1.5 Apple's API surface
 
@@ -164,10 +166,9 @@ Apple's names where a concept maps directly.
 ///  1. an enclosing [DisplayCornerRadii] override,
 ///  2. [MediaQuery.displayCornerRadiiOf] (populated by the engine on
 ///     Android 12 and later; null on iOS as of Flutter 3.47),
-///  3. a heuristic from `MediaQuery.viewPaddingOf(context).top`, the same
-///     one the SDK's [CupertinoSheetRoute] uses (top inset × 0.9, and zero
-///     below a 20 pt inset), refined with a small table of known iOS insets,
-///  4. [BorderRadius.zero].
+///  3. the iOS device table (section 3.2), keyed by logical size, device
+///     pixel ratio and top view padding,
+///  4. [BorderRadius.zero]. Anything not in the table has no rounding.
 class DisplayCornerRadii extends InheritedWidget {
   const DisplayCornerRadii({super.key, required this.radii, required super.child});
   final BorderRadius radii;
@@ -261,13 +262,30 @@ class ZoomTransitionOptions {
     this.dimmingBlurSigma = 0.0,          // UIKit dimmingVisualEffect
     this.alignmentRect,                   // Rect? Function(ZoomAlignmentRectContext)
     this.pushSpring,                      // SpringDescription; default calibrated
-    this.dismissSpring,
-    this.cancelSpring,
-    this.minimumScale = 0.3,
-    this.dismissThreshold = 0.75,         // card scale below which a release dismisses
-    this.flingVelocity = 700.0,           // logical px/s
+    this.dismissPhysics = ZoomDismissPhysics.ios26,
     this.snapshotDuringTransition = false,
   });
+}
+
+/// The fitted response of the interactive dismissal. One value object so the
+/// numbers that were measured together stay together.
+///
+/// The defaults are the iOS 26 fit from liquid_glass_widgets' swipe-dismiss
+/// morph (`SheetMorphGeometry`), measured against native captures to an RMS
+/// scale error of 0.006. Section 3.4 explains each term.
+class ZoomDismissPhysics {
+  const ZoomDismissPhysics({
+    this.scaleGain = 0.64,        // scale lost per card height of travel
+    this.travelKnee = 0.48,       // card heights of 1:1 travel before easing
+    this.minimumScale = 0.33,     // the floor the eased travel asymptotes to
+    this.edgeGive = 0.04,         // fraction of screen width of give at an edge
+    this.trackingSpring = const SpringDescription(mass: 1, stiffness: 2000, damping: 89),
+    this.returnSpring = const SpringDescription(mass: 1, stiffness: 220, damping: 30),
+    this.dismissThreshold = 0.75, // card scale below which a release dismisses
+    this.flingVelocity = 700.0,   // logical px/s
+    this.maxCommitVelocity = 10.0, // progress units/s the commit spring may be seeded with
+  });
+  static const ios26 = ZoomDismissPhysics();
 }
 
 class ZoomDismissGestures {
@@ -404,15 +422,37 @@ the design:
   transition uses it. The engine only populates it on Android API 31 and
   later; the iOS embedder does not report it, and the private `UIScreen` key
   that plugins read is not something the engine will adopt.
-- The SDK's `CupertinoSheetRoute` already ships a heuristic
-  (`viewPadding.top × 0.9`, off below 20 pt). It is within a few points on
-  every modern iPhone and is what users of the SDK sheet already see.
+- The values that key reports are public knowledge. The ScreenCorners
+  project (kylebshr/ScreenCorners) publishes them per device, read from
+  `UIScreen._displayCornerRadius`. That table is the source of truth here;
+  devices it does not list have no rounding.
 
-The heuristic is refined with a lookup of well-known top insets to radii
-(44 → 39, 47 → 47, 48 → 41.5, 50 → 44, 54 → 47, 59 → 55, 62 → 62 pt), falling
-back to the SDK formula. The table lives in one file with its provenance and
-is easy to extend. Clipping uses `ClipRSuperellipse`, which matches Apple's
-continuous corners and is available since Flutter 3.29.
+The published values, in points:
+
+| Devices | Radius |
+|---|---|
+| iPhone X, XS, XS Max, 11 Pro, 11 Pro Max | 39 |
+| iPhone XR, 11 | 41.5 |
+| iPhone 12 mini, 13 mini | 44 |
+| iPhone 12, 12 Pro, 13, 13 Pro, 14, 16e | 47.33 |
+| iPhone 12 Pro Max, 13 Pro Max, 14 Plus | 53.33 |
+| iPhone 14 Pro, 14 Pro Max, 15, 15 Plus, 15 Pro, 15 Pro Max, 16, 16 Plus | 55 |
+| iPhone 16 Pro, 16 Pro Max, 17, 17 Pro, 17 Pro Max, Air | 62 |
+| iPad Air, iPad Pro 11-inch and 12.9-inch | 18 |
+
+Pure Dart cannot read the model identifier, so the table is keyed by what
+`MediaQuery` exposes: logical size, device pixel ratio and top view padding.
+Size and pixel ratio alone are ambiguous in exactly one place (the ScreenCorners
+author's reason for not using resolution): iPhone X-class and the 12 and 13
+mini share 375 × 812 at 3×. Their top insets differ (44 versus 50 pt), which
+is why the inset is part of the key. Every other row maps to a distinct
+size and ratio. The table lives in one file with the README as its provenance,
+each row carrying the key it was derived from, so a new device is one line.
+The override widget covers anything the table misses, and a plugin-fed
+override stays possible without an API change.
+
+Clipping uses `ClipRSuperellipse`, which matches Apple's continuous corners
+and is available since Flutter 3.29.
 
 ### 3.3 Push transition mechanics
 
@@ -475,10 +515,55 @@ progress. The route's `controller.value` is set to the scale-derived
 progress each frame so that everything else in the framework (secondary
 animations, shells, Hero) sees a consistent scalar.
 
-Pan and edge swipe map distance to scale with a soft curve
-(`scale = 1 − k · d`, clamped at `minimumScale`, with `k` calibrated so that
-a full-height pan reaches ~0.45); the pinch uses the recognizer's scale and
-rotation directly, clamped.
+**The pan response is already fitted.** liquid_glass_widgets' swipe-dismiss
+morph (PR #223, `SheetMorphGeometry`) reproduces the iOS 26 zoom dismissal
+from a cursor-tracked native capture, to an RMS scale error of 0.006, and
+its author is this package's author, so it is ported rather than
+re-derived. The model, in `ZoomDismissPhysics` terms:
+
+- Travel is measured in *card heights* (the card here is the whole page, so
+  one card height is the screen height). It is direct manipulation up to
+  `travelKnee` (0.48), then rubber-banded with iOS's over-scroll curve
+  `f(x) = (1 − 1/(x/limit + 1)) · limit` toward the travel at which the scale
+  would reach `minimumScale` (0.33). A long drag parks the card instead of
+  sliding it off screen; it never quite stops shrinking.
+- Scale is linear in the *damped* travel: `1 − scaleGain · travel`, with
+  `scaleGain` 0.64. All easing lives in the travel, so shrink and fall settle
+  as one object.
+- The shrink pivots on the grabbed point carried down with the fall, so the
+  content under the finger stays under the finger. With the gain below 1.0
+  per card height the fall always outruns the shrink, so the card's bottom
+  edge cannot lift into view.
+- The sideways axis opens once the drag is `kTouchSlop` under way. The card
+  does not copy the finger's x; it chases the *damped* finger offset through
+  a stiff, critically damped tracking spring (ω ≈ 45, sized from a 12–24 pt
+  trail at a 535 pt/s sweep), so fast sweeps visibly trail and slow drags
+  read 1:1. The offset is free while the card has room and pinned at the
+  screen edge with `edgeGive` (4 % of the width, the largest native
+  overshoot measured). Sideways movement only translates; a 143 pt sweep
+  changed the native card's scale by 0.029, all attributable to vertical
+  drift. On release the same chase is retargeted home on `returnSpring`,
+  carrying its momentum. The chase is integrated by hand on one `Ticker`,
+  because `animateWith` restarts its clock on every retarget.
+- The rendered transform is *derived from* the geometry function that also
+  hands the release frame to the commit flight, and a render-versus-geometry
+  equivalence test locks them together.
+
+Cross-check against this package's own recording, with the page as the
+card: the model gives about 0.60 at 0.7 screen heights of travel and about
+0.55 at the most a finger can travel, while `drag.mov` measures about 0.54
+mid-drag and about 0.42 at the end of a long, wandering drag. The shape
+matches; the normaliser does not. The sheet fit found one *card-relative*
+gain explained panels of different heights, so the open question for the
+full-page case is what iOS treats as the card height (the page, the page
+minus its bar, or something else), or whether the gain itself differs. That
+fit is an M3 task using the same method as the sheet's: `drag.mov` was
+captured through iPhone Mirroring and shows the cursor, so the finger can be
+tracked frame by frame. `scaleGain`, `travelKnee` and `minimumScale` are
+parameters for exactly this reason. The edge swipe reuses the model with
+horizontal travel normalised by the screen width, pending calibration
+against `back.mov`. The pinch uses the recognizer's scale and rotation
+directly, clamped to `minimumScale`.
 
 **Rendering** of a `ZoomFrame`:
 
@@ -587,7 +672,13 @@ Details that matter:
   `dismissThreshold`, or if the release velocity points away from the
   identity state (downwards for a pan, trailing for a swipe, contracting for
   a pinch) faster than `flingVelocity`. Otherwise cancel. Both outcomes use
-  springs seeded with the release velocity so there is no visible kink.
+  springs seeded with the release velocity so there is no visible kink. The
+  commit seed is the rate the shrink was running at, converted to progress
+  units (`scaleGain · v / cardHeight`), capped at `maxCommitVelocity` and
+  never slower than the resting spring's own start, so a flick hurries the
+  landing but cannot drag it out. That is the `closeVelocityFor` rule from
+  the liquid_glass_widgets follow-up, read at the moment of dismissal rather
+  than at pointer up.
 - **Gates.** A dismissal begins only if `interactiveDismissShouldBegin`
   returns true (default: true), the route is current, and no other user
   gesture is in progress on the navigator. Unlike the SDK's
@@ -623,6 +714,10 @@ begins a pop. In Flutter terms:
 - The SDK's Cupertino spring (stiffness 522.35, critically damped, 0.404 s)
   is available as `SwiftSprings.standard` for apps that want the exact SDK
   feel on the push transition.
+- The interactive dismissal's sideways chase uses the fitted tracking spring
+  (stiffness 2000, damping 89) while the finger drives it and the return
+  spring (stiffness 220, damping 30) on the way home, both from
+  `ZoomDismissPhysics`.
 
 ### 3.10 Accessibility and platforms
 
@@ -728,10 +823,16 @@ source fallback, Reduce Motion. Acceptance: section 5 flight tests; example
 grid of posters opens a detail page and the back button zooms it home.
 
 **M3 Interactive dismissal: pan and edge swipe (3–4 days).**
-Gesture recognizers, scroll handoff position, release rules, springs seeded
-with velocity, navigator gesture plumbing, `interactiveDismissShouldBegin`.
-Acceptance: section 5 interaction tests except pinch; on device the three
-recordings' pan and swipe behaviours are reproduced side by side.
+Port the fitted model from liquid_glass_widgets (`SheetMorphGeometry`'s
+travel, scale, rubber band, horizontal offset and commit-velocity functions,
+plus the presenter's hand-integrated chase) into `ZoomDismissPhysics` and the
+geometry function, with their tests (render-versus-geometry equivalence, RTL
+mirror symmetry, the invariant that the bottom edge never lifts). Then
+gesture recognizers, scroll handoff position, release rules, navigator
+gesture plumbing, `interactiveDismissShouldBegin`. Acceptance: section 5
+interaction tests except pinch; on device the three recordings' pan and
+swipe behaviours are reproduced side by side, and the edge swipe's
+horizontal gain is calibrated against `back.mov`.
 
 **M4 Pinch (2–3 days, after a half-day spike).**
 Spike: prove that a two-finger pinch over a scrolled `ListView` on iOS wins
@@ -766,9 +867,10 @@ Total: roughly three to four weeks of focused work.
   pointer; the eager-accept strategy is a known technique but untested with
   Cupertino's multitouch drag strategy. Mitigation: the spike, and a
   documented fallback.
-- *Corner radius on iOS* is a heuristic until the engine reports it.
-  Mitigation: the override widget, the table, and the same numbers the SDK
-  sheet already shows users.
+- *Corner radius on iOS* is a table until the engine reports it. A new
+  device is a missing row (no rounding) until added. Mitigation: the
+  override widget, one-line rows keyed by observable metrics, and a test
+  that every row's key is unique.
 - *Performance* with expensive pages (backdrop filters, shaders) transformed
   every frame. Mitigation: optional snapshotting; the transform is a single
   layer so the page is not rebuilt during the flight.
@@ -837,6 +939,14 @@ the route.
   `navigationTransition(_:)`, `NavigationTransition.zoom(sourceID:in:)`,
   `matchedTransitionSource(id:in:configuration:)`,
   `MatchedTransitionSourceConfiguration`. WWDC24 session 10145.
+- kylebshr/ScreenCorners README: the per-device display corner radii read
+  from `UIScreen._displayCornerRadius`, reproduced in section 3.2.
+- sdegenaar/liquid_glass_widgets: PR #223 "morph swipe-dismissals back into
+  the trigger" (`SheetMorphGeometry.dismissedRect`, `dampedDismissTravel`,
+  `dismissScale`, `rubberBand`, `horizontalOffsetFor`, and the presenter's
+  tracking chase), its follow-up commit `ee2b97f` (`closeVelocityFor`, RTL
+  symmetry) on the `feat/modal-sheet-swipe-follow-ups` branch, and PR #256's
+  scroll handover. Same author as this package; ported with attribution.
 - exeshka/swiftuikit 0.2.1: `zoom_route.dart` and `page_transitions.dart`,
   read as a reference implementation (Hero-based zoom with a frozen page
   snapshot, delegated dimming, full-width back swipe). Its dependency set
