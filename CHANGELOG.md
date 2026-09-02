@@ -1,3 +1,6 @@
 ## 0.1.0-dev
 
-* Initial project scaffold. No public API yet.
+* Add `DisplayCornerRadii`, resolving the physical display corner radius from
+  an override, `MediaQuery`, or the iOS device table.
+* Add `SwiftSprings.standard`, the SDK's Cupertino modal spring.
+* Initial project scaffold. No public route API yet.
