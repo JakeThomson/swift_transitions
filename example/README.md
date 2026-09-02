@@ -1,6 +1,6 @@
-# zoom_transition example
+# swift_transitions example
 
-Runnable demo app for the [`zoom_transition`](../) package.
+Runnable demo app for the [`swift_transitions`](../) package.
 
 ```sh
 flutter pub get

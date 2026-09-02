@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in `zoom_transition`. Bug reports, feature requests
+Thanks for your interest in `swift_transitions`. Bug reports, feature requests
 and pull requests are all welcome.
 
 ## Before you start
@@ -15,8 +15,8 @@ You need a recent stable Flutter SDK. The minimum supported version is listed
 in `pubspec.yaml`.
 
 ```sh
-git clone https://github.com/JakeThomson/zoom_transition.git
-cd zoom_transition
+git clone https://github.com/JakeThomson/swift_transitions.git
+cd swift_transitions
 flutter pub get
 ```
 

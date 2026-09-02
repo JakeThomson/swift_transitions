@@ -1,6 +1,6 @@
-# zoom_transition
+# swift_transitions
 
-[![CI](https://github.com/JakeThomson/zoom_transition/actions/workflows/ci.yml/badge.svg)](https://github.com/JakeThomson/zoom_transition/actions/workflows/ci.yml)
+[![CI](https://github.com/JakeThomson/swift_transitions/actions/workflows/ci.yml/badge.svg)](https://github.com/JakeThomson/swift_transitions/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 An iOS-style zoom navigation transition for Flutter. A destination page grows
@@ -16,7 +16,7 @@ This is the transition Apple added in iOS 18 as
 Early development. There is no public API and no release yet. The project is
 being set up first, followed by a study of Flutter's `Hero` implementation and
 Apple's zoom transition before the API is designed. Watch the repository or the
-[issue tracker](https://github.com/JakeThomson/zoom_transition/issues) for
+[issue tracker](https://github.com/JakeThomson/swift_transitions/issues) for
 progress.
 
 ## Goals
@@ -63,8 +63,8 @@ dependency:
 
 ```yaml
 dependencies:
-  zoom_transition:
-    git: https://github.com/JakeThomson/zoom_transition.git
+  swift_transitions:
+    git: https://github.com/JakeThomson/swift_transitions.git
 ```
 
 ## Example

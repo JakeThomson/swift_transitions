@@ -1,6 +1,6 @@
 {
-    "name": "zoom_transition_example",
-    "short_name": "zoom_transition_example",
+    "name": "swift_transitions_example",
+    "short_name": "swift_transitions_example",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

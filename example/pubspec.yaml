@@ -1,5 +1,5 @@
-name: zoom_transition_example
-description: Example app for the zoom_transition package.
+name: swift_transitions_example
+description: Example app for the swift_transitions package.
 publish_to: none
 version: 0.1.0+1
 
@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  zoom_transition:
+  swift_transitions:
     path: ../
 
 dev_dependencies:
