@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an API or behaviour the package should support.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the use case rather than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behaviour
+      description: If you have a shape in mind, sketch it here. Pseudo-code is fine.
+  - type: textarea
+    id: reference
+    attributes:
+      label: Native reference
+      description: >-
+        If iOS does this already, link the SwiftUI or UIKit API, or a WWDC
+        session, so the behaviour can be matched.

@@ -1,0 +1,23 @@
+# A .pubignore replaces .gitignore for this directory, so it must repeat the
+# build and tooling entries as well as the repository-only files.
+.dart_tool/
+build/
+coverage/
+pubspec.lock
+.idea/
+*.iml
+.DS_Store
+
+# Repository tooling that package consumers do not need.
+.github/
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+
+# Example app: keep the Dart source so pub.dev can show it, drop the rest.
+example/.dart_tool/
+example/build/
+example/pubspec.lock
+example/android/
+example/ios/
+example/macos/
+example/web/

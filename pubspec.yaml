@@ -1,0 +1,35 @@
+name: zoom_transition
+description: >-
+  An iOS-style zoom navigation transition for Flutter, modelled on SwiftUI's
+  navigationTransition(.zoom) and built on the same mechanics as Hero.
+version: 0.1.0-dev
+repository: https://github.com/JakeThomson/zoom_transition
+issue_tracker: https://github.com/JakeThomson/zoom_transition/issues
+
+topics:
+  - transition
+  - animation
+  - navigation
+  - cupertino
+  - ios
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
