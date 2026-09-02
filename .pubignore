@@ -21,3 +21,7 @@ example/android/
 example/ios/
 example/macos/
 example/web/
+
+# Design notes and calibration tooling live in the repository only.
+docs/
+tool/

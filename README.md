@@ -13,9 +13,10 @@ This is the transition Apple added in iOS 18 as
 
 ## Status
 
-Early development. There is no public API and no release yet. The project is
-being set up first, followed by a study of Flutter's `Hero` implementation and
-Apple's zoom transition before the API is designed. Watch the repository or the
+Early development. There is no public API and no release yet. The design and
+the implementation plan live in [docs/design.md](docs/design.md); it covers
+the target behaviour measured from iOS 26 recordings, the proposed API, the
+architecture, and the delivery milestones. Watch the repository or the
 [issue tracker](https://github.com/JakeThomson/swift_transitions/issues) for
 progress.
 
