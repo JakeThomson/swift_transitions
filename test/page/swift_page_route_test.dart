@@ -377,4 +377,38 @@ void main() {
       expect(find.text('first'), findsOneWidget);
     },
   );
+
+  testWidgets('the leading-edge shadow is cast from the clipped shape', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      DisplayCornerRadii(
+        radii: BorderRadius.circular(40),
+        child: testApp(secondPage: const Center(child: Text('second'))),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    ShapeDecoration shadowDecoration() => tester
+        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .map((box) => box.decoration)
+        .whereType<ShapeDecoration>()
+        .lastWhere(
+          (decoration) => decoration.shape is RoundedSuperellipseBorder,
+        );
+
+    // Mid-flight the shadow's shape carries the same radii as the clip, so
+    // it wraps the corner instead of filling the notch as a rectangle would.
+    final midFlight = shadowDecoration();
+    expect(
+      (midFlight.shape as RoundedSuperellipseBorder).borderRadius,
+      BorderRadius.circular(40),
+    );
+    expect(midFlight.shadows, isNotEmpty);
+
+    await tester.pumpAndSettle();
+    expect(shadowDecoration().shadows, isEmpty);
+  });
 }
