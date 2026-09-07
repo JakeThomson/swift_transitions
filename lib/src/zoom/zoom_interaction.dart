@@ -81,9 +81,12 @@ class ZoomDeparture {
 /// The counterpart of the push route's `BackGestureController`: it is
 /// created when a gesture begins, scrubs the route's own animation
 /// controller, and reports through [onSettled] only once the settle
-/// animation completes. The route that creates it tells the navigator when
-/// the user gesture starts and stops, since a card can be grabbed again
-/// while it is settling and the navigator counts one gesture for both.
+/// animation completes. A committed dismissal lands the card on the route's
+/// controller *before* popping the route, so the route stays current — and
+/// the card can be grabbed again — until it has landed; the pop then
+/// completes at once. The route that creates the controller tells the
+/// navigator when the user gesture starts and stops, since a card grabbed
+/// again while settling is the same gesture to the navigator.
 ///
 /// The response is [ZoomDismissPhysics] applied to the card as it was when
 /// grabbed ([restingFrame]), which is the full screen for a settled page and
@@ -162,15 +165,13 @@ class ZoomDismissController {
   /// Whether the route is still the topmost route.
   final ValueGetter<bool> getIsCurrent;
 
-  /// Called at release with where the card is departing from and, for a
-  /// commit, the progress velocity to seed the landing with. The pop itself
-  /// follows this call, so the route's simulation can read the seed.
-  final void Function(ZoomDeparture departure, double velocity) onRelease;
+  /// Called at release with where the card is departing from.
+  final ValueSetter<ZoomDeparture> onRelease;
 
   /// Called once the settle animation completes.
   final VoidCallback onSettled;
 
-  /// The spring a cancelled dismissal returns to full screen on.
+  /// The spring the card lands on, whichever way it goes.
   final SpringDescription settleSpring;
 
   late final Ticker _ticker;
@@ -341,11 +342,11 @@ class ZoomDismissController {
                   ),
         } *
         restingProgress;
-    onRelease(departure, seed);
+    onRelease(departure);
     if (commit) {
-      if (getIsCurrent()) {
-        navigator.pop();
-      }
+      controller.animateBackWith(
+        SpringSimulation(settleSpring, controller.value, 0, -seed),
+      );
     } else {
       controller.animateWith(
         SpringSimulation(settleSpring, controller.value, 1, seed),
@@ -357,13 +358,23 @@ class ZoomDismissController {
         if (status == AnimationStatus.completed ||
             status == AnimationStatus.dismissed) {
           controller.removeStatusListener(onStatusChanged);
-          onSettled();
+          _settle();
         }
       };
       controller.addStatusListener(onStatusChanged);
     } else {
-      onSettled();
+      _settle();
     }
+  }
+
+  void _settle() {
+    if (controller.isDismissed && getIsCurrent()) {
+      // Landed: the route's transition is already at its start, so the pop
+      // completes without a further flight. Popping only now is what lets
+      // the card be caught on its way down.
+      navigator.pop();
+    }
+    onSettled();
   }
 
   /// Releases the ticker. Called by whoever created the controller when the

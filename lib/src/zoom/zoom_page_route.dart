@@ -45,10 +45,10 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   Route<dynamic>? _previousRoute;
   ZoomTransitionSourceState? _source;
   ZoomFlightSource? _flightSource;
+  Rect? _alignmentRect;
   ZoomDismissController? _dismiss;
   bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
-  double _releaseVelocity = 0;
   final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
 
   /// The scroll controller that hands a top-edge downward drag to the
@@ -87,18 +87,17 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   DelegatedTransitionBuilder? get delegatedTransition =>
       ZoomPageTransition.delegatedTransition;
 
-  /// A spring from wherever the controller is: from the flight's far end
-  /// after a push or a programmatic pop, and from the release point — with
-  /// the release velocity — after an interactive dismissal.
+  /// A spring from wherever the controller is: the flight's far end after
+  /// a push or a programmatic pop, or mid-flight when a push is popped
+  /// before it lands. An interactive dismissal lands the card itself and
+  /// pops from the start, where this spring is already at rest.
   @override
   Simulation? createSimulation({required bool forward}) {
-    final velocity = _releaseVelocity;
-    _releaseVelocity = 0;
     return SpringSimulation(
       options.pushSpring,
       controller!.value,
       forward ? 1 : 0,
-      forward ? velocity : -velocity,
+      0,
     );
   }
 
@@ -122,7 +121,11 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   @override
   bool didPop(T? result) {
-    _scheduleFlight();
+    if (!controller!.isDismissed) {
+      // Popped from the start — an interactive dismissal that has already
+      // landed — there is no flight to prepare.
+      _scheduleFlight();
+    }
     return super.didPop(result);
   }
 
@@ -149,15 +152,16 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   }
 
   /// Whether an interactive dismissal may begin now: the route is current
-  /// and can pop, no other gesture holds the navigator, and the options'
-  /// predicate agrees. Unlike [popGestureEnabled], a running push does not
-  /// block it — the push is grabbed instead (design.md section 3.8).
+  /// and can pop, no other route's gesture holds the navigator, and the
+  /// options' predicate agrees. Unlike [popGestureEnabled], a card in
+  /// motion does not block it: a push is grabbed instead (design.md section
+  /// 3.8), and a landing or returning card is caught.
   bool _canBeginDismiss(ZoomGesture gesture, Offset grabPoint) {
     final navigator = this.navigator;
     if (navigator == null ||
         !isCurrent ||
         isFirst ||
-        navigator.userGestureInProgress ||
+        (navigator.userGestureInProgress && !_userGestureInProgress) ||
         popDisposition == RoutePopDisposition.doNotPop ||
         _dismiss != null) {
       return false;
@@ -221,6 +225,11 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     final screenRadii =
         cornerRadii ??
         (context == null ? BorderRadius.zero : DisplayCornerRadii.of(context));
+    if (controller!.isCompleted) {
+      // From rest the landing is a new flight: look the source up again,
+      // since the tag may have changed while the page was open.
+      _prepareFlight(ZoomFlightDirection.pop);
+    }
     final resting = _currentFrame(screen, screenRadii);
     _departure = null;
     _dismiss = ZoomDismissController(
@@ -236,10 +245,9 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       liveFrame: _liveFrame,
       getIsActive: () => isActive,
       getIsCurrent: () => isCurrent,
-      onRelease: (departure, velocity) {
+      onRelease: (departure) {
         _dismiss = null;
         _departure = departure;
-        _releaseVelocity = velocity;
         changedInternalState();
       },
       onSettled: () {
@@ -298,16 +306,19 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       if (navigator == null) {
         return; // Disposed before the frame ended.
       }
-      _prepareFlight();
+      _prepareFlight(
+        isActive ? ZoomFlightDirection.push : ZoomFlightDirection.pop,
+      );
       changedInternalState();
     }, debugLabel: 'ZoomRouteTransitionMixin.prepareFlight');
   }
 
   /// Finds the source for [sourceTag] in the route underneath, measures it
-  /// for the flight about to start, and swaps which source is hidden if the
-  /// tag has changed. With animations disabled there is no flight, and the
-  /// source stays put under the fade.
-  void _prepareFlight() {
+  /// for the flight about to start, asks the options which part of the
+  /// page aligns with it, and swaps which source is hidden if the tag has
+  /// changed. With animations disabled there is no flight, and the source
+  /// stays put under the fade.
+  void _prepareFlight(ZoomFlightDirection direction) {
     final navigator = this.navigator;
     final previous = _previousRoute;
     final overlay = navigator?.overlay?.context.findRenderObject();
@@ -325,15 +336,29 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         navigator,
       );
     }
+    // ignore: avoid_print
+    print(
+      '[ZOOMDBG] tag=$sourceTag animate=$animate overlay=${overlay != null} '
+      'prev=${previous.runtimeType} subtree=${previous is ModalRoute<Object?> ? previous.subtreeContext != null : null} '
+      'found=${found != null}',
+    );
     final rect = overlay == null ? null : found?.boundsIn(overlay);
     if (found == null || rect == null) {
       found = null;
       _flightSource = null;
+      _alignmentRect = null;
     } else {
       _flightSource = ZoomFlightSource(
         rect: rect,
         radii: found.borderRadius,
         child: found.flightChild,
+      );
+      _alignmentRect = options.alignmentRect?.call(
+        ZoomAlignmentRectContext(
+          sourceRect: rect,
+          pageSize: (overlay as RenderBox).size,
+          direction: direction,
+        ),
       );
     }
     if (found != _source) {
@@ -367,7 +392,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       pan: gestures.pan,
       edgeSwipe: gestures.edgeSwipe,
       pinch: gestures.pinch,
-      isPushing: () => animation.status == AnimationStatus.forward,
+      isInFlight: () => animation.isAnimating,
       onStart: _beginDismiss,
       scrollController: _scrollController,
       child: child,
@@ -381,6 +406,8 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       liveFrame: _liveFrame,
       departure: _departure,
       cornerRadii: cornerRadii,
+      alignmentRect: _alignmentRect,
+      snapshot: options.snapshotDuringTransition,
       child: page,
     );
   }

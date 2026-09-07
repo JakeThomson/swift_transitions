@@ -48,6 +48,8 @@ class ZoomPageTransition extends StatelessWidget {
     this.liveFrame,
     this.departure,
     this.cornerRadii,
+    this.alignmentRect,
+    this.snapshot = false,
     required this.child,
   });
 
@@ -69,6 +71,13 @@ class ZoomPageTransition extends StatelessWidget {
   /// Overrides [DisplayCornerRadii.of] for the card's corners at the screen
   /// end of the flight.
   final BorderRadius? cornerRadii;
+
+  /// The part of the page that fills the card at the source end of the
+  /// flight, or null for the whole page. See [ZoomTransitionLayer].
+  final Rect? alignmentRect;
+
+  /// Whether the page is painted from a snapshot while it flies.
+  final bool snapshot;
 
   /// The page.
   final Widget child;
@@ -181,20 +190,66 @@ class ZoomPageTransition extends StatelessWidget {
                 screenRadii: screenRadii,
               );
             }
+            final atRest = animation.isCompleted && held == null;
             return Opacity(
               opacity: source == null && held == null ? t : 1,
               child: ZoomTransitionLayer(
                 frame: frame,
                 pageSize: pageSize,
-                atRest: animation.isCompleted && held == null,
+                atRest: atRest,
                 flightChild: source?.child,
                 sourceSize: source?.rect.size,
-                child: child!,
+                alignmentRect: source == null ? null : alignmentRect,
+                child: _FlightSnapshot(
+                  enabled: snapshot && !atRest,
+                  child: child!,
+                ),
               ),
             );
           },
         );
       },
+    );
+  }
+}
+
+/// Paints its child from a snapshot while [enabled], the way Material's
+/// zoom transition does: [SnapshotMode.permissive], so a page with a
+/// platform view paints live instead of throwing. Always in the tree, so
+/// the page's element keeps its position and state either way.
+class _FlightSnapshot extends StatefulWidget {
+  const _FlightSnapshot({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_FlightSnapshot> createState() => _FlightSnapshotState();
+}
+
+class _FlightSnapshotState extends State<_FlightSnapshot> {
+  late final SnapshotController _controller = SnapshotController(
+    allowSnapshotting: widget.enabled,
+  );
+
+  @override
+  void didUpdateWidget(_FlightSnapshot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller.allowSnapshotting = widget.enabled;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SnapshotWidget(
+      controller: _controller,
+      mode: SnapshotMode.permissive,
+      child: widget.child,
     );
   }
 }

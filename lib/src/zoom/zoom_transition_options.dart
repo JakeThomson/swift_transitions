@@ -13,7 +13,9 @@ class ZoomTransitionOptions {
     this.dismissPhysics = ZoomDismissPhysics.ios26,
     this.dimmingColor = const Color(0x33000000),
     this.dimmingBlurSigma = 0.0,
+    this.alignmentRect,
     this.pushSpring = kZoomPushSpring,
+    this.snapshotDuringTransition = false,
   });
 
   /// Which gestures may dismiss the route interactively.
@@ -38,8 +40,25 @@ class ZoomTransitionOptions {
   /// `UIZoomTransitionOptions.dimmingVisualEffect`. Zero for no blur.
   final double dimmingBlurSigma;
 
+  /// The part of the page that aligns with the source during a flight, the
+  /// counterpart of `UIZoomTransitionOptions.alignmentRectProvider`.
+  ///
+  /// Asked when a flight starts, on the push and again on each pop. The
+  /// rect is in the page's coordinates; the card grows out of the source
+  /// showing that part of the page, and shrinks back onto it. Null, or a
+  /// null result, aligns the whole page to the source: the page fills the
+  /// card, anchored at its top centre.
+  final ZoomAlignmentRectProvider? alignmentRect;
+
   /// The spring that drives the push and the non-interactive pop.
   final SpringDescription pushSpring;
+
+  /// Whether the page is painted from a snapshot while it flies, the way
+  /// Material's zoom transition does. A page whose paint is expensive —
+  /// backdrop filters, shaders — is then rasterised once per flight rather
+  /// than every frame. Pages containing platform views fall back to live
+  /// painting. Off by default.
+  final bool snapshotDuringTransition;
 
   @override
   bool operator ==(Object other) =>
@@ -49,7 +68,9 @@ class ZoomTransitionOptions {
       other.dismissPhysics == dismissPhysics &&
       other.dimmingColor == dimmingColor &&
       other.dimmingBlurSigma == dimmingBlurSigma &&
-      other.pushSpring == pushSpring;
+      other.alignmentRect == alignmentRect &&
+      other.pushSpring == pushSpring &&
+      other.snapshotDuringTransition == snapshotDuringTransition;
 
   @override
   int get hashCode => Object.hash(
@@ -58,9 +79,44 @@ class ZoomTransitionOptions {
     dismissPhysics,
     dimmingColor,
     dimmingBlurSigma,
+    alignmentRect,
     pushSpring,
+    snapshotDuringTransition,
   );
 }
+
+/// Which way a zoom flight is going.
+enum ZoomFlightDirection {
+  /// Out of the source to the full screen.
+  push,
+
+  /// Back into the source.
+  pop,
+}
+
+/// What [ZoomTransitionOptions.alignmentRect] is asked with.
+@immutable
+class ZoomAlignmentRectContext {
+  /// Creates the context of a flight about to start.
+  const ZoomAlignmentRectContext({
+    required this.sourceRect,
+    required this.pageSize,
+    required this.direction,
+  });
+
+  /// The source's bounds, in the navigator's coordinates.
+  final Rect sourceRect;
+
+  /// The size the page is laid out at.
+  final Size pageSize;
+
+  /// Which way the flight is going.
+  final ZoomFlightDirection direction;
+}
+
+/// Chooses the part of the page that aligns with the source.
+typedef ZoomAlignmentRectProvider =
+    Rect? Function(ZoomAlignmentRectContext context);
 
 /// The default zoom flight spring: [SpringDescription.withDurationAndBounce]
 /// for 500 ms with no bounce, written out because that constructor is not

@@ -246,6 +246,62 @@ void main() {
     expect(sourceHidden(tester, 'other'), isFalse);
   });
 
+  testWidgets('alignmentRect is asked on the push and again on the pop', (
+    tester,
+  ) async {
+    final asked = <ZoomAlignmentRectContext>[];
+    await tester.pumpWidget(
+      testApp(
+        options: ZoomTransitionOptions(
+          alignmentRect: (context) {
+            asked.add(context);
+            return const Rect.fromLTWH(0, 0, 400, 300);
+          },
+        ),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    expect(asked, hasLength(1));
+    expect(asked.single.direction, ZoomFlightDirection.push);
+    expect(asked.single.sourceRect, posterRect);
+    expect(asked.single.pageSize, screen.size);
+
+    final route = detailRoute(tester) as ZoomPageRoute<void>;
+    route.sourceTag = 'other';
+    Navigator.of(tester.element(find.text('detail'))).pop();
+    await tester.pump();
+    await tester.pump();
+    expect(asked, hasLength(2));
+    expect(asked.last.direction, ZoomFlightDirection.pop);
+    expect(asked.last.sourceRect, otherPosterRect);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('snapshotDuringTransition rasterises the page only in flight', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(
+        options: const ZoomTransitionOptions(snapshotDuringTransition: true),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    SnapshotWidget snapshot() => tester.widget<SnapshotWidget>(
+      find.descendant(
+        of: find.byType(ZoomTransitionLayer),
+        matching: find.byType(SnapshotWidget),
+      ),
+    );
+    expect(snapshot().controller.allowSnapshotting, isTrue);
+    expect(snapshot().mode, SnapshotMode.permissive);
+
+    await tester.pumpAndSettle();
+    expect(snapshot().controller.allowSnapshotting, isFalse);
+  });
+
   testWidgets('a missing source falls back to a centred scale-and-fade', (
     tester,
   ) async {

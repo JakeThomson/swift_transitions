@@ -39,7 +39,7 @@ class ZoomDismissGestureDetector extends StatefulWidget {
     required this.pan,
     required this.edgeSwipe,
     required this.pinch,
-    required this.isPushing,
+    required this.isInFlight,
     required this.onStart,
     required this.scrollController,
     required this.child,
@@ -54,9 +54,9 @@ class ZoomDismissGestureDetector extends StatefulWidget {
   /// Whether a two-finger pinch may dismiss.
   final bool pinch;
 
-  /// Whether the route's push is still running, so that a pointer down
-  /// grabs the card in flight.
-  final ValueGetter<bool> isPushing;
+  /// Whether the card is moving on its own — pushing, landing or returning
+  /// — so that a pointer down grabs it at once rather than after a drag.
+  final ValueGetter<bool> isInFlight;
 
   /// Starts a dismissal, or refuses it.
   final ZoomDismissStartCallback onStart;
@@ -252,10 +252,10 @@ class _ZoomDismissGestureDetectorState
     if (widget.pan) {
       _panRecognizer.addPointer(event);
     }
-    if (widget.isPushing() && widget.pan && _controller == null) {
-      // Grab the card in flight: the push completes into a gesture rather
-      // than being cancelled. Driven from raw pointer movement, since no
-      // recognizer has resolved yet.
+    if (widget.isInFlight() && widget.pan && _controller == null) {
+      // Grab the card in flight: a push completes into a gesture rather
+      // than being cancelled, and a landing or return is caught. Driven from
+      // raw pointer movement, since no recognizer has resolved yet.
       if (_begin(ZoomGesture.pan, event.position)) {
         _pointerDriven = true;
       }

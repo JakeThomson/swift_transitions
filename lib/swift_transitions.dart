@@ -20,7 +20,13 @@ export 'src/zoom/zoom_dismiss_physics.dart';
 export 'src/zoom/zoom_gestures.dart' show ZoomScrollController;
 export 'src/zoom/zoom_interaction.dart'
     show ZoomGesture, ZoomInteractionContext, ZoomInteractiveDismissPredicate;
-export 'src/zoom/zoom_page_route.dart' show ZoomPage, ZoomPageRoute;
+export 'src/zoom/zoom_page_route.dart'
+    show ZoomPage, ZoomPageRoute, ZoomRouteTransitionMixin;
 export 'src/zoom/zoom_transition_options.dart'
-    show ZoomDismissGestures, ZoomTransitionOptions;
+    show
+        ZoomAlignmentRectContext,
+        ZoomAlignmentRectProvider,
+        ZoomDismissGestures,
+        ZoomFlightDirection,
+        ZoomTransitionOptions;
 export 'src/zoom/zoom_transition_source.dart' show ZoomTransitionSource;

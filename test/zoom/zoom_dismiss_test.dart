@@ -6,6 +6,7 @@ import 'package:swift_transitions/src/zoom/zoom_transition_layer.dart';
 import 'package:swift_transitions/swift_transitions.dart';
 
 const Rect posterRect = Rect.fromLTWH(100, 200, 80, 120);
+const Rect otherPosterRect = Rect.fromLTWH(600, 200, 80, 120);
 const Rect screen = Rect.fromLTWH(0, 0, 800, 600);
 
 /// A home page with a poster source and a button that pushes a zoom route
@@ -46,6 +47,13 @@ Widget testApp({
                 child: const Text('push'),
               ),
             ),
+            Positioned.fromRect(
+              rect: otherPosterRect,
+              child: const ZoomTransitionSource(
+                tag: 'other',
+                child: ColoredBox(color: Color(0xFFFF0000)),
+              ),
+            ),
             if (hero)
               const Positioned(
                 right: 0,
@@ -82,7 +90,9 @@ NavigatorState navigatorOf(WidgetTester tester) =>
 bool sourceHidden(WidgetTester tester) => tester
     .widget<Offstage>(
       find.descendant(
-        of: find.byType(ZoomTransitionSource),
+        of: find.byWidgetPredicate(
+          (widget) => widget is ZoomTransitionSource && widget.tag == 'poster',
+        ),
         matching: find.byType(Offstage),
       ),
     )
@@ -161,6 +171,88 @@ void main() {
     expect(cardRect(tester), screen);
     expect(navigator.userGestureInProgress, isFalse);
     expect(sourceHidden(tester), isTrue);
+  });
+
+  testWidgets('a committed release lands before the route pops', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final navigator = navigatorOf(tester);
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    // Landing: the route is still current, so the card can be caught.
+    expect(route.isCurrent, isTrue);
+    expect(route.animation!.status, AnimationStatus.reverse);
+    expect(navigator.userGestureInProgress, isTrue);
+    expect(cardRect(tester).width, lessThan(800 * physics.scaleFor(0.5)));
+
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    expect(route.isActive, isFalse);
+    expect(navigator.userGestureInProgress, isFalse);
+    expect(sourceHidden(tester), isFalse);
+  });
+
+  testWidgets('a landing card can be caught and brought back', (tester) async {
+    await pushAndSettle(tester, staticDetail);
+    final navigator = navigatorOf(tester);
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+
+    final first = await tester.startGesture(const Offset(400, 300));
+    await first.moveBy(const Offset(0, 300));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final caughtAt = cardRect(tester);
+
+    final second = await tester.startGesture(caughtAt.center);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(cardRect(tester), caughtAt, reason: 'the landing stops');
+    expect(navigator.userGestureInProgress, isTrue);
+
+    // Lift it back up; a card above where it was grabbed is at full size
+    // for its grab, which is well over the threshold.
+    await second.moveBy(const Offset(0, -40));
+    await tester.pump(const Duration(milliseconds: 50));
+    await second.moveBy(const Offset(0, -40));
+    await tester.pump(const Duration(milliseconds: 50));
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(cardRect(tester), screen);
+    expect(route.animation!.isCompleted, isTrue);
+    expect(navigator.userGestureInProgress, isFalse);
+  });
+
+  testWidgets('a dismissal from rest lands on the current sourceTag', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+    (route as ZoomPageRoute<void>).sourceTag = 'other';
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final card = cardRect(tester);
+    expect(
+      (card.center - otherPosterRect.center).distance,
+      lessThan((card.center - posterRect.center).distance),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
   });
 
   testWidgets('a downward fling short of the threshold still pops', (
@@ -321,7 +413,10 @@ void main() {
     expect(route.animation!.value, inExclusiveRange(0, 1));
 
     final second = await tester.startGesture(const Offset(400, 300));
+    await tester.pump();
+    final caughtAt = route.animation!.value;
     await tester.pump(const Duration(milliseconds: 40));
+    expect(route.animation!.value, caughtAt, reason: 'the return stops');
     expect(navigator.userGestureInProgress, isTrue);
     expect(tester.takeException(), isNull);
 
