@@ -110,13 +110,29 @@ class PosterRow extends StatelessWidget {
             tag: poster.title,
             borderRadius: _radius,
             child: GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                ZoomPageRoute<void>(
-                  sourceTag: poster.title,
-                  title: poster.title,
-                  builder: (_) => PosterPage(poster: poster),
-                ),
-              ),
+              onTap: () {
+                // The art sits under the navigation bar at the page's width
+                // and the poster's aspect; that is what the poster grows
+                // into and shrinks back onto.
+                final artTop =
+                    MediaQuery.paddingOf(context).top +
+                    const CupertinoNavigationBar().preferredSize.height;
+                Navigator.of(context).push(
+                  ZoomPageRoute<void>(
+                    sourceTag: poster.title,
+                    title: poster.title,
+                    options: ZoomTransitionOptions(
+                      alignmentRect: (context) => Rect.fromLTWH(
+                        0,
+                        artTop,
+                        context.pageSize.width,
+                        context.pageSize.width * 1.5,
+                      ),
+                    ),
+                    builder: (_) => PosterPager(initial: index),
+                  ),
+                );
+              },
               child: ClipRRect(
                 borderRadius: _radius,
                 child: PosterArt(poster: poster, width: 120, height: _height),
@@ -176,6 +192,46 @@ class PosterArt extends StatelessWidget {
   }
 }
 
+/// The poster pages, swiped through sideways.
+///
+/// Whichever poster is showing is the one the page shrinks back onto: each
+/// swipe sets the route's `sourceTag`, the counterpart of UIKit calling the
+/// source view provider again on dismiss.
+class PosterPager extends StatefulWidget {
+  /// Creates the pager, opened on the poster at [initial].
+  const PosterPager({super.key, required this.initial});
+
+  /// The index of the poster that was tapped.
+  final int initial;
+
+  @override
+  State<PosterPager> createState() => _PosterPagerState();
+}
+
+class _PosterPagerState extends State<PosterPager> {
+  late final PageController _controller = PageController(
+    initialPage: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      controller: _controller,
+      itemCount: posters.length,
+      onPageChanged: (index) {
+        ZoomRouteTransitionMixin.of(context)?.sourceTag = posters[index].title;
+      },
+      itemBuilder: (context, index) => PosterPage(poster: posters[index]),
+    );
+  }
+}
+
 /// The page a poster zooms open into.
 class PosterPage extends StatelessWidget {
   /// Creates the detail page for [poster].
@@ -204,8 +260,10 @@ class PosterPage extends StatelessWidget {
             child: Text(
               'Drag down from the top of this page, swipe in from the '
               'leading edge, or pinch with two fingers to shrink it into its '
-              'poster; let go early and it springs back. Tap back to zoom '
-              'home.',
+              'poster; let go early and it springs back, and a card on its '
+              'way anywhere can be caught. Swipe sideways for the next '
+              'poster, which is then the one this page lands on. Tap back '
+              'to zoom home.',
               style: CupertinoTheme.of(context).textTheme.textStyle,
             ),
           ),
