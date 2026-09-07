@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swift_transitions/src/zoom/zoom_transition_layer.dart';
@@ -260,6 +262,139 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
     expect(route.animation!.isCompleted, isTrue);
     expect(navigatorOf(tester).userGestureInProgress, isFalse);
+  });
+
+  /// The angle the card is drawn at, from the layer's rotate transform.
+  double cardRotation(WidgetTester tester) {
+    final transform = tester.widget<Transform>(
+      find
+          .descendant(
+            of: find.byType(ZoomTransitionLayer),
+            matching: find.byType(Transform),
+          )
+          .first,
+    );
+    final m = transform.transform;
+    return math.atan2(m.entry(1, 0), m.entry(0, 0));
+  }
+
+  testWidgets('a pinch scales the card with the fingers and pops', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final first = await tester.startGesture(const Offset(300, 300), pointer: 1);
+    final second = await tester.startGesture(
+      const Offset(500, 300),
+      pointer: 2,
+    );
+    await first.moveTo(const Offset(350, 300));
+    await second.moveTo(const Offset(450, 300));
+    await tester.pump();
+
+    // The fingers closed from 200 to 100 apart.
+    expect(cardRect(tester).width, closeTo(400, 0.5));
+    expect(cardRect(tester).height, closeTo(300, 0.5));
+    expect(cardRect(tester).center.dx, closeTo(400, 0.5));
+    expect(navigatorOf(tester).userGestureInProgress, isTrue);
+
+    await first.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    await second.up();
+  });
+
+  testWidgets('a pinch rotates the card and it un-rotates on release', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final first = await tester.startGesture(const Offset(300, 300), pointer: 1);
+    final second = await tester.startGesture(
+      const Offset(500, 300),
+      pointer: 2,
+    );
+    const angle = math.pi / 6;
+    await second.moveTo(
+      Offset(300 + 200 * math.cos(angle), 300 + 200 * math.sin(angle)),
+    );
+    await tester.pump();
+
+    expect(cardRotation(tester), closeTo(angle, 1e-6));
+    // The fingers are the same distance apart, so the card keeps its size
+    // (its bounding rect is wider, being rotated).
+    expect(
+      tester.getSize(
+        find.descendant(
+          of: find.byType(ZoomTransitionLayer),
+          matching: find.byType(ClipRSuperellipse),
+        ),
+      ),
+      const Size(800, 600),
+    );
+
+    await first.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(cardRotation(tester), inExclusiveRange(0, angle));
+
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(cardRotation(tester), closeTo(0, 1e-6));
+    expect(cardRect(tester), screen);
+    await second.up();
+  });
+
+  testWidgets('a pinch over a scrolled list takes the finger from the list', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, listDetail());
+    final list = tester.state<ScrollableState>(find.byType(Scrollable));
+    final first = await tester.startGesture(const Offset(400, 400), pointer: 1);
+    await first.moveBy(const Offset(0, -20));
+    await first.moveBy(const Offset(0, -200));
+    await tester.pump();
+    expect(list.position.pixels, closeTo(200, 1));
+
+    final second = await tester.startGesture(
+      const Offset(400, 480),
+      pointer: 2,
+    );
+    await second.moveTo(const Offset(400, 330));
+    await first.moveTo(const Offset(400, 230));
+    await tester.pump();
+
+    // The fingers closed from 300 to 100 apart; the list did not scroll
+    // with either of them.
+    expect(cardRect(tester).width, closeTo(800 / 3, 0.5));
+    expect(list.position.pixels, closeTo(200, 1));
+
+    await first.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    await second.up();
+  });
+
+  testWidgets('a second finger turns a pan into a pinch', (tester) async {
+    await pushAndSettle(tester, staticDetail);
+    final first = await tester.startGesture(const Offset(400, 200), pointer: 1);
+    await first.moveBy(const Offset(0, 100));
+    await tester.pump();
+    final panned = cardRect(tester);
+    expect(panned.width, closeTo(800 * physics.scaleFor(100 / 600), 0.5));
+
+    final second = await tester.startGesture(
+      const Offset(400, 550),
+      pointer: 2,
+    );
+    await second.moveTo(const Offset(400, 425));
+    await tester.pump();
+
+    // 250 apart to 125 apart: half the size the pan left the card at.
+    expect(cardRect(tester).width, closeTo(panned.width / 2, 0.5));
+
+    await first.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    await second.up();
   });
 
   testWidgets('interactiveDismissShouldBegin can refuse', (tester) async {
