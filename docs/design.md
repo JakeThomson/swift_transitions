@@ -1,6 +1,7 @@
 # swift_transitions: design and implementation plan
 
-Status: proposal, 2026-09-02. Nothing in this document is implemented yet.
+Status: proposal, 2026-09-02; M0–M2 implemented as of 2026-09-07, with the
+deviations noted inline.
 
 This package recreates two iOS navigation transitions in Flutter, with the
 gestures that iOS 18 and iOS 26 attach to them:
@@ -244,12 +245,10 @@ class ZoomTransitionSource extends StatefulWidget {
   const ZoomTransitionSource({
     super.key,
     required this.tag,
-    required this.child,
-    this.shape,             // RoundedSuperellipseBorder / RoundedRectangleBorder; default: no rounding
-    this.background,        // Color drawn behind the content in flight
-    this.shadow,            // BoxShadow applied to the source in flight
+    this.borderRadius = BorderRadius.zero, // the card interpolates radii, so a radius rather than a shape; drawn as a superellipse
     this.flightChild,       // what to draw for the source inside the card; defaults to child
     this.enabled = true,
+    required this.child,
   });
 }
 
@@ -324,7 +323,9 @@ class ZoomPageRoute<T> extends PageRoute<T> with CupertinoRouteTransitionMixin<T
   ScrollController get scrollController;
 
   @override bool get opaque => false;      // the source page stays visible
-  @override Color? get barrierColor => null; // dimming is the delegated transition's job
+  @override Color? get barrierColor => options.dimmingColor; // the dim is the modal barrier, see 3.1
+  @override Curve get barrierCurve => Curves.easeIn;
+  @override ImageFilter? get filter => /* blur of dimmingBlurSigma */;
 }
 
 class ZoomPage<T> extends Page<T> { ... }
@@ -407,10 +408,15 @@ and with anything that reads route animations (navigation shells, observers):
 - **`maintainState` defaults to true.** Hero-style gesture transitions
   require the route underneath to keep its layout, and the zoom needs the
   source's current position at any moment.
-- **The zoom route is non-opaque and has no barrier.** The source page stays
-  visible and interactive-looking underneath. Dimming is painted by the
-  delegated transition, not by `barrierColor`, so it can track the
-  interactive progress and be blurred.
+- **The zoom route is non-opaque, and its dim is its modal barrier.** The
+  source page stays visible and interactive-looking underneath. The dim uses
+  the stock `ModalRoute` hooks — `barrierColor`, `barrierCurve` (an ease-in)
+  and `filter` for the blur — which already track the route animation, and
+  so the interactive progress once the gesture scrubs the controller. The
+  proposal had the delegated transition paint it, but a delegated transition
+  is a static tear-off with no access to the route's options; the zoom
+  route's delegate instead holds the covered page still at full scale, which
+  is what stops a covered Cupertino or Material route running its own slide.
 
 ### 3.2 Corner radius resolution
 
@@ -494,18 +500,22 @@ class ZoomFrame {
   final double rotation;    // radians, non-zero only during a pinch
   final BorderRadius radii; // on-screen corner radii
   final double sourceOpacity; // cross-fade of the source's pixels inside the card
-  final double dimming;     // 0..1 for the covered route
 }
 ```
+
+The covered route's dim is not part of the frame: it is the route's modal
+barrier (section 3.1), driven by the same controller through an ease-in
+`barrierCurve`.
 
 Two regimes produce a `ZoomFrame`:
 
 **Flight** (push, committed dismissal, cancel): `t` is the route animation
 (or a spring on the controller). `rect = Rect.lerp(alignedSource, screen, t)`,
 `radii = lerp(source.radii, display.radii, t)` interpolated in the card's own
-space so the visible radius scales with the card, `sourceOpacity` fades out
-over the first ~40 % of a push and in over the last ~40 % of a pop, and
-`dimming` is an ease-in of `t`.
+space so the visible radius scales with the card, and `sourceOpacity` fades
+out over the first ~40 % of a push and in over the last ~40 % of a pop. A
+spring settles within a tolerance of its end, so the ends are read from the
+animation status rather than its value.
 
 **Interaction** (finger down): the gesture owns a `ZoomInteraction` with
 `focalPoint`, `translation`, `scale` and `rotation`. The frame is the full
@@ -568,22 +578,28 @@ directly, clamped to `minimumScale`.
 **Rendering** of a `ZoomFrame`:
 
 ```
-Stack (navigator-sized)
-  ├ [delegated, on the route underneath] ColoredBox(dimmingColor × dimming) [+ BackdropFilter if blur]
-  └ Transform (rotation about frame centre)
-      └ Positioned.fromRect(frame.rect)
-          └ DecoratedBox (shadow, RoundedSuperellipseBorder)
-              └ ClipRSuperellipse(frame.radii)
-                  └ Stack
-                      ├ OverflowBox(alignment from alignmentRect, default topCenter)
-                      │   └ Transform.scale(rect.width / pageWidth)
-                      │       └ SizedBox(page size) ─ the live page
-                      └ Opacity(sourceOpacity) ─ source flightChild, fitted to the source rect's aspect
+[modal barrier entry] AnimatedModalBarrier(dimmingColor, barrierCurve) [under BackdropFilter if blur]
+[modal scope entry]
+  Stack (navigator-sized)
+    └ Positioned.fromRect(frame.rect)
+        └ Transform.rotate(frame.rotation)
+            └ ClipRSuperellipse(frame.radii)
+                └ Stack
+                    ├ OverflowBox(alignment topCenter)
+                    │   └ Transform.scale(max(rect.width / pageWidth, rect.height / pageHeight))
+                    │       └ SizedBox(page size) ─ the live page
+                    └ Opacity(sourceOpacity) ─ source flightChild, FittedBox(cover) at the source's size
 ```
 
 The page is laid out at its full size once and scaled; it does not reflow,
-matching iOS. `transformHitTests` stays true so the page remains tappable at
-rest (the transform is identity then).
+matching iOS. The scale is an aspect fill anchored at the top centre, so a
+poster taller than the screen's aspect shows the top of the page at the
+card's width and a wide list row shows the page's top strip at full scale;
+the width-only scale first proposed leaves a gap under the page for the
+first case. The tree has the same shape at rest and in flight — the clip and
+transforms become identities rather than being removed — so the page's
+element subtree keeps its position and state. `transformHitTests` stays true
+so the page remains tappable at rest.
 
 Optionally, `snapshotDuringTransition` wraps the page in a `SnapshotWidget`
 with `SnapshotMode.permissive` for the duration of a flight, the same
@@ -615,14 +631,18 @@ inside a zoomed page keep working for their own flights.
 
 ### 3.6 Source discovery and hiding
 
-- `ZoomPageRoute.install` records `previousRoute` from `didChangePrevious`.
+- The route records `previousRoute` from `didChangePrevious`.
 - On push (and again on each pop, because `sourceTag` may have changed) the
   route walks `previousRoute.subtreeContext` for a `ZoomTransitionSource`
   whose tag matches, applying `Hero`'s nested-navigator rule: a source inside
   another navigator counts only if its own route is a current `PageRoute`.
-- The source's rect is measured after the destination's first layout, using
-  the same end-of-frame deferral `HeroController` uses (`offstage` for the
-  first frame so the page lays out at its final size).
+- Discovery and measurement run in an end-of-frame callback scheduled from
+  `didPush` and `didPop`, the deferral `HeroController` makes: the element
+  tree cannot be walked during a build, and a pages-based `Navigator` pushes
+  and pops during one. The first frame of a push draws the fallback card at
+  zero opacity and the first frame of a pop draws the previous flight's card
+  at full screen; neither is visible. The source is measured against the
+  navigator's overlay, which is the card's coordinate space.
 - The source state enters `hidden`: it keeps its child mounted and laid out
   inside an `Offstage` with `TickerMode` off, and paints a `SizedBox` of the
   frozen size, exactly like `_HeroState`. It leaves `hidden` when the zoom
@@ -706,7 +726,9 @@ begins a pop. In Flutter terms:
 
 - Push: `SpringDescription.withDurationAndBounce(duration: 500 ms, bounce: 0)`
   as the starting point, calibrated against the 60 fps push strip (most of
-  the travel in the first ~120 ms).
+  the travel in the first ~120 ms). It reaches the controller through
+  `TransitionRoute.createSimulation`, so the route's `animateWith` plumbing
+  is the SDK's.
 - Dismissal landing and cancel: the same constructor with a slightly shorter
   duration, seeded with the release velocity projected onto the remaining
   travel. Rotation and translation share the spring's normalised progress so
@@ -890,10 +912,21 @@ Total: roughly three to four weeks of focused work.
    matches iOS 26. The SDK default is safer for horizontal scrollables.
 3. Whether the zoom route mixes in `CupertinoRouteTransitionMixin` (for
    automatic back titles in `CupertinoNavigationBar`) or stays a plain
-   `PageRoute`. The plan assumes the mixin.
+   `PageRoute`. *Decided (2026-09-07): the mixin.* Its `previousTitle` only
+   reads a previous route that is itself the mixin, so a plain route would be
+   the one page in a stack that loses its back title in both directions; its
+   `canTransitionTo` makes the zoom route a recognised neighbour of stock
+   Cupertino and Material routes without leaning on the delegate alone; and
+   `buildPage` scopes the route's semantics. The push route already carries
+   the framework-churn risk, so the zoom route adds none.
 4. Whether to publish `ZoomFrame` and the rendering layer as public API for
    apps that want a custom presentation, or keep them private until 1.0.
-   The plan keeps them private.
+   *Decided (2026-09-07): private.* The frame's shape changes with M3–M5
+   (pan geometry, rotation and focal point, alignment rects), the rendering
+   layer is coupled to the interaction state machine, and the source's
+   `flightChild` and the options' `alignmentRect` already cover what UIKit
+   exposes. The frame is a pure value type, so exporting it later is a
+   one-line change if a concrete custom presentation asks for it.
 
 ---
 
