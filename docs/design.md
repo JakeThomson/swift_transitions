@@ -1,6 +1,6 @@
 # swift_transitions: design and implementation plan
 
-Status: proposal, 2026-09-02; M0–M4 implemented as of 2026-09-07, with the
+Status: proposal, 2026-09-02; M0–M5 implemented as of 2026-09-08, with the
 deviations noted inline.
 
 This package recreates two iOS navigation transitions in Flutter, with the
@@ -784,8 +784,14 @@ As implemented (M3), with the departures from the sketch above:
   the release speed is the fingers' closing rate over the last 100 ms, and
   the departure frame un-rotates over the landing. Trackpad pinches are not
   handled yet.
-- Not yet: re-grabbing a card during its landing (the modal scope ignores
-  pointers while the route animation reverses), and trackpad pinches.
+- A committed release lands the card on the route's own controller before
+  popping the route (`TransitionRoute` anticipates exactly this: the SDK's
+  back gesture also drives its animation to dismissed before the route is
+  removed), so the route stays current until it has landed and a card on
+  its way down, or springing back, can be caught: the gesture layer grabs
+  on pointer down whenever the animation is running, and the route's own
+  gesture does not block a second grab. The navigator sees one user gesture
+  from the first grab to the final settle. Not yet: trackpad pinches.
 
 ### 3.8 Interruptible push
 
@@ -961,12 +967,17 @@ scroll position is at rest, and document the limitation. Then: rotation,
 focal point, un-rotate on landing. Acceptance: pinch tests; recording
 `pinch.mp4` reproduced.
 
-**M5 Fluidity and options (2–3 days).**
+**M5 Fluidity and options (2–3 days).** *Done 2026-09-08 except the device
+performance pass, which needs the host app's glass surfaces and is folded
+into the host-app adapter work in M6.*
 Interruptible push, dynamic `sourceTag` for paging detail pages,
 `alignmentRect`, `snapshotDuringTransition`, `dimmingBlurSigma`. Performance
 pass on a real device with a heavy page (the host app's glass surfaces):
 frame times during flight with and without snapshotting recorded in the
-CHANGELOG.
+CHANGELOG. The alignment rect is applied in the transition layer as a
+window on the page — the rect at the source end, widening to the page's
+bounds as the card grows, by the square root of the card's area between
+the two — so the dragged and landing frames need no separate treatment.
 
 **M6 Release (1–2 days).**
 README with API tour and GIFs from the example, dartdoc pass (the analyzer

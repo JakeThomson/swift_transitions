@@ -1,5 +1,17 @@
 ## 0.1.0-dev
 
+* Make the zoom route's interactive dismissal interruptible the whole way:
+  a committed release lands the card before the route pops, so a card on
+  its way down — or springing back — can be caught and dragged again, and
+  the navigator sees one gesture from the first grab to the last landing.
+  A dismissal begun from rest looks the source up again, so a paging page
+  that changes `sourceTag` lands on the poster it is showing.
+* Add `alignmentRect` and `snapshotDuringTransition` to
+  `ZoomTransitionOptions`: the part of the page that aligns with the
+  source, asked on the push and again on each pop like UIKit's
+  `alignmentRectProvider`, and a Material-style snapshot of the page while
+  it flies. Export `ZoomRouteTransitionMixin` for custom routes and for
+  pages that set the enclosing route's `sourceTag`.
 * Add the pinch to the zoom route's interactive dismissal: two fingers
   scale the card with their distance, rotate it with their angle and move it
   with their focal point, and a second finger turns a pan or swipe into a
