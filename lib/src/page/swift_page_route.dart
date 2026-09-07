@@ -16,6 +16,12 @@ mixin SwiftPageTransitionMixin<T> on PageRoute<T> {
   /// Overrides [DisplayCornerRadii.of] for the incoming page's clip.
   BorderRadius? get cornerRadii => null;
 
+  /// No barrier: the covered page's dim is painted by [SwiftPageTransition]
+  /// (measured, and tracking the finger) rather than by
+  /// [CupertinoRouteTransitionMixin]'s barrier colour.
+  @override
+  Color? get barrierColor => null;
+
   @override
   Widget buildTransitions(
     BuildContext context,

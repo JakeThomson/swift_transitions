@@ -39,6 +39,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
 
       expect(find.byType(ClipRSuperellipse), findsWidgets);
+      // Two Material routes share their delegated transition, so the covered
+      // one runs the theme's transition itself and keeps pace with the
+      // arriving page.
+      final arrivingX = tester
+          .getTopLeft(find.byType(ClipRSuperellipse).last)
+          .dx;
+      final coveredX = tester
+          .getTopLeft(find.byType(ClipRSuperellipse).first)
+          .dx;
+      expect(arrivingX, inExclusiveRange(0, 800));
+      expect(coveredX, closeTo(-0.29 * (800 - arrivingX), 1));
 
       await tester.pumpAndSettle();
       expect(find.text('second'), findsOneWidget);

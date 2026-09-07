@@ -36,6 +36,23 @@ const BorderRadius leadingCorners40 = BorderRadius.only(
 ClipRSuperellipse findClip(WidgetTester tester) =>
     tester.widget<ClipRSuperellipse>(find.byType(ClipRSuperellipse).last);
 
+/// The alpha of the dim painted over the covered (first clipped) page.
+double coveredDim(WidgetTester tester) {
+  final box = tester.widget<DecoratedBox>(
+    find
+        .descendant(
+          of: find.byType(ClipRSuperellipse).first,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is DecoratedBox &&
+                widget.position == DecorationPosition.foreground,
+          ),
+        )
+        .first,
+  );
+  return (box.decoration as BoxDecoration).color?.a ?? 0;
+}
+
 void main() {
   testWidgets('the pushed page is clipped mid-transition and not at rest', (
     tester,
@@ -222,6 +239,66 @@ void main() {
     },
   );
 
+  testWidgets('the covered page keeps pace at 0.29 of the width and dims', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(secondPage: const Center(child: Text('second'))),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    // The home CupertinoPageRoute receives SwiftPageTransition's delegate, so
+    // both pages are clipped pages: the covered one first, the arriving one
+    // last. The covered page's travel is a fixed fraction of the arriving
+    // page's, whatever the curve, because they share one curve.
+    final arrivingX = tester.getTopLeft(find.byType(ClipRSuperellipse).last).dx;
+    final coveredX = tester.getTopLeft(find.byType(ClipRSuperellipse).first).dx;
+    expect(arrivingX, inExclusiveRange(0, 800));
+    expect(coveredX, closeTo(-0.29 * (800 - arrivingX), 1));
+    expect(coveredDim(tester), closeTo(0.115 * (800 - arrivingX) / 800, 0.005));
+
+    await tester.pumpAndSettle();
+    expect(coveredDim(tester), 0);
+  });
+
+  testWidgets('the covered page tracks the finger linearly', (tester) async {
+    await tester.pumpWidget(
+      testApp(secondPage: const Center(child: Text('second'))),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(200, 0));
+    await tester.pump();
+
+    expect(tester.getTopLeft(find.byType(ClipRSuperellipse).last).dx, 200);
+    // 200px of an 800px drag leaves the controller at 0.75.
+    expect(
+      tester.getTopLeft(find.byType(ClipRSuperellipse).first).dx,
+      closeTo(-0.29 * 800 * 0.75, 1),
+    );
+    expect(coveredDim(tester), closeTo(0.115 * 600 / 800, 0.005));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a SwiftPageRoute has no barrier colour', (tester) async {
+    await tester.pumpWidget(
+      testApp(secondPage: const Center(child: Text('second'))),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    expect(
+      ModalRoute.of(tester.element(find.text('second')))!.barrierColor,
+      isNull,
+    );
+  });
+
   testWidgets('an override wins over the resolved display corner radii', (
     tester,
   ) async {
@@ -330,16 +407,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
-      // The regression this guards: SwiftPageTransition.delegatedTransition
-      // and CupertinoPageTransition.delegatedTransition must be the same
-      // function so the swift route underneath keeps driving its own
-      // secondaryRouteAnimation (and this clip) rather than being handed a
-      // frozen proxy animation.
-      expect(find.byType(ClipRSuperellipse), findsWidgets);
-      final clip = tester
-          .widgetList<ClipRSuperellipse>(find.byType(ClipRSuperellipse))
-          .first;
-      expect(clip.clipBehavior, Clip.antiAlias);
+      // The documented trade-off of owning the delegated transition: under a
+      // stock CupertinoPageRoute the swift page receives the SDK's delegate,
+      // so it slides as the SDK does and its own clip stays inactive.
+      final clip = findClip(tester);
+      expect(clip.clipBehavior, Clip.none);
+      expect(tester.getTopLeft(find.byType(ClipRSuperellipse)).dx, lessThan(0));
 
       await tester.pumpAndSettle();
       expect(find.text('cupertino'), findsOneWidget);

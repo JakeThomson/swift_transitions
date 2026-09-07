@@ -2,11 +2,15 @@ import 'package:flutter/cupertino.dart';
 
 import '../corners/display_corner_radii.dart';
 
-// The slide geometry and curves are the SDK's, ported from
-// `cupertino/route.dart` (`_kRightMiddleTween`, `_kMiddleLeftTween` and
-// `_CupertinoPageTransitionState._setupAnimation`), so a SwiftPageRoute and a
-// CupertinoPageRoute move identically. Only the leading-edge shadow and the
-// clip differ — see [SwiftPageTransition].
+// The incoming page's slide and curve are the SDK's, ported from
+// `cupertino/route.dart` (`_kRightMiddleTween` and
+// `_CupertinoPageTransitionState._setupAnimation`). The covered page's
+// motion is not: it was measured from a native recording (design.md section
+// 1.1) and differs from the SDK in three ways. It travels 0.29 of the width
+// rather than a third, it follows the same curve as the incoming page rather
+// than its own `linearToEaseOut`, so the two pages move in lockstep, and it
+// is dimmed by the transition rather than a barrier, so the dim also tracks
+// the finger and exists under a route with no barrier colour.
 
 // Offset from offscreen to the right to fully on screen.
 final Animatable<Offset> _kRightMiddleTween = Tween<Offset>(
@@ -14,20 +18,31 @@ final Animatable<Offset> _kRightMiddleTween = Tween<Offset>(
   end: Offset.zero,
 );
 
-// Offset from fully on screen to 1/3 offscreen to the left.
+/// How far the covered page travels, as a fraction of the width. Native
+/// measured 0.283–0.288 across the whole of a push and a held back swipe.
+const double _kCoveredPageTravel = 0.29;
+
+// Offset from fully on screen to [_kCoveredPageTravel] offscreen to the left.
 final Animatable<Offset> _kMiddleLeftTween = Tween<Offset>(
   begin: Offset.zero,
-  end: const Offset(-1 / 3, 0),
+  end: const Offset(-_kCoveredPageTravel, 0),
 );
 
-/// The iOS push transition: the SDK's slide, with the moving page's leading
-/// corners clipped to the display's corner radius and its leading-edge shadow
-/// cast from that rounded shape.
+/// The black overlaid on the covered page at full progress. Native measured
+/// 0.109–0.118 × progress, linear.
+const double _kCoveredPageDimAlpha = 0.115;
+
+/// The iOS push transition: the SDK's slide for the arriving page, the
+/// measured parallax and dim for the covered page, and the moving page's
+/// leading corners clipped to the display's corner radius with its
+/// leading-edge shadow cast from that rounded shape.
 ///
 /// The page is clipped while it is in motion — arriving (`primaryRouteAnimation`
 /// incomplete) or receding under a route pushed on top of it
 /// (`secondaryRouteAnimation` active) — and the clip is removed at rest, so a
-/// settled page costs nothing.
+/// settled page costs nothing. The covered page moves on the same curve as
+/// the page covering it and darkens in proportion, so the two read as one
+/// motion; both are linear while a back swipe is tracking the finger.
 ///
 /// Only the **leading** corners round. A page in flight keeps its trailing
 /// edge on or beyond the display's own edge, where the display already rounds
@@ -69,16 +84,33 @@ class SwiftPageTransition extends StatefulWidget {
   /// The page content.
   final Widget child;
 
-  /// The transition applied to the route underneath this one.
+  /// The transition applied to a route underneath a [SwiftPageRoute] that
+  /// does not share it — a [CupertinoPageRoute], or a [MaterialPageRoute]
+  /// with another theme: the covered page's slide, clip and dim, linear
+  /// while a back swipe is in progress.
   ///
-  /// The same function as [CupertinoPageTransition.delegatedTransition],
-  /// not a forwarding wrapper: [ModalRoute.didChangeNext] only hands a route
-  /// its own live `secondaryAnimation` (rather than delegating to this one)
-  /// when the route above it carries the *same* [delegatedTransition], so a
-  /// [SwiftPageRoute] and a [CupertinoPageRoute] must share one function
-  /// identity to clip and slide correctly stacked in either order.
-  static const DelegatedTransitionBuilder delegatedTransition =
-      CupertinoPageTransition.delegatedTransition;
+  /// A static tear-off, because [ModalRoute.didChangeNext] compares delegated
+  /// transitions by identity: two stacked Swift routes share it and so each
+  /// keeps driving its own [SwiftPageTransition]. The reverse stack — a Swift
+  /// route under a stock [CupertinoPageRoute] — receives the SDK's delegate
+  /// and moves as the SDK does, without the clip or the measured dim.
+  static Widget? delegatedTransition(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    bool allowSnapshotting,
+    Widget? child,
+  ) {
+    if (child == null) {
+      return null;
+    }
+    return SwiftPageTransition(
+      primaryRouteAnimation: kAlwaysCompleteAnimation,
+      secondaryRouteAnimation: secondaryAnimation,
+      linearTransition: ModalRoute.of(context)?.popGestureInProgress ?? false,
+      child: child,
+    );
+  }
 
   @override
   State<SwiftPageTransition> createState() => _SwiftPageTransitionState();
@@ -88,6 +120,7 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
   late Animation<Offset> _primaryPositionAnimation;
   late Animation<Offset> _secondaryPositionAnimation;
   late Animation<double> _shadowAnimation;
+  late Animation<double> _dimAnimation;
   CurvedAnimation? _primaryPositionCurve;
   CurvedAnimation? _secondaryPositionCurve;
   CurvedAnimation? _shadowCurve;
@@ -131,10 +164,12 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
         curve: Curves.fastEaseInToSlowEaseOut,
         reverseCurve: Curves.fastEaseInToSlowEaseOut.flipped,
       );
+      // The same curve as the primary, so the covered page keeps pace with
+      // the page covering it (the SDK gives it linearToEaseOut of its own).
       _secondaryPositionCurve = CurvedAnimation(
         parent: widget.secondaryRouteAnimation,
-        curve: Curves.linearToEaseOut,
-        reverseCurve: Curves.easeInToLinear,
+        curve: Curves.fastEaseInToSlowEaseOut,
+        reverseCurve: Curves.fastEaseInToSlowEaseOut.flipped,
       );
       _shadowCurve = CurvedAnimation(
         parent: widget.primaryRouteAnimation,
@@ -150,6 +185,7 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
           _kMiddleLeftTween,
         );
     _shadowAnimation = _shadowCurve ?? widget.primaryRouteAnimation;
+    _dimAnimation = _secondaryPositionCurve ?? widget.secondaryRouteAnimation;
   }
 
   @override
@@ -170,6 +206,7 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
           primaryRouteAnimation: widget.primaryRouteAnimation,
           secondaryRouteAnimation: widget.secondaryRouteAnimation,
           shadowAnimation: _shadowAnimation,
+          dimAnimation: _dimAnimation,
           cornerRadii: widget.cornerRadii,
           child: widget.child,
         ),
@@ -179,13 +216,15 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
 }
 
 /// The page clipped to the display radius on its leading corners, with the
-/// leading-edge shadow cast from the same shape. Both only exist while the
-/// page is in motion.
+/// leading-edge shadow cast from the same shape and the covered page's dim
+/// painted inside the clip. All three only exist while the page is in
+/// motion.
 class _ClippedPage extends StatelessWidget {
   const _ClippedPage({
     required this.primaryRouteAnimation,
     required this.secondaryRouteAnimation,
     required this.shadowAnimation,
+    required this.dimAnimation,
     required this.cornerRadii,
     required this.child,
   });
@@ -193,6 +232,10 @@ class _ClippedPage extends StatelessWidget {
   final Animation<double> primaryRouteAnimation;
   final Animation<double> secondaryRouteAnimation;
   final Animation<double> shadowAnimation;
+
+  /// The covered page's progress, on the same curve as its slide; the dim is
+  /// [_kCoveredPageDimAlpha] of black at 1.
+  final Animation<double> dimAnimation;
   final BorderRadius? cornerRadii;
   final Widget child;
 
@@ -211,6 +254,7 @@ class _ClippedPage extends StatelessWidget {
         primaryRouteAnimation,
         secondaryRouteAnimation,
         shadowAnimation,
+        dimAnimation,
       ]),
       child: child,
       builder: (context, child) {
@@ -227,6 +271,9 @@ class _ClippedPage extends StatelessWidget {
             MediaQuery.sizeOf(context).width * _shadowWidthFraction;
         final shadowStrength = inMotion
             ? shadowAnimation.value.clamp(0.0, 1.0)
+            : 0.0;
+        final dim = inMotion
+            ? _kCoveredPageDimAlpha * dimAnimation.value.clamp(0.0, 1.0)
             : 0.0;
         return DecoratedBox(
           decoration: ShapeDecoration(
@@ -249,7 +296,15 @@ class _ClippedPage extends StatelessWidget {
           child: ClipRSuperellipse(
             borderRadius: active ? radii : BorderRadius.zero,
             clipBehavior: active ? Clip.antiAlias : Clip.none,
-            child: child,
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                color: dim > 0
+                    ? const Color(0xFF000000).withValues(alpha: dim)
+                    : null,
+              ),
+              child: child,
+            ),
           ),
         );
       },

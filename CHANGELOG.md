@@ -1,5 +1,11 @@
 ## 0.1.0-dev
 
+* Match the push transition's covered page to iOS: it travels 0.29 of the
+  width on the same curve as the arriving page, so the two move in lockstep
+  and track the finger together, and it is dimmed by the transition at
+  0.115 × progress. `SwiftPageRoute` has no barrier colour; a covered
+  `CupertinoPageRoute` or Material route gets the same motion and dim
+  through `SwiftPageTransition.delegatedTransition`.
 * Add `ZoomPageRoute`, `ZoomPage` and `ZoomTransitionSource`: the iOS 18
   zoom transition, non-interactive. A page grows out of the source tagged
   with its `sourceTag` and shrinks back into it on pop, cross-fading with
