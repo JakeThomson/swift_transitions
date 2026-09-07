@@ -20,14 +20,22 @@ final Animatable<Offset> _kMiddleLeftTween = Tween<Offset>(
   end: const Offset(-1 / 3, 0),
 );
 
-/// The iOS push transition: the SDK's slide, with the moving page's corners
-/// clipped to the display's corner radius and its leading-edge shadow cast
-/// from that rounded shape.
+/// The iOS push transition: the SDK's slide, with the moving page's leading
+/// corners clipped to the display's corner radius and its leading-edge shadow
+/// cast from that rounded shape.
 ///
 /// The page is clipped while it is in motion — arriving (`primaryRouteAnimation`
 /// incomplete) or receding under a route pushed on top of it
 /// (`secondaryRouteAnimation` active) — and the clip is removed at rest, so a
 /// settled page costs nothing.
+///
+/// Only the **leading** corners round. A page in flight keeps its trailing
+/// edge on or beyond the display's own edge, where the display already rounds
+/// it, so a trailing clip can never be seen on a device — but it can be seen
+/// wherever the app's radius and the bezel's disagree by a pixel (the
+/// simulator's device frame), as a sliver of the window ground in the
+/// trailing corners. Leaving those corners square is pixel-identical on
+/// hardware and removes the sliver.
 ///
 /// The shadow is why this owns its tree rather than wrapping
 /// [CupertinoPageTransition]: that widget paints its shadow as a full-height
@@ -170,8 +178,9 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
   }
 }
 
-/// The page clipped to the display radius, with the leading-edge shadow cast
-/// from the same shape. Both only exist while the page is in motion.
+/// The page clipped to the display radius on its leading corners, with the
+/// leading-edge shadow cast from the same shape. Both only exist while the
+/// page is in motion.
 class _ClippedPage extends StatelessWidget {
   const _ClippedPage({
     required this.primaryRouteAnimation,
@@ -205,7 +214,8 @@ class _ClippedPage extends StatelessWidget {
       ]),
       child: child,
       builder: (context, child) {
-        final radii = cornerRadii ?? DisplayCornerRadii.of(context);
+        final displayRadii = cornerRadii ?? DisplayCornerRadii.of(context);
+        final radii = _leadingCorners(displayRadii, textDirection);
         final inMotion =
             primaryRouteAnimation.value < 1 ||
             secondaryRouteAnimation.value > 0;
@@ -245,4 +255,20 @@ class _ClippedPage extends StatelessWidget {
       },
     );
   }
+
+  /// [radii] reduced to the corners on the page's leading edge — the edge
+  /// that travels across the display. See [SwiftPageTransition].
+  static BorderRadius _leadingCorners(
+    BorderRadius radii,
+    TextDirection textDirection,
+  ) => switch (textDirection) {
+    TextDirection.ltr => BorderRadius.only(
+      topLeft: radii.topLeft,
+      bottomLeft: radii.bottomLeft,
+    ),
+    TextDirection.rtl => BorderRadius.only(
+      topRight: radii.topRight,
+      bottomRight: radii.bottomRight,
+    ),
+  };
 }

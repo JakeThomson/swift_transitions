@@ -27,6 +27,12 @@ Widget testApp({
   );
 }
 
+/// What a 40pt display radius clips to: the leading (LTR: left) corners only.
+const BorderRadius leadingCorners40 = BorderRadius.only(
+  topLeft: Radius.circular(40),
+  bottomLeft: Radius.circular(40),
+);
+
 ClipRSuperellipse findClip(WidgetTester tester) =>
     tester.widget<ClipRSuperellipse>(find.byType(ClipRSuperellipse).last);
 
@@ -46,7 +52,7 @@ void main() {
 
     final midFlight = findClip(tester);
     expect(midFlight.clipBehavior, Clip.antiAlias);
-    expect(midFlight.borderRadius, BorderRadius.circular(40));
+    expect(midFlight.borderRadius, leadingCorners40);
 
     await tester.pumpAndSettle();
     expect(find.text('second'), findsOneWidget);
@@ -229,7 +235,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(findClip(tester).borderRadius, BorderRadius.circular(20));
+    expect(
+      findClip(tester).borderRadius,
+      const BorderRadius.only(
+        topLeft: Radius.circular(20),
+        bottomLeft: Radius.circular(20),
+      ),
+    );
   });
 
   testWidgets(
@@ -404,7 +416,7 @@ void main() {
     final midFlight = shadowDecoration();
     expect(
       (midFlight.shape as RoundedSuperellipseBorder).borderRadius,
-      BorderRadius.circular(40),
+      leadingCorners40,
     );
     expect(midFlight.shadows, isNotEmpty);
 
