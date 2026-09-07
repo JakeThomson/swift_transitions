@@ -46,6 +46,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   ZoomTransitionSourceState? _source;
   ZoomFlightSource? _flightSource;
   ZoomDismissController? _dismiss;
+  bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
   double _releaseVelocity = 0;
   final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
@@ -127,6 +128,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   @override
   void dispose() {
+    _stopUserGesture();
     _source?.show();
     _source = null;
     _liveFrame.dispose();
@@ -221,7 +223,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         (context == null ? BorderRadius.zero : DisplayCornerRadii.of(context));
     final resting = _currentFrame(screen, screenRadii);
     _departure = null;
-    return _dismiss = ZoomDismissController(
+    _dismiss = ZoomDismissController(
       navigator: navigator,
       controller: controller!,
       physics: options.dismissPhysics,
@@ -241,6 +243,11 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         changedInternalState();
       },
       onSettled: () {
+        if (_dismiss != null) {
+          // Grabbed again while settling; that gesture settles for both.
+          return;
+        }
+        _stopUserGesture();
         // A committed dismissal has usually disposed the route by now.
         if (this.navigator != null && navigator.mounted) {
           changedInternalState();
@@ -249,6 +256,34 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       settleSpring: options.pushSpring,
       vsync: navigator,
     );
+    if (!_userGestureInProgress) {
+      final controller = this.controller!;
+      if (controller.status == AnimationStatus.forward) {
+        // Grabbed in flight. A hero flight — a [CupertinoNavigationBar]'s,
+        // say — diverts from the push into a pop only if the route reads as
+        // reversing, so turn the stopped controller around first: reverse()
+        // sets the status, stop() keeps it from moving.
+        controller
+          ..reverse()
+          ..stop();
+      }
+      _userGestureInProgress = true;
+      navigator.didStartUserGesture();
+    }
+    return _dismiss;
+  }
+
+  /// Tells the navigator the user gesture has stopped, once per gesture no
+  /// matter how many grabs it took.
+  void _stopUserGesture() {
+    if (!_userGestureInProgress) {
+      return;
+    }
+    _userGestureInProgress = false;
+    final navigator = this.navigator;
+    if (navigator != null && navigator.mounted) {
+      navigator.didStopUserGesture();
+    }
   }
 
   /// Prepares the flight at the end of the current frame, the deferral

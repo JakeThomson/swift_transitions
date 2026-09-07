@@ -79,9 +79,11 @@ class ZoomDeparture {
 /// spring either way with the release velocity.
 ///
 /// The counterpart of the push route's `BackGestureController`: it is
-/// created when a gesture begins (telling the navigator so), scrubs the
-/// route's own animation controller, and tells the navigator the gesture
-/// has stopped only once the settle animation completes.
+/// created when a gesture begins, scrubs the route's own animation
+/// controller, and reports through [onSettled] only once the settle
+/// animation completes. The route that creates it tells the navigator when
+/// the user gesture starts and stops, since a card can be grabbed again
+/// while it is settling and the navigator counts one gesture for both.
 ///
 /// The response is [ZoomDismissPhysics] applied to the card as it was when
 /// grabbed ([restingFrame]), which is the full screen for a settled page and
@@ -94,8 +96,8 @@ class ZoomDeparture {
 /// and moves with their focal point, about the card as it was at that
 /// moment.
 class ZoomDismissController {
-  /// Creates a controller for a dismissal that has just begun, and tells
-  /// [navigator] that a user gesture has started.
+  /// Creates a controller for a dismissal that has just begun and stops the
+  /// route's animation where it is.
   ZoomDismissController({
     required this.navigator,
     required this.controller,
@@ -118,10 +120,9 @@ class ZoomDismissController {
        _pointer = grabPoint {
     _ticker = vsync.createTicker(_tick);
     controller.stop();
-    navigator.didStartUserGesture();
   }
 
-  /// The navigator the gesture was started on.
+  /// The navigator to pop from on a committed dismissal.
   final NavigatorState navigator;
 
   /// The route's own animation controller, scrubbed by the gesture.
@@ -356,20 +357,13 @@ class ZoomDismissController {
         if (status == AnimationStatus.completed ||
             status == AnimationStatus.dismissed) {
           controller.removeStatusListener(onStatusChanged);
-          _settle();
+          onSettled();
         }
       };
       controller.addStatusListener(onStatusChanged);
     } else {
-      _settle();
+      onSettled();
     }
-  }
-
-  void _settle() {
-    if (navigator.mounted) {
-      navigator.didStopUserGesture();
-    }
-    onSettled();
   }
 
   /// Releases the ticker. Called by whoever created the controller when the

@@ -9,11 +9,16 @@ const Rect posterRect = Rect.fromLTWH(100, 200, 80, 120);
 const Rect screen = Rect.fromLTWH(0, 0, 800, 600);
 
 /// A home page with a poster source and a button that pushes a zoom route
-/// for [detail].
+/// for [detail]. With [hero], both pages carry a [Hero] tagged 'bar', the
+/// way a [CupertinoNavigationBar] does.
 Widget testApp({
   required Widget detail,
   ZoomTransitionOptions options = const ZoomTransitionOptions(),
+  bool hero = false,
 }) {
+  if (hero) {
+    detail = Hero(tag: 'bar', child: detail);
+  }
   return DisplayCornerRadii(
     radii: BorderRadius.circular(40),
     child: CupertinoApp(
@@ -41,6 +46,12 @@ Widget testApp({
                 child: const Text('push'),
               ),
             ),
+            if (hero)
+              const Positioned(
+                right: 0,
+                top: 0,
+                child: Hero(tag: 'bar', child: SizedBox(width: 20, height: 20)),
+              ),
           ],
         ),
       ),
@@ -262,6 +273,63 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
     expect(route.animation!.isCompleted, isTrue);
     expect(navigatorOf(tester).userGestureInProgress, isFalse);
+  });
+
+  testWidgets('grabbing during the push diverts a hero flight', (tester) async {
+    await tester.pumpWidget(testApp(detail: staticDetail, hero: true));
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    // The hero in flight has a copy of the page's text in the overlay.
+    final route = ModalRoute.of(
+      tester.element(find.byType(ZoomTransitionLayer)),
+    )!;
+
+    final gesture = await tester.startGesture(posterRect.center);
+    await tester.pump();
+    expect(route.animation!.status, AnimationStatus.reverse);
+    // A little, and slowly: the card is small this early in the push, so a
+    // short drag is a long way in card heights, and a fast one is a fling.
+    await gesture.moveBy(const Offset(0, 5));
+    await tester.pump(const Duration(milliseconds: 50));
+    await gesture.moveBy(const Offset(0, 5));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.takeException(), isNull);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(navigatorOf(tester).userGestureInProgress, isFalse);
+  });
+
+  testWidgets('grabbing again while the card returns is one gesture', (
+    tester,
+  ) async {
+    await tester.pumpWidget(testApp(detail: staticDetail, hero: true));
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final navigator = navigatorOf(tester);
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+
+    final first = await tester.startGesture(const Offset(400, 300));
+    await first.moveBy(const Offset(0, 100));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(route.animation!.status, AnimationStatus.forward);
+    expect(route.animation!.value, inExclusiveRange(0, 1));
+
+    final second = await tester.startGesture(const Offset(400, 300));
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(navigator.userGestureInProgress, isTrue);
+    expect(tester.takeException(), isNull);
+
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(route.animation!.isCompleted, isTrue);
+    expect(navigator.userGestureInProgress, isFalse);
   });
 
   /// The angle the card is drawn at, from the layer's rotate transform.
