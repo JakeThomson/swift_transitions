@@ -13,22 +13,32 @@ typedef ZoomDismissStartCallback =
 
 const double _kEdgeSwipeWidth = 20.0;
 
-/// Installs the pan and edge-swipe dismissal gestures over a zoom route's
-/// page.
+/// Installs the dismissal gestures over a zoom route's page.
 ///
 /// Three inputs feed one [ZoomDismissController]: a vertical drag
 /// recognizer for pages without a vertical scroll view, the route's
 /// [ZoomScrollController] for pages with one (the scroll view wins the
 /// arena and hands a top-edge drag across, see [ZoomScrollController]), and
-/// a horizontal drag recognizer on the leading edge for the swipe. A
-/// translucent [Listener] underneath tracks the raw pointer for the pivot
-/// and the sideways chase, and grabs a page that is still being pushed.
+/// a horizontal drag recognizer on the leading edge for the swipe. An
+/// opaque [Listener] underneath tracks the raw pointers for the pivot and
+/// the sideways chase, grabs a page that is still being pushed, and drives
+/// the pinch.
+///
+/// The pinch is read from the raw pointers rather than from a
+/// [ScaleGestureRecognizer], because a scroll view accepts a finger as soon
+/// as it passes the touch slop, before a second finger usually lands, and
+/// a recognizer that lost that arena stops tracking the finger. The
+/// [Listener] sees every finger regardless; when the second one lands the
+/// scroll view's live drag is cancelled through [ZoomScrollController],
+/// the mechanism the SDK's sheet keeps for the same handover, and the
+/// scroll view then ignores the rest of the drag.
 class ZoomDismissGestureDetector extends StatefulWidget {
   /// Creates the dismissal gesture layer.
   const ZoomDismissGestureDetector({
     super.key,
     required this.pan,
     required this.edgeSwipe,
+    required this.pinch,
     required this.isPushing,
     required this.onStart,
     required this.scrollController,
@@ -40,6 +50,9 @@ class ZoomDismissGestureDetector extends StatefulWidget {
 
   /// Whether a drag from the leading edge may dismiss.
   final bool edgeSwipe;
+
+  /// Whether a two-finger pinch may dismiss.
+  final bool pinch;
 
   /// Whether the route's push is still running, so that a pointer down
   /// grabs the card in flight.
@@ -70,6 +83,12 @@ class _ZoomDismissGestureDetectorState
   /// resolved.
   bool _pointerDriven = false;
   Offset? _lastPointer;
+
+  /// Every finger on the page, by pointer id, in navigator coordinates.
+  final Map<int, Offset> _pointers = <int, Offset>{};
+
+  /// The two fingers of a live pinch, or null.
+  (int, int)? _pinchPointers;
 
   @override
   void initState() {
@@ -214,6 +233,7 @@ class _ZoomDismissGestureDetectorState
     final controller = _controller;
     _controller = null;
     _pointerDriven = false;
+    _pinchPointers = null;
     controller?.dragEnd(velocity);
     if (controller != null) {
       // Disposed after the settle: the ticker only drives the sideways
@@ -224,6 +244,11 @@ class _ZoomDismissGestureDetectorState
 
   void _handlePointerDown(PointerDownEvent event) {
     _lastPointer = event.position;
+    _pointers[event.pointer] = _toNavigator(event.position);
+    if (widget.pinch && _pointers.length == 2 && _pinchPointers == null) {
+      _beginPinch(event.timeStamp);
+      return;
+    }
     if (widget.pan) {
       _panRecognizer.addPointer(event);
     }
@@ -246,20 +271,63 @@ class _ZoomDismissGestureDetectorState
 
   void _handlePointerMove(PointerMoveEvent event) {
     _lastPointer = event.position;
+    final position = _toNavigator(event.position);
+    _pointers[event.pointer] = position;
     final controller = _controller;
     if (controller == null) {
+      return;
+    }
+    final pinch = _pinchPointers;
+    if (pinch != null) {
+      if (event.pointer == pinch.$1 || event.pointer == pinch.$2) {
+        controller.pinchUpdate(
+          _pointers[pinch.$1]!,
+          _pointers[pinch.$2]!,
+          event.timeStamp,
+        );
+      }
       return;
     }
     if (_pointerDriven) {
       controller.dragUpdate(event.delta.dy);
     }
-    controller.pointerMoved(_toNavigator(event.position));
+    controller.pointerMoved(position);
   }
 
   void _handlePointerUp(PointerEvent event) {
+    _pointers.remove(event.pointer);
+    final pinch = _pinchPointers;
+    if (pinch != null) {
+      if (event.pointer == pinch.$1 || event.pointer == pinch.$2) {
+        _end(_controller?.pinchReleaseVelocity ?? 0);
+      }
+      return;
+    }
     if (_pointerDriven) {
       _end(0);
     }
+  }
+
+  /// The second finger has landed: the live gesture, or a new one, becomes
+  /// a pinch, and any scroll view drag lets go of its finger.
+  void _beginPinch(Duration timeStamp) {
+    final ids = _pointers.keys.toList();
+    final first = _pointers[ids[0]]!;
+    final second = _pointers[ids[1]]!;
+    if (_controller == null) {
+      final controller = widget.onStart(
+        ZoomGesture.pinch,
+        (first + second) / 2,
+      );
+      if (controller == null) {
+        return;
+      }
+      _controller = controller;
+    }
+    _pinchPointers = (ids[0], ids[1]);
+    _pointerDriven = false;
+    widget.scrollController.cancelDrag();
+    _controller!.beginPinch(first, second, timeStamp);
   }
 
   @override
@@ -326,6 +394,17 @@ class ZoomScrollController extends ScrollController {
   /// feeding the dismissal (an upward delta grows the card back) instead of
   /// scrolling the list.
   ValueGetter<bool> isCardDragged = () => false;
+
+  /// Makes every attached scroll view let go of a drag in progress, so a
+  /// pinch can take its finger over. The scroll view keeps receiving the
+  /// drag's updates but no longer applies them.
+  void cancelDrag() {
+    for (final position in positions) {
+      if (position is _ZoomScrollPosition) {
+        position.cancelDrag();
+      }
+    }
+  }
 
   @override
   ScrollPosition createScrollPosition(
@@ -401,5 +480,15 @@ class _ZoomScrollPosition extends ScrollPositionWithSingleContext {
   Drag drag(DragStartDetails details, VoidCallback dragCancelCallback) {
     _dragCancelCallback = dragCancelCallback;
     return super.drag(details, dragCancelCallback);
+  }
+
+  /// Ends the drag activity without handing anything to the dismissal.
+  void cancelDrag() {
+    if (_dragCancelCallback == null) {
+      return;
+    }
+    _dragCancelCallback?.call();
+    _dragCancelCallback = null;
+    super.goBallistic(0);
   }
 }

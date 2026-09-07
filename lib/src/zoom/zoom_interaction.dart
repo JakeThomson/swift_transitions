@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
@@ -38,6 +40,11 @@ class ZoomInteractionContext {
   /// to the route's scroll controller.
   final ScrollMetrics? primaryScrollMetrics;
 }
+
+/// How far short of full progress a cancelled dismissal's return starts
+/// from when the card is already at full progress. See
+/// [ZoomDismissController.dragEnd].
+const double _kReturnStart = 0.02;
 
 /// Decides whether an interactive dismissal may begin.
 typedef ZoomInteractiveDismissPredicate =
@@ -81,6 +88,11 @@ class ZoomDeparture {
 /// the mid-flight card for an interrupted push. Progress scales with the
 /// card: a card at 0.75 of its grabbed size reports 0.75 of the grabbed
 /// progress.
+///
+/// A second finger turns any gesture into a pinch ([beginPinch]): from then
+/// on the card scales with the fingers' distance, rotates with their angle
+/// and moves with their focal point, about the card as it was at that
+/// moment.
 class ZoomDismissController {
   /// Creates a controller for a dismissal that has just begun, and tells
   /// [navigator] that a user gesture has started.
@@ -118,14 +130,15 @@ class ZoomDismissController {
   /// The dismissal's response.
   final ZoomDismissPhysics physics;
 
-  /// Which gesture is driving.
-  final ZoomGesture gesture;
+  /// Which gesture is driving. A pan or swipe becomes a pinch when a second
+  /// finger lands ([beginPinch]).
+  ZoomGesture gesture;
 
-  /// The card as it was when grabbed.
-  final ZoomFrame restingFrame;
+  /// The card as it was when grabbed, or when the pinch began.
+  ZoomFrame restingFrame;
 
-  /// The route animation's value when grabbed.
-  final double restingProgress;
+  /// The route animation's value when grabbed, or when the pinch began.
+  double restingProgress;
 
   /// The navigator's bounds.
   final Rect screen;
@@ -172,8 +185,21 @@ class ZoomDismissController {
   Duration _lastTick = Duration.zero;
   bool _released = false;
 
+  // Pinch state: the fingers' initial and current distance, angle and
+  // focal point, and a short history of distances for the release speed.
+  double _pinchDistance0 = 1;
+  double _pinchAngle0 = 0;
+  Offset _pinchFocal0 = Offset.zero;
+  double _pinchScale = 1;
+  double _pinchRotation = 0;
+  Offset _pinchFocal = Offset.zero;
+  final List<(Duration, double)> _pinchSamples = <(Duration, double)>[];
+
   /// The card's current scale relative to [restingFrame].
-  double get scale => physics.scaleFor(_travel);
+  double get scale => switch (gesture) {
+    ZoomGesture.pan || ZoomGesture.edgeSwipe => physics.scaleFor(_travel),
+    ZoomGesture.pinch => _pinchScale,
+  };
 
   /// Whether the card has been dragged away from where it was grabbed.
   bool get isDragged => _travelPixels > 0;
@@ -186,9 +212,10 @@ class ZoomDismissController {
   };
 
   /// Feeds the gesture's primary-axis movement: downward pixels for a pan,
-  /// pixels toward the trailing edge for an edge swipe.
+  /// pixels toward the trailing edge for an edge swipe. Ignored once a pinch
+  /// has taken over.
   void dragUpdate(double delta) {
-    if (_released) {
+    if (_released || gesture == ZoomGesture.pinch) {
       return;
     }
     _travelPixels += delta;
@@ -196,14 +223,70 @@ class ZoomDismissController {
   }
 
   /// Feeds the finger's position in navigator coordinates, for the pivot
-  /// and the sideways chase.
+  /// and the sideways chase. Ignored once a pinch has taken over.
   void pointerMoved(Offset position) {
-    if (_released) {
+    if (_released || gesture == ZoomGesture.pinch) {
       return;
     }
     _pointer = position;
     _trackHorizontal();
     _publish();
+  }
+
+  /// A second finger has landed at [second] with the first at [first]: the
+  /// card as it is right now becomes the resting frame of a pinch.
+  void beginPinch(Offset first, Offset second, Duration timeStamp) {
+    if (_released) {
+      return;
+    }
+    restingFrame = _frame();
+    restingProgress = controller.value;
+    gesture = ZoomGesture.pinch;
+    _retargetHorizontal(0, physics.returnSpring);
+    _pinchDistance0 = math.max(1, (second - first).distance);
+    _pinchAngle0 = (second - first).direction;
+    _pinchFocal0 = (first + second) / 2;
+    _pinchScale = 1;
+    _pinchRotation = 0;
+    _pinchFocal = _pinchFocal0;
+    _pinchSamples
+      ..clear()
+      ..add((timeStamp, _pinchDistance0));
+    _publish();
+  }
+
+  /// Feeds the two fingers' positions in navigator coordinates.
+  void pinchUpdate(Offset first, Offset second, Duration timeStamp) {
+    if (_released || gesture != ZoomGesture.pinch) {
+      return;
+    }
+    final distance = math.max(1.0, (second - first).distance);
+    // A card cannot grow past the size it was pinched at.
+    _pinchScale = (distance / _pinchDistance0).clamp(physics.minimumScale, 1.0);
+    _pinchRotation = (second - first).direction - _pinchAngle0;
+    _pinchFocal = (first + second) / 2;
+    _pinchSamples.add((timeStamp, distance));
+    while (_pinchSamples.length > 2 &&
+        timeStamp - _pinchSamples[1].$1 > const Duration(milliseconds: 100)) {
+      _pinchSamples.removeAt(0);
+    }
+    _publish();
+  }
+
+  /// How fast the fingers are closing, in pixels per second, from the
+  /// samples of the last hundred milliseconds. Positive means contracting,
+  /// which is away from the identity state.
+  double get pinchReleaseVelocity {
+    if (_pinchSamples.length < 2) {
+      return 0;
+    }
+    final (t0, d0) = _pinchSamples.first;
+    final (t1, d1) = _pinchSamples.last;
+    final seconds = (t1 - t0).inMicroseconds / Duration.microsecondsPerSecond;
+    if (seconds <= 0) {
+      return 0;
+    }
+    return (d0 - d1) / seconds;
   }
 
   /// Ends the gesture with the primary axis's release [velocity] in pixels
@@ -221,6 +304,12 @@ class ZoomDismissController {
     } else {
       commit = scale < physics.dismissThreshold;
     }
+    if (!commit && controller.value > 1 - _kReturnStart) {
+      // The return spring on the route's controller is also the clock the
+      // card un-rotates and re-centres by, so a card that was only rotated
+      // or moved — progress still 1 — starts a hair short of the end.
+      controller.value = 1 - _kReturnStart;
+    }
     final departure = ZoomDeparture(
       frame: _frame(),
       progress: controller.value,
@@ -228,15 +317,28 @@ class ZoomDismissController {
     );
     liveFrame.value = null;
     _retargetHorizontal(0, physics.returnSpring);
-    final cardExtent = switch (gesture) {
-      ZoomGesture.pan || ZoomGesture.pinch => restingFrame.rect.height,
-      ZoomGesture.edgeSwipe => restingFrame.rect.width,
-    };
+    // The rate the shrink was running at, in progress units per second.
+    // A pinch's scale is the fingers' distance over their initial distance,
+    // so its rate needs no gain.
+    final towardTarget = commit ? velocity : -velocity;
     final seed =
-        physics.commitVelocityFor(
-          velocity: commit ? velocity : -velocity,
-          cardHeight: cardExtent,
-        ) *
+        switch (gesture) {
+          ZoomGesture.pan => physics.commitVelocityFor(
+            velocity: towardTarget,
+            cardHeight: restingFrame.rect.height,
+          ),
+          ZoomGesture.edgeSwipe => physics.commitVelocityFor(
+            velocity: towardTarget,
+            cardHeight: restingFrame.rect.width,
+          ),
+          ZoomGesture.pinch =>
+            towardTarget <= 0
+                ? 0.0
+                : math.min(
+                    physics.maxCommitVelocity,
+                    towardTarget / _pinchDistance0,
+                  ),
+        } *
         restingProgress;
     onRelease(departure, seed);
     if (commit) {
@@ -280,10 +382,25 @@ class ZoomDismissController {
   ZoomFrame _frame() {
     final rest = restingFrame.rect;
     final scale = this.scale;
+    var rotation = restingFrame.rotation;
     final Rect rect;
     switch (gesture) {
-      case ZoomGesture.pan:
       case ZoomGesture.pinch:
+        // Scaled and rotated about the initial focal point, then carried
+        // with the focal point. The layer rotates the card about its own
+        // centre, so the centre is placed where rotating about the focal
+        // point would put it.
+        final pivot = _pinchFocal0;
+        final scaledCentre = pivot + (rest.center - pivot) * scale;
+        final spun = pivot + _rotate(scaledCentre - pivot, _pinchRotation);
+        final centre = spun + (_pinchFocal - _pinchFocal0);
+        rect = Rect.fromCenter(
+          center: centre,
+          width: rest.width * scale,
+          height: rest.height * scale,
+        );
+        rotation += _pinchRotation;
+      case ZoomGesture.pan:
         rect = physics.dismissedRect(
           restingRect: rest,
           travel: _travel,
@@ -309,7 +426,18 @@ class ZoomDismissController {
     final radii =
         BorderRadius.lerp(sourceRadii ?? screenRadii, screenRadii, progress)! *
         scale;
-    return ZoomFrame(rect: rect, rotation: 0, radii: radii, sourceOpacity: 0);
+    return ZoomFrame(
+      rect: rect,
+      rotation: rotation,
+      radii: radii,
+      sourceOpacity: 0,
+    );
+  }
+
+  static Offset _rotate(Offset v, double angle) {
+    final c = math.cos(angle);
+    final s = math.sin(angle);
+    return Offset(v.dx * c - v.dy * s, v.dx * s + v.dy * c);
   }
 
   void _publish() {
@@ -321,8 +449,9 @@ class ZoomDismissController {
   /// chases the damped finger offset through the tracking spring.
   void _trackHorizontal() {
     final open = switch (gesture) {
-      ZoomGesture.pan || ZoomGesture.pinch => _travelPixels > kTouchSlop,
+      ZoomGesture.pan => _travelPixels > kTouchSlop,
       ZoomGesture.edgeSwipe => true,
+      ZoomGesture.pinch => false,
     };
     if (!open) {
       if (_pointerAtOpen != null) {

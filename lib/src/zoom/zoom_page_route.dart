@@ -331,6 +331,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     final page = ZoomDismissGestureDetector(
       pan: gestures.pan,
       edgeSwipe: gestures.edgeSwipe,
+      pinch: gestures.pinch,
       isPushing: () => animation.status == AnimationStatus.forward,
       onStart: _beginDismiss,
       scrollController: _scrollController,

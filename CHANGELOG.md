@@ -1,5 +1,11 @@
 ## 0.1.0-dev
 
+* Add the pinch to the zoom route's interactive dismissal: two fingers
+  scale the card with their distance, rotate it with their angle and move it
+  with their focal point, and a second finger turns a pan or swipe into a
+  pinch. The card un-rotates on the way to wherever it lands. The pinch is
+  read from the page's own pointer layer and takes its finger from a
+  scrolling list through the route's scroll controller.
 * Add interactive dismissal to the zoom route: a downward pan anywhere on
   the page, or on a vertical scroll view once it reaches its top edge, and a
   swipe from the leading edge shrink the page into a card that follows the

@@ -99,7 +99,8 @@ class ZoomDismissGestures {
   /// A drag from the leading edge, as the push transition's back swipe.
   final bool edgeSwipe;
 
-  /// A two-finger pinch. Not implemented yet.
+  /// A two-finger pinch, which scales the card with the fingers' distance,
+  /// rotates it with their angle and moves it with their focal point.
   final bool pinch;
 
   @override
