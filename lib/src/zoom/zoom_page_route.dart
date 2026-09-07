@@ -336,12 +336,6 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         navigator,
       );
     }
-    // ignore: avoid_print
-    print(
-      '[ZOOMDBG] tag=$sourceTag animate=$animate overlay=${overlay != null} '
-      'prev=${previous.runtimeType} subtree=${previous is ModalRoute<Object?> ? previous.subtreeContext != null : null} '
-      'found=${found != null}',
-    );
     final rect = overlay == null ? null : found?.boundsIn(overlay);
     if (found == null || rect == null) {
       found = null;
