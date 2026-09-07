@@ -1,6 +1,6 @@
 # swift_transitions: design and implementation plan
 
-Status: proposal, 2026-09-02; M0–M2 implemented as of 2026-09-07, with the
+Status: proposal, 2026-09-02; M0–M2b implemented as of 2026-09-07, with the
 deviations noted inline.
 
 This package recreates two iOS navigation transitions in Flutter, with the
@@ -47,9 +47,10 @@ Apple's behaviour, which Flutter's `CupertinoPageTransition` already models
 except for the corners:
 
 - The incoming page slides in from the trailing edge; the covered page slides
-  out by a third of the width and is dimmed slightly. Flutter uses
-  `Curves.fastEaseInToSlowEaseOut` over 500 ms and a barrier colour of
-  `0x18000000` for the dim.
+  out by 0.29 of the width on the same curve and is dimmed in proportion
+  (measured below). Flutter uses `Curves.fastEaseInToSlowEaseOut` over 500 ms
+  for the incoming page, a third of the width on a curve of its own for the
+  covered page, and a barrier colour of `0x18000000` for the dim.
 - The incoming page's leading corners are clipped to the display corner radius
   while it is in motion. At rest the clip is removed.
 - A soft shadow runs along the incoming page's leading edge.
@@ -59,6 +60,27 @@ except for the corners:
 - Navigation bar items do not travel with the page. They belong to the stack
   and cross-fade (Flutter apps that want this use a shell above the navigator,
   see section 8; the package does not draw bar chrome).
+
+Measured 2026-09-07 from a native Settings recording (`push.mov`, iPhone
+Mirroring, the push read at 60 fps and a held back swipe at 5 fps, the top
+page's edge and the covered page's shift found by matching against the
+at-rest frames):
+
+| Quantity | Observed | Flutter SDK |
+|---|---|---|
+| Covered page travel at full progress | 0.29 of the width (0.283–0.288 across progress 0.49–0.94, push and swipe alike) | 1/3 |
+| Covered page timing | linear in the top page's progress: one progress drives both pages, in the push and under the finger | its own `linearToEaseOut` curve; linear only during the gesture, and only when the covered route runs its own transition |
+| Dim on the covered page | black at alpha 0.115 × progress, linear (white 253 → 229 under the settled page) | barrier `0x18000000` (alpha 0.094) on `Curves.ease`; none at all for a Material route |
+
+The same app recorded through swift_transitions installed as a
+`PageTransitionsTheme` showed the covered page lagging on a curve during the
+swipe (0.25 of the width at 87 % progress, not tracking the finger) and no
+dim: `MaterialRouteTransitionMixin` has no barrier colour, and a covered
+route that does not share the top route's delegated transition (a
+`CupertinoPage` under a Material page, or the reverse) receives the SDK's
+static delegate, which always curves and knows nothing about the gesture.
+swiftuikit 0.2.1 has the same SDK curves and dim, a 0.40 overlap and a
+blur-100 shadow; it does not address either point.
 
 ### 1.2 Zoom push
 
@@ -465,16 +487,25 @@ and is available since Flutter 3.29.
 `SwiftPageTransition` is `CupertinoPageTransition` plus a clip:
 
 ```
-SlideTransition (secondary, −⅓ width, transformHitTests: false)
+SlideTransition (secondary, −0.29 width on the primary's curve, transformHitTests: false)
   └ SlideTransition (primary, from +1 width)
-      └ DecoratedBoxTransition (leading edge shadow, as in the SDK)
+      └ DecoratedBox (leading edge shadow, cast from the clip shape)
           └ ClipRSuperellipse (leading corners = DisplayCornerRadii, only while primary < 1 or secondary > 0)
-              └ child
+              └ DecoratedBox (foreground dim, 0.115 × the secondary's curved value)
+                  └ child
 ```
 
 The clip is removed at rest (`BorderRadius.zero` and `Clip.none`) so a
-settled page costs nothing. The delegated transition applied to the covered
-route is the SDK slide plus a dim matching Cupertino's barrier colour.
+settled page costs nothing. The covered page's slide uses the *same* curve as
+the incoming page's, so the two move in lockstep as measured in section 1.1,
+and its dim is painted here rather than by a barrier so that it tracks a
+back swipe and exists under a top route with no barrier colour;
+`SwiftPageRoute.barrierColor` is null. The delegated transition applied to a
+covered route that does not share it (a `CupertinoPageRoute`, or a Material
+route with another theme) is this same widget with a completed primary
+animation, linear while `popGestureInProgress`. The reverse stack — a Swift
+route under a stock `CupertinoPageRoute` — receives the SDK's delegate and
+moves as the SDK does, without the clip or the measured dim.
 
 The back gesture reuses the SDK controller semantics (they are private, so
 they are copied with attribution as go_router and swiftuikit do): drag
@@ -844,6 +875,22 @@ flight rendering, cross-fade, dimming via the delegated transition, missing
 source fallback, Reduce Motion. Acceptance: section 5 flight tests; example
 grid of posters opens a detail page and the back button zooms it home.
 
+**M2b Push parallax and dim (1 day).**
+Bring the push in line with the section 1.1 measurements. `SwiftPageTransition`
+drives the covered page from the top page's progress at 0.29 of the width,
+so both pages share one curve and one gesture, and paints the dim itself at
+0.115 × progress (`SwiftPageRoute.barrierColor` becomes null; the dim then
+exists under a Material top route too). `SwiftPageTransition.delegatedTransition`
+becomes the package's own static, gesture-aware builder, so a covered
+Cupertino or Material route gets the same motion, dim and clip under a Swift
+top route. The trade-off is the reverse stack: a Swift route covered by a
+stock `CupertinoPageRoute` receives the SDK's delegate and moves as the SDK
+does, without its clip; documented, and moot for apps that use `SwiftPage`
+or the theme builder throughout. Acceptance: tests for the fraction, the dim
+alpha, and linearity under the gesture in mixed stacks; the example captured
+on the simulator and read with the same script gives 0.29 and 0.115 (done:
+0.289–0.290 and 0.106–0.118 across a held swipe).
+
 **M3 Interactive dismissal: pan and edge swipe (3–4 days).**
 Port the fitted model from liquid_glass_widgets (`SheetMorphGeometry`'s
 travel, scale, rubber band, horizontal offset and commit-velocity functions,
@@ -986,5 +1033,6 @@ the route.
   (`auto_route`, `flutter_physics`, `screen_corner_radius`) and its lack of
   a pinch gesture are why this package is a separate implementation.
 - Recordings: `drag.mov`, `back.mov`, `pinch.mp4` captured on iOS 26 on
-  2026-09-02. Not committed; the frame-strip tool in `tool/` reproduces the
+  2026-09-02, and `push.mov` (Settings, push and held back swipe) on
+  2026-09-07. Not committed; the frame-strip tool in `tool/` reproduces the
   readings from any recording.
