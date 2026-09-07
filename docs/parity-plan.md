@@ -185,10 +185,23 @@ rather than assume).
 ## 2. The back swipe
 
 **Owns** (`lib/src/page/back_gesture.dart`): the edge width
-(`_kBackGestureWidth` 20), the tracking (1:1 today), the commit rule
-(`_kMinFlingVelocity` 1.0 screen widths/s and the 50 % position rule), the
+(`_kBackGestureWidth` 20), the tracking (1:1 today), the commit rule, the
 commit and cancel animations (spring or curve, and duration from the
 release point), and the covered page and dim while tracking.
+
+The commit rule is the first known deviation. The SDK's
+`_CupertinoBackGestureController` (and swiftuikit, which copies it)
+commits past the midpoint or at a fling of a full screen width per
+second — 402 pt/s on the reference device — so a short flick springs
+back unless it is fast, which is not what iOS does. Since 2026-09-08 the
+package projects the release instead: commit if the page, coasting from
+the release point at `UIScrollView.DecelerationRate.normal` (0.998,
+`velocity × rate / (1 − rate)` per WWDC 2018 "Designing Fluid
+Interfaces"), would pass the midpoint. That is a hypothesis about UIKit's
+rule, not a measurement; this stage measures it. Note that a mouse drag
+on the simulator releases at far lower velocities than a finger, so the
+commit table is taken from scripted drags with stated velocities and
+checked by hand on the device.
 
 **Recordings** (scripted, simulator): edge drags to 20 %, 45 %, 55 % and
 80 % of the width, each released at rest and with a fling (fast, slow);
@@ -198,13 +211,18 @@ vertically. Then the same set on the device by hand, with touch rings.
 **Measure**: page left edge vs finger x while tracking (should be
 identity for the edge swipe); the commit and cancel curves from release
 to settle, and their duration as a function of the release position;
-which releases commit.
+which releases commit, over a grid of release position (10 %, 20 %, 35 %,
+50 %, 65 %, 80 %) × release velocity (−600, −200, 0, +150, +300, +600,
++1200 pt/s), the negative rows released while moving back toward the
+edge.
 
 **Tune**: the commit and cancel springs (fit them; iOS uses a spring here
-and its duration depends on remaining distance), the velocity threshold,
-the position threshold. The anywhere region: same response per pt of
-travel as the edge, with the tracking start at the touch slop rather than
-at the edge.
+and its duration depends on remaining distance); the commit rule — keep
+the projection if the grid fits it with one deceleration rate, otherwise
+whatever boundary the grid draws (a velocity sign rule with a position
+fallback is the other common reading of UIKit). The anywhere region: same
+response per pt of travel as the edge, with the tracking start at the
+touch slop rather than at the edge.
 
 **Done when** tracking is identity, the release curves are matched from
 each of the four positions, and the commit table (position × velocity →

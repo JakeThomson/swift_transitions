@@ -21,7 +21,9 @@ enum BackGestureRegion {
 }
 
 const double _kBackGestureWidth = 20.0;
-const double _kMinFlingVelocity = 1.0; // Screen widths per second.
+
+/// `UIScrollView.DecelerationRate.normal`: how a release coasts on iOS.
+const double _kDecelerationRate = 0.998;
 const Duration _kDroppedSwipePageAnimationDuration = Duration(
   milliseconds: 350,
 );
@@ -61,8 +63,23 @@ class BackGestureController<T> {
     controller.value -= delta;
   }
 
+  /// Where a release at [velocity] (screen widths per second) would coast
+  /// to, in screen widths, at the iOS scroll deceleration: the projection
+  /// from "Designing Fluid Interfaces" (WWDC 2018),
+  /// `velocity × rate / (1 − rate)` with velocity per millisecond.
+  static double projectedTravel(double velocity) =>
+      velocity / 1000 * _kDecelerationRate / (1 - _kDecelerationRate);
+
   /// Ends the gesture with a release [velocity] (a fraction of the drag axis
-  /// per second), committing or cancelling the pop.
+  /// per second, positive toward the pop), committing or cancelling it.
+  ///
+  /// The pop commits if the page, coasting from where it is at the release
+  /// velocity, would pass the midpoint. The SDK's rule — commit past the
+  /// midpoint, or at a fling of a full screen width per second in either
+  /// direction — leaves a short flick springing back and lets a page that
+  /// is being pulled back past the midpoint pop anyway; a projection
+  /// handles both, and is the rule iOS uses for coasting releases. Its
+  /// calibration against the native pop is parity-plan stage 2.
   void dragEnd(double velocity) {
     const animationCurve = Curves.fastEaseInToSlowEaseOut;
     final isCurrent = getIsCurrent();
@@ -72,10 +89,9 @@ class BackGestureController<T> {
       // Already navigated away from (e.g. a programmatic pop mid-drag): the
       // outcome no longer depends on velocity or position.
       animateForward = getIsActive();
-    } else if (velocity.abs() >= _kMinFlingVelocity) {
-      animateForward = velocity <= 0;
     } else {
-      animateForward = controller.value > 0.5;
+      final travelled = 1 - controller.value;
+      animateForward = travelled + projectedTravel(velocity) < 0.5;
     }
 
     if (animateForward) {

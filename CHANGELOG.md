@@ -1,5 +1,9 @@
 ## 0.1.0-dev
 
+* Decide the back swipe's release by projecting where the page would coast
+  to at iOS's scroll deceleration rate, instead of the SDK's midpoint-or-
+  fling rule: a short flick pops, and a page pulled back at the release
+  springs home even past the midpoint.
 * Make the zoom route's interactive dismissal interruptible the whole way:
   a committed release lands the card before the route pops, so a card on
   its way down — or springing back — can be caught and dragged again, and

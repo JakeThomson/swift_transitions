@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swift_transitions/src/page/back_gesture.dart';
 import 'package:swift_transitions/swift_transitions.dart';
 
 /// A minimal app with a home page that pushes a [SwiftPageRoute] wrapping
@@ -153,12 +154,58 @@ void main() {
     await tester.pumpAndSettle();
 
     // 100px is well short of the 400px midpoint of the default 800px test
-    // view; only the fling-velocity threshold (one screen width per second)
-    // can be committing this.
+    // view; only the release velocity can be committing this.
     await tester.flingFrom(const Offset(5, 300), const Offset(100, 0), 1600);
     await tester.pumpAndSettle();
 
     expect(find.text('second'), findsNothing);
+  });
+
+  testWidgets('a short flick commits when its coast would pass the midpoint', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(secondPage: const Center(child: Text('second'))),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    // 120px at 600px/s: 0.15 widths travelled, and 0.75 widths/s coasts
+    // another 0.37 at the iOS deceleration rate. Short of the SDK's fling
+    // threshold, past the midpoint once projected.
+    expect(BackGestureController.projectedTravel(0.75), closeTo(0.374, 0.001));
+    await tester.flingFrom(const Offset(5, 300), const Offset(120, 0), 600);
+    await tester.pumpAndSettle();
+
+    expect(find.text('second'), findsNothing);
+  });
+
+  testWidgets('a page pulled back at the release cancels even past midpoint', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(secondPage: const Center(child: Text('second'))),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    // Dragged 70% across, then moving back at 500px/s when let go: the
+    // coast takes it back to 0.39, so it springs home.
+    // Stamped by hand: the velocity tracker reads event times, and a pause
+    // before the pull back keeps the drag out of its window.
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(560, 0));
+    await tester.pump(const Duration(milliseconds: 150));
+    var at = const Duration(milliseconds: 150);
+    for (var i = 0; i < 4; i++) {
+      at += const Duration(milliseconds: 20);
+      await gesture.moveBy(const Offset(-10, 0), timeStamp: at);
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    await gesture.up(timeStamp: at);
+    await tester.pumpAndSettle();
+
+    expect(find.text('second'), findsOneWidget);
   });
 
   testWidgets('a short drag on the leading edge cancels the pop', (
