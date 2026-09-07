@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../corners/display_corner_radii.dart';
 import 'zoom_frame.dart';
+import 'zoom_interaction.dart';
 import 'zoom_transition_layer.dart';
 
 /// What a zoom flight grows out of and shrinks back into, measured when the
@@ -32,12 +34,19 @@ class ZoomFlightSource {
 /// underneath, or one that has not been laid out — the page scales up from
 /// the centre of the screen and fades in, the fallback UIKit uses when a
 /// zoom's source view cannot be found.
+///
+/// While a finger holds the card, [liveFrame] carries the frame the gesture
+/// computed and the flight line is ignored. After a release, [departure]
+/// says where the card left from, so the landing (or the return to full
+/// screen) flies from there rather than from the flight line.
 class ZoomPageTransition extends StatelessWidget {
   /// Creates a zoom transition.
   const ZoomPageTransition({
     super.key,
     required this.animation,
     this.source,
+    this.liveFrame,
+    this.departure,
     this.cornerRadii,
     required this.child,
   });
@@ -49,6 +58,14 @@ class ZoomPageTransition extends StatelessWidget {
   /// What the flight grows out of, or null for the centred fallback.
   final ZoomFlightSource? source;
 
+  /// The frame under the finger during an interactive dismissal, or null
+  /// when no gesture is live.
+  final ValueListenable<ZoomFrame?>? liveFrame;
+
+  /// Where the card departed from at the last release, or null when the
+  /// card is on the flight line.
+  final ZoomDeparture? departure;
+
   /// Overrides [DisplayCornerRadii.of] for the card's corners at the screen
   /// end of the flight.
   final BorderRadius? cornerRadii;
@@ -59,6 +76,48 @@ class ZoomPageTransition extends StatelessWidget {
   /// How far the fallback card is inset from the screen at the start of the
   /// flight, as a fraction of each dimension.
   static const double fallbackInset = 0.05;
+
+  /// The card's frame at the start of the centred fallback flight.
+  static Rect fallbackRectFor(Rect screen) => Rect.fromCenter(
+    center: screen.center,
+    width: screen.width * (1 - 2 * fallbackInset),
+    height: screen.height * (1 - 2 * fallbackInset),
+  );
+
+  /// The frame at route progress [t] of a card flying from [departure]: to
+  /// the source (or the fallback rect) as [t] falls to zero, or to the full
+  /// [screen] as it rises to one.
+  static ZoomFrame departureFrameAt({
+    required double t,
+    required ZoomDeparture departure,
+    required ZoomFlightSource? source,
+    required Rect screen,
+    required BorderRadius screenRadii,
+  }) {
+    if (departure.toSource) {
+      return zoomDepartureFrame(
+        t: departure.progress <= 0
+            ? 1
+            : (1 - t / departure.progress).clamp(0.0, 1.0),
+        from: departure.frame,
+        to: source?.rect ?? fallbackRectFor(screen),
+        toRadii: source?.radii ?? screenRadii,
+        toSource: true,
+      );
+    }
+    return zoomDepartureFrame(
+      t: departure.progress >= 1
+          ? 1
+          : ((t - departure.progress) / (1 - departure.progress)).clamp(
+              0.0,
+              1.0,
+            ),
+      from: departure.frame,
+      to: screen,
+      toRadii: screenRadii,
+      toSource: false,
+    );
+  }
 
   /// The transition applied to the route underneath a zoom route: none.
   ///
@@ -84,13 +143,12 @@ class ZoomPageTransition extends StatelessWidget {
         final screen = Offset.zero & pageSize;
         final screenRadii = cornerRadii ?? DisplayCornerRadii.of(context);
         final source = this.source;
-        final fallbackRect = Rect.fromCenter(
-          center: screen.center,
-          width: screen.width * (1 - 2 * fallbackInset),
-          height: screen.height * (1 - 2 * fallbackInset),
-        );
+        final fallbackRect = fallbackRectFor(screen);
+        final liveFrame = this.liveFrame;
         return AnimatedBuilder(
-          animation: animation,
+          animation: liveFrame == null
+              ? animation
+              : Listenable.merge(<Listenable>[animation, liveFrame]),
           child: child,
           builder: (context, child) {
             // A spring settles within a tolerance of its end, so read the
@@ -101,19 +159,34 @@ class ZoomPageTransition extends StatelessWidget {
               AnimationStatus.forward ||
               AnimationStatus.reverse => animation.value.clamp(0.0, 1.0),
             };
-            final frame = zoomFlightFrame(
-              t: t,
-              source: source?.rect ?? fallbackRect,
-              screen: screen,
-              sourceRadii: source?.radii ?? screenRadii,
-              screenRadii: screenRadii,
-            );
+            final held = liveFrame?.value;
+            final departure = this.departure;
+            final ZoomFrame frame;
+            if (held != null) {
+              frame = held;
+            } else if (departure != null && !animation.isCompleted) {
+              frame = departureFrameAt(
+                t: t,
+                departure: departure,
+                source: source,
+                screen: screen,
+                screenRadii: screenRadii,
+              );
+            } else {
+              frame = zoomFlightFrame(
+                t: t,
+                source: source?.rect ?? fallbackRect,
+                screen: screen,
+                sourceRadii: source?.radii ?? screenRadii,
+                screenRadii: screenRadii,
+              );
+            }
             return Opacity(
-              opacity: source == null ? t : 1,
+              opacity: source == null && held == null ? t : 1,
               child: ZoomTransitionLayer(
                 frame: frame,
                 pageSize: pageSize,
-                atRest: animation.isCompleted,
+                atRest: animation.isCompleted && held == null,
                 flightChild: source?.child,
                 sourceSize: source?.rect.size,
                 child: child!,

@@ -73,3 +73,29 @@ ZoomFrame zoomFlightFrame({
     sourceOpacity: 1 - (t / kZoomCrossFadeWindow).clamp(0, 1),
   );
 }
+
+/// The frame of a card leaving from [from] — the frame a gesture released it
+/// at, or the frame a push was interrupted at — and flying to [to], at
+/// progress [t] from 0 ([from]) to 1 ([to]).
+///
+/// When the destination is the source, [sourceOpacity] runs the cross-fade
+/// over the last [kZoomCrossFadeWindow] of the flight as [zoomFlightFrame]
+/// does; when it is the full screen (a cancelled dismissal) there is
+/// nothing to fade to.
+ZoomFrame zoomDepartureFrame({
+  required double t,
+  required ZoomFrame from,
+  required Rect to,
+  required BorderRadius toRadii,
+  required bool toSource,
+}) {
+  assert(t >= 0 && t <= 1, 'flight progress must be normalised, got $t');
+  return ZoomFrame(
+    rect: Rect.lerp(from.rect, to, t)!,
+    rotation: from.rotation * (1 - t),
+    radii: BorderRadius.lerp(from.radii, toRadii, t)!,
+    sourceOpacity: toSource
+        ? ((t - (1 - kZoomCrossFadeWindow)) / kZoomCrossFadeWindow).clamp(0, 1)
+        : 0,
+  );
+}

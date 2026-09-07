@@ -4,7 +4,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../corners/display_corner_radii.dart';
 import 'zoom_frame.dart';
+import 'zoom_gestures.dart';
+import 'zoom_interaction.dart';
 import 'zoom_page_transition.dart';
 import 'zoom_transition_options.dart';
 import 'zoom_transition_source.dart';
@@ -18,6 +21,11 @@ import 'zoom_transition_source.dart';
 /// on the push and again on each pop, because [sourceTag] may have changed
 /// while the route was open — and stays hidden behind a placeholder of its
 /// own size until the route leaves the stack.
+///
+/// Interactive dismissal is installed by [ZoomDismissGestureDetector]
+/// around the page and driven by a [ZoomDismissController]; the page's
+/// vertical scroll views take part through [scrollController], installed as
+/// the page's [PrimaryScrollController].
 mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   /// The tag of the [ZoomTransitionSource] to fly from and to.
   ///
@@ -37,6 +45,25 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   Route<dynamic>? _previousRoute;
   ZoomTransitionSourceState? _source;
   ZoomFlightSource? _flightSource;
+  ZoomDismissController? _dismiss;
+  ZoomDeparture? _departure;
+  double _releaseVelocity = 0;
+  final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
+
+  /// The scroll controller that hands a top-edge downward drag to the
+  /// dismissal, installed as the page's [PrimaryScrollController] so that
+  /// vertical scroll views on iOS pick it up without configuration. Pages
+  /// with their own controllers can pass this one instead.
+  ZoomScrollController get scrollController => _scrollController;
+  final ZoomScrollController _scrollController = ZoomScrollController(
+    debugLabel: 'ZoomPageRoute',
+  );
+
+  /// The zoom route enclosing [context], or null if there is none.
+  static ZoomRouteTransitionMixin<Object?>? of(BuildContext context) {
+    final route = ModalRoute.of(context);
+    return route is ZoomRouteTransitionMixin<Object?> ? route : null;
+  }
 
   @override
   bool get opaque => false;
@@ -59,9 +86,20 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   DelegatedTransitionBuilder? get delegatedTransition =>
       ZoomPageTransition.delegatedTransition;
 
+  /// A spring from wherever the controller is: from the flight's far end
+  /// after a push or a programmatic pop, and from the release point — with
+  /// the release velocity — after an interactive dismissal.
   @override
-  Simulation? createSimulation({required bool forward}) =>
-      SpringSimulation(options.pushSpring, forward ? 0 : 1, forward ? 1 : 0, 0);
+  Simulation? createSimulation({required bool forward}) {
+    final velocity = _releaseVelocity;
+    _releaseVelocity = 0;
+    return SpringSimulation(
+      options.pushSpring,
+      controller!.value,
+      forward ? 1 : 0,
+      forward ? velocity : -velocity,
+    );
+  }
 
   @override
   void install() {
@@ -91,6 +129,8 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   void dispose() {
     _source?.show();
     _source = null;
+    _liveFrame.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -100,6 +140,115 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       _source = null;
       _flightSource = null;
     }
+    if (status == AnimationStatus.dismissed ||
+        status == AnimationStatus.completed) {
+      _departure = null;
+    }
+  }
+
+  /// Whether an interactive dismissal may begin now: the route is current
+  /// and can pop, no other gesture holds the navigator, and the options'
+  /// predicate agrees. Unlike [popGestureEnabled], a running push does not
+  /// block it — the push is grabbed instead (design.md section 3.8).
+  bool _canBeginDismiss(ZoomGesture gesture, Offset grabPoint) {
+    final navigator = this.navigator;
+    if (navigator == null ||
+        !isCurrent ||
+        isFirst ||
+        navigator.userGestureInProgress ||
+        popDisposition == RoutePopDisposition.doNotPop ||
+        _dismiss != null) {
+      return false;
+    }
+    final shouldBegin = options.interactiveDismissShouldBegin;
+    if (shouldBegin == null) {
+      return true;
+    }
+    return shouldBegin(
+      ZoomInteractionContext(
+        gesture: gesture,
+        location: grabPoint,
+        primaryScrollMetrics: _scrollController.hasClients
+            ? _scrollController.position
+            : null,
+      ),
+    );
+  }
+
+  /// The card's frame at the controller's current value: on the flight
+  /// line, or on the way from the last departure. The same frames
+  /// [ZoomPageTransition] draws.
+  ZoomFrame _currentFrame(Rect screen, BorderRadius screenRadii) {
+    final source = _flightSource;
+    // A spring settles within a tolerance of its end; read the ends from
+    // the status, as ZoomPageTransition does.
+    final t = controller!.isCompleted
+        ? 1.0
+        : controller!.isDismissed
+        ? 0.0
+        : controller!.value.clamp(0.0, 1.0);
+    final departure = _departure;
+    if (departure == null) {
+      return zoomFlightFrame(
+        t: t,
+        source: source?.rect ?? ZoomPageTransition.fallbackRectFor(screen),
+        screen: screen,
+        sourceRadii: source?.radii ?? screenRadii,
+        screenRadii: screenRadii,
+      );
+    }
+    return ZoomPageTransition.departureFrameAt(
+      t: t,
+      departure: departure,
+      source: source,
+      screen: screen,
+      screenRadii: screenRadii,
+    );
+  }
+
+  /// Begins an interactive dismissal at [grabPoint] (navigator
+  /// coordinates), or returns null if it may not begin.
+  ZoomDismissController? _beginDismiss(ZoomGesture gesture, Offset grabPoint) {
+    if (!_canBeginDismiss(gesture, grabPoint)) {
+      return null;
+    }
+    final navigator = this.navigator!;
+    final overlay = navigator.overlay!.context.findRenderObject()! as RenderBox;
+    final screen = Offset.zero & overlay.size;
+    final context = subtreeContext;
+    final screenRadii =
+        cornerRadii ??
+        (context == null ? BorderRadius.zero : DisplayCornerRadii.of(context));
+    final resting = _currentFrame(screen, screenRadii);
+    _departure = null;
+    return _dismiss = ZoomDismissController(
+      navigator: navigator,
+      controller: controller!,
+      physics: options.dismissPhysics,
+      gesture: gesture,
+      restingFrame: resting,
+      screen: screen,
+      sourceRadii: _flightSource?.radii,
+      screenRadii: screenRadii,
+      grabPoint: grabPoint,
+      liveFrame: _liveFrame,
+      getIsActive: () => isActive,
+      getIsCurrent: () => isCurrent,
+      onRelease: (departure, velocity) {
+        _dismiss = null;
+        _departure = departure;
+        _releaseVelocity = velocity;
+        changedInternalState();
+      },
+      onSettled: () {
+        // A committed dismissal has usually disposed the route by now.
+        if (this.navigator != null && navigator.mounted) {
+          changedInternalState();
+        }
+      },
+      settleSpring: options.pushSpring,
+      vsync: navigator,
+    );
   }
 
   /// Prepares the flight at the end of the current frame, the deferral
@@ -160,20 +309,43 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   }
 
   @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    return PrimaryScrollController(
+      controller: _scrollController,
+      child: super.buildPage(context, animation, secondaryAnimation),
+    );
+  }
+
+  @override
   Widget buildTransitions(
     BuildContext context,
     Animation<double> animation,
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
+    final gestures = options.dismissGestures;
+    final page = ZoomDismissGestureDetector(
+      pan: gestures.pan,
+      edgeSwipe: gestures.edgeSwipe,
+      isPushing: () => animation.status == AnimationStatus.forward,
+      onStart: _beginDismiss,
+      scrollController: _scrollController,
+      child: child,
+    );
     if (MediaQuery.disableAnimationsOf(context)) {
-      return FadeTransition(opacity: animation, child: child);
+      return FadeTransition(opacity: animation, child: page);
     }
     return ZoomPageTransition(
       animation: animation,
       source: _flightSource,
+      liveFrame: _liveFrame,
+      departure: _departure,
       cornerRadii: cornerRadii,
-      child: child,
+      child: page,
     );
   }
 }

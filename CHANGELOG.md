@@ -1,5 +1,16 @@
 ## 0.1.0-dev
 
+* Add interactive dismissal to the zoom route: a downward pan anywhere on
+  the page, or on a vertical scroll view once it reaches its top edge, and a
+  swipe from the leading edge shrink the page into a card that follows the
+  finger; a release past the threshold or a fling lands it on its source,
+  seeded with the release velocity, and an early release springs it back. A
+  page still being pushed can be grabbed. The response is
+  `ZoomDismissPhysics`, the iOS 26 fit ported from liquid_glass_widgets'
+  swipe-dismiss morph; `ZoomTransitionOptions` gains `dismissGestures`,
+  `interactiveDismissShouldBegin` and `dismissPhysics`, and the route
+  exposes the `ZoomScrollController` it installs as the page's primary
+  scroll controller.
 * Match the push transition's covered page to iOS: it travels 0.29 of the
   width on the same curve as the arriving page, so the two move in lockstep
   and track the finger together, and it is dimmed by the transition at

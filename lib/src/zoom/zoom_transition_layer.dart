@@ -86,16 +86,21 @@ class ZoomTransitionLayer extends StatelessWidget {
                       child: SizedBox.fromSize(size: pageSize, child: child),
                     ),
                   ),
+                  // A picture of the source, not the source: it neither
+                  // takes pointers (a grab mid-flight must reach the page)
+                  // nor ticks.
                   if (showSource)
-                    Opacity(
-                      opacity: frame.sourceOpacity,
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        clipBehavior: Clip.hardEdge,
-                        child: SizedBox.fromSize(
-                          size: sourceSize,
-                          child: flightChild,
+                    IgnorePointer(
+                      child: Opacity(
+                        opacity: frame.sourceOpacity,
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                          clipBehavior: Clip.hardEdge,
+                          child: SizedBox.fromSize(
+                            size: sourceSize,
+                            child: flightChild,
+                          ),
                         ),
                       ),
                     ),

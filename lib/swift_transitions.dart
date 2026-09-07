@@ -16,6 +16,11 @@ export 'src/page/swift_page_route.dart' show SwiftPage, SwiftPageRoute;
 export 'src/page/swift_page_transition.dart' show SwiftPageTransition;
 export 'src/page/swift_page_transitions_builder.dart';
 export 'src/physics/springs.dart';
+export 'src/zoom/zoom_dismiss_physics.dart';
+export 'src/zoom/zoom_gestures.dart' show ZoomScrollController;
+export 'src/zoom/zoom_interaction.dart'
+    show ZoomGesture, ZoomInteractionContext, ZoomInteractiveDismissPredicate;
 export 'src/zoom/zoom_page_route.dart' show ZoomPage, ZoomPageRoute;
-export 'src/zoom/zoom_transition_options.dart' show ZoomTransitionOptions;
+export 'src/zoom/zoom_transition_options.dart'
+    show ZoomDismissGestures, ZoomTransitionOptions;
 export 'src/zoom/zoom_transition_source.dart' show ZoomTransitionSource;
