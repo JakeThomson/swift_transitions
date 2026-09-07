@@ -1,6 +1,6 @@
 # swift_transitions: design and implementation plan
 
-Status: proposal, 2026-09-02; M0–M2b implemented as of 2026-09-07, with the
+Status: proposal, 2026-09-02; M0–M3 implemented as of 2026-09-07, with the
 deviations noted inline.
 
 This package recreates two iOS navigation transitions in Flutter, with the
@@ -739,6 +739,37 @@ Details that matter:
   Shells that hoist chrome above the navigator get the signals they need
   from the navigator gesture flags and the route status.
 
+As implemented (M3), with the departures from the sketch above:
+
+- `ZoomDismissController` is the counterpart of the push route's
+  `BackGestureController`: created when a gesture begins (it stops the
+  controller and calls `didStartUserGesture`), fed primary-axis deltas and
+  raw pointer positions, and on release it decides, records a
+  `ZoomDeparture` (the frame and progress the card left from) on the route,
+  and either pops — the route's `createSimulation` then seeds the landing
+  spring with the release velocity — or springs the controller back to 1.
+  `didStopUserGesture` follows the settle. Progress under the finger is the
+  grabbed progress times the card's relative scale, so a settled page reads
+  its scale as progress and an interrupted push continues from where it was.
+- The dismissal begins on the first *diverted* scroll delta, not when the
+  scroll drag starts, so an ordinary scroll never counts as a navigator
+  gesture; and the scroll position keeps diverting only while the card has
+  actually left rest, so an upward drag on an undisturbed list scrolls it.
+- The route's own recognizers use `DragStartBehavior.down`, so the card
+  takes up the slop distance instead of losing it, and the gesture layer is
+  an opaque `Listener`: a translucent one reports a miss where no page
+  content is hit, which let pointers fall through to the modal barrier and
+  put its tap recognizer into the arena.
+- The source's flight copy inside the card ignores pointers, so a grab
+  during the push reaches the page.
+- The edge swipe shrinks by horizontal travel over the card's width and
+  then follows the finger freely, pivoting on the grabbed point, pending the
+  calibration against `back.mov`. Radii under the finger interpolate in the
+  card's own space and scale with the card, which lands near the 13–17 pt
+  measured natively at 0.55–0.6.
+- Not yet: re-grabbing a card during its landing (the modal scope ignores
+  pointers while the route animation reverses), and the pinch (M4).
+
 ### 3.8 Interruptible push
 
 Apple: a push is never cancelled; grabbing during it completes the push and
@@ -891,7 +922,8 @@ alpha, and linearity under the gesture in mixed stacks; the example captured
 on the simulator and read with the same script gives 0.29 and 0.115 (done:
 0.289–0.290 and 0.106–0.118 across a held swipe).
 
-**M3 Interactive dismissal: pan and edge swipe (3–4 days).**
+**M3 Interactive dismissal: pan and edge swipe (3–4 days).** *Done
+2026-09-07; see the notes at the end of section 3.7.*
 Port the fitted model from liquid_glass_widgets (`SheetMorphGeometry`'s
 travel, scale, rubber band, horizontal offset and commit-velocity functions,
 plus the presenter's hand-integrated chase) into `ZoomDismissPhysics` and the
