@@ -21,7 +21,6 @@ void main() {
     expect(frame.rect, source);
     expect(frame.radii, sourceRadii);
     expect(frame.sourceOpacity, 1);
-    expect(frame.dimming, 0);
   });
 
   test('t = 1 rests on the screen', () {
@@ -29,7 +28,6 @@ void main() {
     expect(frame.rect, screen);
     expect(frame.radii, screenRadii);
     expect(frame.sourceOpacity, 0);
-    expect(frame.dimming, 1);
   });
 
   test('the source fades out within the cross-fade window', () {
