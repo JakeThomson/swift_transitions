@@ -5,8 +5,9 @@
 /// The design draws on Flutter's [Hero] mechanics and on SwiftUI's
 /// `matchedTransitionSource` / `navigationTransition(.zoom)` APIs.
 ///
-/// The zoom route has not landed yet. See the repository README for the
-/// project goals and current status.
+/// [SwiftPageRoute] is the push transition and [ZoomPageRoute] the zoom;
+/// [ZoomTransitionSource] marks what a zoom route grows out of. See the
+/// repository README for the project goals and current status.
 library;
 
 export 'src/corners/display_corner_radii.dart';
@@ -15,3 +16,6 @@ export 'src/page/swift_page_route.dart' show SwiftPage, SwiftPageRoute;
 export 'src/page/swift_page_transition.dart' show SwiftPageTransition;
 export 'src/page/swift_page_transitions_builder.dart';
 export 'src/physics/springs.dart';
+export 'src/zoom/zoom_page_route.dart' show ZoomPage, ZoomPageRoute;
+export 'src/zoom/zoom_transition_options.dart' show ZoomTransitionOptions;
+export 'src/zoom/zoom_transition_source.dart' show ZoomTransitionSource;
