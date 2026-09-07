@@ -202,10 +202,10 @@ class PosterPage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Drag down from the top of this page, or swipe in from the '
-              'leading edge, to shrink it into its poster; let go early and '
-              'it springs back. Tap back to zoom home. Pinching arrives with '
-              'a later milestone.',
+              'Drag down from the top of this page, swipe in from the '
+              'leading edge, or pinch with two fingers to shrink it into its '
+              'poster; let go early and it springs back. Tap back to zoom '
+              'home.',
               style: CupertinoTheme.of(context).textTheme.textStyle,
             ),
           ),

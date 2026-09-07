@@ -1,6 +1,6 @@
 # swift_transitions: design and implementation plan
 
-Status: proposal, 2026-09-02; M0–M3 implemented as of 2026-09-07, with the
+Status: proposal, 2026-09-02; M0–M4 implemented as of 2026-09-07, with the
 deviations noted inline.
 
 This package recreates two iOS navigation transitions in Flutter, with the
@@ -767,8 +767,25 @@ As implemented (M3), with the departures from the sketch above:
   calibration against `back.mov`. Radii under the finger interpolate in the
   card's own space and scale with the card, which lands near the 13–17 pt
   measured natively at 0.55–0.6.
+- The pinch (M4) is read from the same opaque `Listener` rather than from
+  a `ScaleGestureRecognizer`. The spike was settled by reading the
+  recognizer lifecycle: a scroll view accepts a finger at the touch slop,
+  usually before the second finger lands, and a recognizer that lost that
+  arena stops tracking the finger, so an eager-accept recognizer can never
+  see both fingers over a scrolled list. The `Listener` sees every finger
+  regardless of the arena; when the second one lands, the live gesture (or
+  a new one) becomes a pinch with the card as it is at that moment as its
+  resting frame, and the route cancels the scroll view's drag through the
+  scroll position's cancel hook — the sheet's mechanism — after which the
+  scroll view ignores the rest of that drag. This is the plan's fallback
+  without its "only at rest" limitation. The card scales with the fingers'
+  distance (never past the size it was pinched at), rotates with their
+  angle and moves with their focal point, about the initial focal point;
+  the release speed is the fingers' closing rate over the last 100 ms, and
+  the departure frame un-rotates over the landing. Trackpad pinches are not
+  handled yet.
 - Not yet: re-grabbing a card during its landing (the modal scope ignores
-  pointers while the route animation reverses), and the pinch (M4).
+  pointers while the route animation reverses), and trackpad pinches.
 
 ### 3.8 Interruptible push
 
@@ -935,7 +952,8 @@ interaction tests except pinch; on device the three recordings' pan and
 swipe behaviours are reproduced side by side, and the edge swipe's
 horizontal gain is calibrated against `back.mov`.
 
-**M4 Pinch (2–3 days, after a half-day spike).**
+**M4 Pinch (2–3 days, after a half-day spike).** *Done 2026-09-07; the
+spike's outcome is in the section 3.7 notes.*
 Spike: prove that a two-finger pinch over a scrolled `ListView` on iOS wins
 the arena reliably with the eager-accept recognizer plus drag cancel. If it
 cannot, fall back to a `Listener`-level pinch that only activates when the
