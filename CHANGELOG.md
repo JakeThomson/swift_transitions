@@ -1,5 +1,17 @@
 ## 0.1.0-dev
 
+* Match the zoom route's edge swipe to iOS, measured against a native
+  `NavigationStack` zoom (parity stage 5): the card waits out the back
+  swipe's 12 pt dead zone, shrinks at 0.67 per screen width with no knee,
+  follows the finger sideways 1:1 (off the far side of the screen, rather
+  than pinned inside it) and up or down at 0.43 of the finger's movement,
+  a release commits on where 120 ms of its velocity would carry the card
+  against a 0.70 scale boundary (a short fast flick springs back, as it
+  does natively), and a cancelled release returns on the back swipe's
+  spring (ω 22, ζ 0.9) instead of the flight spring. `ZoomDismissPhysics`
+  gains `edgeSwipeVerticalGain`, `edgeSwipeScaleFor` and
+  `releaseProjection`; its `returnSpring` now carries the cancel as well
+  as the sideways return, and `dismissThreshold` is 0.70.
 * Match the zoom transition to iOS, measured against a native
   `NavigationStack` zoom (parity stage 3): the flight is one critically
   damped spring at ω 19 rad/s for push and pop, the card casts the native

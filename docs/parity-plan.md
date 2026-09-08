@@ -432,6 +432,43 @@ the same landing here.
 **Done when** the gain trace and the free-follow trace match and the
 release curves match.
 
+*Measured 2026-09-08, flat palette, twelve native runs.* The driver
+gained a touch synthesizer (XCTest's private `XCPointerEventPath`, as
+WebDriverAgent uses) so a drag can turn or reverse without lifting and
+lift 8 ms after its last move; one keyframe per segment, since dense
+keyframes play back compressed. A fast first move past the edge region
+misses the edge recognizer and the poster pager takes the swipe, so
+flings start their first 20 pt at 300 pt/s. The native card: still for
+the first 12 pt from the touch (the back swipe's dead zone), then scaled
+uniformly about the grab point — its left edge at the finger less the
+dead zone (−4 to −15 pt at rest, −20 to −26 moving at 300 pt/s, the
+display lag included), its right edge off the screen — at 1 − 0.67 ×
+travel/width with no knee to 0.56 of the width (0.898 at 16 %, 0.761 at
+36 %, 0.620 at 56 %). A 200 pt drop moved the card 86 pt and a 240 pt one
+99 pt, at one ratio throughout (0.41–0.43) and without changing the
+scale; the horizontal follow reverses 1:1. Releases: at rest 0.732 and
+0.715 sprang back, 0.678 and 0.620 landed; 0.805 moving at 800 pt/s
+landed, 0.659 at 800 landed, and a 14 pt flick at 1200 pt/s sprang back
+— the back swipe's projection (position plus 120 ms of velocity against
+a 0.70 scale boundary) fits all seven, a speed threshold does not. Every
+cancel returns on the back swipe's spring (ω 22, ζ 0.9, 0.5–1.1 pt RMS
+from 10–36 % of the width); a landing from rest covers 98 % in
+350 ms. The package now uses the dead zone, a knee-free edge scale at
+`scaleGain` 0.67, `edgeSwipeVerticalGain` 0.43, a free sideways follow
+(the card was pinned inside the screen and its chase anchored a move
+late, leaving it 29 pt behind the finger), `returnSpring` at ω 22 ζ 0.9
+for cancels, `releaseProjection` 120 ms and `dismissThreshold` 0.70 (the
+pan shares both; stage 4 measures them for it). Verified on the new
+build: held scale within 0.006 of native at 16–56 %, left edge within
+3 pt at rest, vertical follow 0.43, cancel curves within one frame of
+native's, and the outcome table agrees on ten of eleven cases: the
+exception is the 67 ms flick to 20 % at 1200 pt/s, which UIKit's edge
+recognizer had barely begun to track (its card reached 0.999 and sprang
+back) while ours followed the finger to 0.90 and, projected, landed. A
+real finger's flick is worth checking on the device. The native touch
+ring vanishes ~200 ms into a stationary hold, so rest releases are timed
+from the motion's start, not the ring.
+
 ## 6. The pinch
 
 **Owns**: scale from the fingers' distance (1:1 today, never above the

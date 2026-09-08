@@ -171,7 +171,8 @@ class ZoomDismissController {
   /// Called once the settle animation completes.
   final VoidCallback onSettled;
 
-  /// The spring the card lands on, whichever way it goes.
+  /// The spring a committed dismissal lands on. A cancelled one returns on
+  /// [ZoomDismissPhysics.returnSpring].
   final SpringDescription settleSpring;
 
   late final Ticker _ticker;
@@ -199,7 +200,8 @@ class ZoomDismissController {
 
   /// The card's current scale relative to [restingFrame].
   double get scale => switch (gesture) {
-    ZoomGesture.pan || ZoomGesture.edgeSwipe => physics.scaleFor(_travel),
+    ZoomGesture.pan => physics.scaleFor(_travel),
+    ZoomGesture.edgeSwipe => physics.edgeSwipeScaleFor(_travel),
     ZoomGesture.pinch => _pinchScale,
   };
 
@@ -301,6 +303,12 @@ class ZoomDismissController {
     final bool commit;
     if (!getIsCurrent()) {
       commit = !getIsActive();
+    } else if (gesture == ZoomGesture.edgeSwipe) {
+      // Where the card would be after coasting on the release velocity.
+      final projected =
+          _travel +
+          velocity * physics.releaseProjection / restingFrame.rect.width;
+      commit = physics.edgeSwipeScaleFor(projected) < physics.dismissThreshold;
     } else if (velocity.abs() >= physics.flingVelocity) {
       commit = velocity > 0;
     } else {
@@ -349,7 +357,7 @@ class ZoomDismissController {
       );
     } else {
       controller.animateWith(
-        SpringSimulation(settleSpring, controller.value, 1, seed),
+        SpringSimulation(physics.returnSpring, controller.value, 1, seed),
       );
     }
     if (controller.isAnimating) {
@@ -413,8 +421,9 @@ class ZoomDismissController {
           anchor: _anchor,
         );
       case ZoomGesture.edgeSwipe:
-        // The edge swipe shrinks like the pan but the card then follows the
-        // finger freely, pivoting on the grabbed point.
+        // The edge swipe shrinks the card about the grabbed point and then
+        // follows the finger: sideways as far as it goes, off the screen
+        // included, and up or down at a fraction of the finger's movement.
         final delta = _pointer - _anchor;
         final pivot = _anchor;
         final scaled = Rect.fromLTRB(
@@ -423,7 +432,9 @@ class ZoomDismissController {
           pivot.dx + (rest.right - pivot.dx) * scale,
           pivot.dy + (rest.bottom - pivot.dy) * scale,
         );
-        rect = scaled.shift(Offset(_horizontalOffset, delta.dy));
+        rect = scaled.shift(
+          Offset(_horizontalOffset, delta.dy * physics.edgeSwipeVerticalGain),
+        );
     }
     final progress = restingProgress * scale;
     // Radii interpolate in the card's own space and scale with the card, so
@@ -451,7 +462,9 @@ class ZoomDismissController {
   }
 
   /// Opens the sideways axis once the drag is [kTouchSlop] under way and
-  /// chases the damped finger offset through the tracking spring.
+  /// chases the finger offset through the tracking spring: damped at the
+  /// screen's edges for a pan, free for an edge swipe, whose card leaves
+  /// the screen on the far side.
   void _trackHorizontal() {
     final open = switch (gesture) {
       ZoomGesture.pan => _travelPixels > kTouchSlop,
@@ -470,6 +483,10 @@ class ZoomDismissController {
     // on the way here does not snap in.
     final origin = _pointerAtOpen ??= _pointer;
     _horizontalRaw = _pointer.dx - origin.dx;
+    if (gesture == ZoomGesture.edgeSwipe) {
+      _retargetHorizontal(_horizontalRaw, physics.trackingSpring);
+      return;
+    }
     final cardRect = physics.dismissedRect(
       restingRect: restingFrame.rect,
       travel: _travel,

@@ -119,9 +119,13 @@ screen the card is about 45 % of its width. The page in the recording was
 scrolled to the top; on a scrolled page iOS lets the scroll view consume the
 drag until it reaches its top edge.
 
-**Edge back swipe** (`back.mov`). Dragging from the leading edge does not
-slide the page. It shrinks it exactly like the pan, with scale driven by
-horizontal distance, and the card then follows the finger freely.
+**Edge back swipe** (`back.mov`; parity stage 5). Dragging from the leading
+edge does not slide the page. It shrinks it about the grabbed point, with
+scale driven by horizontal distance past a 12 pt dead zone (0.67 per screen
+width, no knee to at least 0.56 of the width), and the card follows the
+finger sideways 1:1 — off the far side of the screen if the finger goes
+that far — and vertically at 0.43 of the finger's movement. A cancelled
+release returns on the back swipe's spring (ω 22, ζ 0.9).
 
 **Pinch** (`pinch.mp4`). Two fingers scale the page with the pinch, rotate it
 with the two-finger rotation, and translate it with the focal point. The card
@@ -298,13 +302,14 @@ class ZoomTransitionOptions {
 /// scale error of 0.006. Section 3.4 explains each term.
 class ZoomDismissPhysics {
   const ZoomDismissPhysics({
-    this.scaleGain = 0.64,        // scale lost per card height of travel
-    this.travelKnee = 0.48,       // card heights of 1:1 travel before easing
+    this.scaleGain = 0.67,        // scale lost per card height (width, for the edge swipe) of travel
+    this.travelKnee = 0.48,       // card heights of 1:1 travel before easing (pan only)
     this.minimumScale = 0.33,     // the floor the eased travel asymptotes to
-    this.edgeGive = 0.04,         // fraction of screen width of give at an edge
+    this.edgeGive = 0.04,         // fraction of screen width of give at an edge (pan only)
+    this.edgeSwipeVerticalGain = 0.43, // card movement per point of finger movement up or down
     this.trackingSpring = const SpringDescription(mass: 1, stiffness: 2000, damping: 89),
-    this.returnSpring = const SpringDescription(mass: 1, stiffness: 220, damping: 30),
-    this.dismissThreshold = 0.75, // card scale below which a release dismisses
+    this.returnSpring = const SpringDescription(mass: 1, stiffness: 484, damping: 39.6), // ω 22, ζ 0.9
+    this.dismissThreshold = 0.70, // card scale below which a release dismisses (0.715 sprang back, 0.678 landed)
     this.flingVelocity = 700.0,   // logical px/s
     this.maxCommitVelocity = 10.0, // progress units/s the commit spring may be seeded with
   });
@@ -571,7 +576,7 @@ re-derived. The model, in `ZoomDismissPhysics` terms:
   would reach `minimumScale` (0.33). A long drag parks the card instead of
   sliding it off screen; it never quite stops shrinking.
 - Scale is linear in the *damped* travel: `1 − scaleGain · travel`, with
-  `scaleGain` 0.64. All easing lives in the travel, so shrink and fall settle
+  `scaleGain` 0.67. All easing lives in the travel, so shrink and fall settle
   as one object.
 - The shrink pivots on the grabbed point carried down with the fall, so the
   content under the finger stays under the finger. With the gain below 1.0
@@ -603,10 +608,12 @@ minus its bar, or something else), or whether the gain itself differs. That
 fit is an M3 task using the same method as the sheet's: `drag.mov` was
 captured through iPhone Mirroring and shows the cursor, so the finger can be
 tracked frame by frame. `scaleGain`, `travelKnee` and `minimumScale` are
-parameters for exactly this reason. The edge swipe reuses the model with
-horizontal travel normalised by the screen width, pending calibration
-against `back.mov`. The pinch uses the recognizer's scale and rotation
-directly, clamped to `minimumScale`.
+parameters for exactly this reason. The edge swipe was calibrated on the
+parity rig (parity-plan.md stage 5): it has no knee — the card shrinks at
+`scaleGain` per screen width all the way, and a finger cannot travel far
+enough to reach the floor — measured past the same 12 pt dead zone as the
+back swipe. The pinch uses the recognizer's scale and rotation directly,
+clamped to `minimumScale`.
 
 **Rendering** of a `ZoomFrame`:
 
@@ -764,11 +771,16 @@ As implemented (M3), with the departures from the sketch above:
   put its tap recognizer into the arena.
 - The source's flight copy inside the card ignores pointers, so a grab
   during the push reaches the page.
-- The edge swipe shrinks by horizontal travel over the card's width and
-  then follows the finger freely, pivoting on the grabbed point, pending the
-  calibration against `back.mov`. Radii under the finger interpolate in the
-  card's own space and scale with the card, which lands near the 13–17 pt
-  measured natively at 0.55–0.6.
+- The edge swipe waits out a 12 pt dead zone, then shrinks by horizontal
+  travel over the card's width about the grabbed point and follows the
+  finger: sideways 1:1 through the tracking spring with no pinning (the
+  native card runs off the far side of the screen), up or down at
+  `edgeSwipeVerticalGain` of the finger's movement (natively a 200 pt drop
+  moved the card 86 pt). Its controller is fed from the edge recognizer
+  rather than the raw pointer stream, which runs a move ahead of the
+  recognizer and would see the dead zone late. Radii under the finger
+  interpolate in the card's own space and scale with the card, which lands
+  near the 13–17 pt measured natively at 0.55–0.6.
 - The pinch (M4) is read from the same opaque `Listener` rather than from
   a `ScaleGestureRecognizer`. The spike was settled by reading the
   recognizer lifecycle: a scroll view accepts a finger at the touch slop,
@@ -833,7 +845,8 @@ begins a pop. In Flutter terms:
   feel on the push transition.
 - The interactive dismissal's sideways chase uses the fitted tracking spring
   (stiffness 2000, damping 89) while the finger drives it and the return
-  spring (stiffness 220, damping 30) on the way home, both from
+  spring (stiffness 484, damping 39.6: ω 22, ζ 0.9, measured in parity
+  stage 5) on the way home and for a cancelled release, both from
   `ZoomDismissPhysics`.
 
 ### 3.10 Accessibility and platforms

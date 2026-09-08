@@ -13,6 +13,13 @@ typedef ZoomDismissStartCallback =
 
 const double _kEdgeSwipeWidth = 20.0;
 
+/// How far an edge swipe travels before the card moves, the same 12 pt as
+/// the back swipe's: UIKit's edge recognizer holds the page still for that
+/// long (parity stage 2), and the zoom page's card behaves the same way
+/// (stage 5). The finger then leads the card by this much for the rest of
+/// the gesture.
+const double _kEdgeDeadZone = 12.0;
+
 /// Installs the dismissal gestures over a zoom route's page.
 ///
 /// Three inputs feed one [ZoomDismissController]: a vertical drag
@@ -84,6 +91,11 @@ class _ZoomDismissGestureDetectorState
   bool _pointerDriven = false;
   Offset? _lastPointer;
 
+  /// How far the live edge swipe has travelled, for the dead zone, and
+  /// where it went down.
+  double _edgeDragged = 0;
+  Offset _edgeDown = Offset.zero;
+
   /// Every finger on the page, by pointer id, in navigator coordinates.
   final Map<int, Offset> _pointers = <int, Offset>{};
 
@@ -133,8 +145,31 @@ class _ZoomDismissGestureDetectorState
     _end(details.velocity.pixelsPerSecond.dy);
   }
 
+  /// An edge swipe's controller is fed from here rather than from the raw
+  /// pointer stream, which runs ahead of the recognizer and would see the
+  /// dead zone a move late.
   void _handleEdgeUpdate(DragUpdateDetails details) {
-    _controller?.dragUpdate(_toLogical(details.primaryDelta!));
+    final delta = _toLogical(details.primaryDelta!);
+    final before = _edgeDragged;
+    _edgeDragged += delta;
+    if (_edgeDragged <= _kEdgeDeadZone) {
+      return;
+    }
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    if (before <= _kEdgeDeadZone) {
+      // Leaving the dead zone: the chase anchors where it ends, not at the
+      // first move seen past it.
+      controller.pointerMoved(
+        _toNavigator(_edgeDown + Offset(_toLogical(_kEdgeDeadZone), 0)),
+      );
+    }
+    // The part of this delta past the dead zone.
+    controller
+      ..dragUpdate(_edgeDragged - math.max(before, _kEdgeDeadZone))
+      ..pointerMoved(_toNavigator(details.globalPosition));
   }
 
   void _handleEdgeEnd(DragEndDetails details) {
@@ -226,6 +261,8 @@ class _ZoomDismissGestureDetectorState
     if (_pointerDriven) {
       return;
     }
+    _edgeDragged = 0;
+    _edgeDown = details.globalPosition;
     _begin(ZoomGesture.edgeSwipe, details.globalPosition);
   }
 
@@ -290,6 +327,9 @@ class _ZoomDismissGestureDetectorState
     }
     if (_pointerDriven) {
       controller.dragUpdate(event.delta.dy);
+    }
+    if (controller.gesture == ZoomGesture.edgeSwipe) {
+      return;
     }
     controller.pointerMoved(position);
   }

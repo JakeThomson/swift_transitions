@@ -327,19 +327,86 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
   });
 
+  testWidgets('an edge swipe commits on where a flick would carry the card', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    // 163px past the dead zone leaves the card well above the threshold;
+    // 120 ms at 2000 px/s is another 240px, which takes it below.
+    expect(
+      physics.edgeSwipeScaleFor(163 / 800),
+      greaterThan(physics.dismissThreshold),
+    );
+    expect(
+      physics.edgeSwipeScaleFor((163 + 240) / 800),
+      lessThan(physics.dismissThreshold),
+    );
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    for (var i = 1; i <= 5; i++) {
+      await gesture.moveBy(
+        const Offset(35, 0),
+        timeStamp: Duration(microseconds: 17500 * i),
+      );
+      await tester.pump();
+    }
+    await gesture.up(timeStamp: const Duration(microseconds: 95500));
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
+  testWidgets('an edge swipe follows a finger moving down at a fraction', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(112, 0));
+    await tester.pump();
+    final before = cardRect(tester);
+
+    await gesture.moveBy(const Offset(0, 200));
+    await tester.pump();
+    final after = cardRect(tester);
+    expect(after.width, closeTo(before.width, 0.001));
+    expect(
+      after.top - before.top,
+      closeTo(200 * physics.edgeSwipeVerticalGain, 0.5),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
+
   testWidgets('an edge swipe shrinks the card by horizontal travel', (
     tester,
   ) async {
     await pushAndSettle(tester, staticDetail);
     final gesture = await tester.startGesture(const Offset(5, 300));
-    await gesture.moveBy(const Offset(200, 0));
+    // The first 12px are the dead zone: the card stays put.
+    await gesture.moveBy(const Offset(10, 0));
     await tester.pump();
-    // 200px across an 800px card is a quarter of a card width of travel.
-    expect(cardRect(tester).width, closeTo(800 * physics.scaleFor(0.25), 0.5));
+    expect(cardRect(tester).width, 800);
+
+    await gesture.moveBy(const Offset(190, 0));
+    await tester.pump();
+    // 188px past the dead zone across an 800px card, with no knee.
+    expect(
+      cardRect(tester).width,
+      closeTo(800 * physics.edgeSwipeScaleFor(188 / 800), 0.5),
+    );
+    // The card's left edge follows the finger less the dead zone (the
+    // grab point at 5 shrinks toward itself), off the right of the screen.
+    // The sideways chase settles on the tracking spring.
+    await tester.pump(const Duration(milliseconds: 300));
+    final scale = physics.edgeSwipeScaleFor(188 / 800);
+    expect(cardRect(tester).left, closeTo(5 * (1 - scale) + 188, 0.5));
+    expect(cardRect(tester).right, greaterThan(800));
 
     await gesture.moveBy(const Offset(300, 0));
     await tester.pump();
-    expect(physics.scaleFor(500 / 800), lessThan(physics.dismissThreshold));
+    expect(
+      physics.edgeSwipeScaleFor(488 / 800),
+      lessThan(physics.dismissThreshold),
+    );
     await gesture.up();
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsNothing);

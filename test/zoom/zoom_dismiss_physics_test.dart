@@ -11,14 +11,17 @@ void main() {
   group('scale', () {
     test('falls linearly at the measured iOS gain', () {
       expect(physics.scaleFor(0), 1);
-      expect(physics.scaleFor(0.2), closeTo(1 - 0.64 * 0.2, 1e-9));
+      expect(physics.scaleFor(0.2), closeTo(1 - physics.scaleGain * 0.2, 1e-9));
       final half = 1 - physics.scaleFor(0.1);
       final full = 1 - physics.scaleFor(0.2);
       expect(half * 2, closeTo(full, 1e-9));
     });
 
     test('the measured linear region is untouched by the easing', () {
-      expect(physics.scaleFor(0.48), closeTo(1 - 0.64 * 0.48, 1e-9));
+      expect(
+        physics.scaleFor(0.48),
+        closeTo(1 - physics.scaleGain * 0.48, 1e-9),
+      );
     });
 
     test('eases toward the floor without reaching it', () {
@@ -188,7 +191,7 @@ void main() {
         );
         expect(
           rect.width / resting.width,
-          closeTo(1 - 0.64 * physics.dampedTravel(travel), 1e-9),
+          closeTo(1 - physics.scaleGain * physics.dampedTravel(travel), 1e-9),
         );
       }
     });
@@ -198,11 +201,11 @@ void main() {
     test('a fling hands the landing the speed it was shrinking at', () {
       expect(
         physics.commitVelocityFor(velocity: 400, cardHeight: 400),
-        closeTo(0.64, 1e-9),
+        closeTo(physics.scaleGain, 1e-9),
       );
       expect(
         physics.commitVelocityFor(velocity: 400, cardHeight: 200),
-        closeTo(1.28, 1e-9),
+        closeTo(2 * physics.scaleGain, 1e-9),
       );
     });
 
