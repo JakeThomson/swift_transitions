@@ -222,7 +222,8 @@ class PosterRow extends StatelessWidget {
                 // into and shrinks back onto.
                 final artTop =
                     MediaQuery.paddingOf(context).top +
-                    const CupertinoNavigationBar().preferredSize.height;
+                    const CupertinoNavigationBar().preferredSize.height +
+                    13;
                 Navigator.of(context).push(
                   ZoomPageRoute<void>(
                     sourceTag: poster.title,
@@ -356,10 +357,11 @@ class PosterPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: Parity.flat ? const Color(0xFFEEF4FF) : null,
+      backgroundColor: Parity.flat ? const Color(0xFFE0F0FF) : null,
       navigationBar: CupertinoNavigationBar(middle: Text(poster.title)),
       child: ListView(
-        padding: EdgeInsets.zero,
+        // Below the bar, plus the 13 pt a SwiftUI scroll view leaves there.
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 13),
         children: <Widget>[
           AspectRatio(
             aspectRatio: 2 / 3,
@@ -402,7 +404,7 @@ class PushDemoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: Parity.flat ? const Color(0xFFE8FFEE) : null,
+      backgroundColor: Parity.flat ? const Color(0xFFD8FFE0) : null,
       navigationBar: const CupertinoNavigationBar(middle: Text('Detail')),
       child: SafeArea(
         child: Center(

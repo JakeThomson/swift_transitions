@@ -18,8 +18,8 @@ from PIL import Image
 # the flat palette only.
 PALETTE = {
     "card":    {"hue": (20, 42), "sat": (0.45, 1.0), "val": (0.3, 1.0)},
-    "zoom_pg": {"rgb": (0xEE, 0xF4, 0xFF), "tol": 10},   # zoomed page background, flat mode
-    "push_pg": {"rgb": (0xE8, 0xFF, 0xEE), "tol": 10},   # pushed page background, flat mode
+    "zoom_pg": {"rgb": (0xE0, 0xF0, 0xFF), "tol": 8},   # zoomed page background, flat mode
+    "push_pg": {"rgb": (0xD8, 0xFF, 0xE0), "tol": 8},   # pushed page background, flat mode
     "ring":    {"hue": (100, 140), "sat": (0.7, 1.0), "val": (0.7, 1.0)},  # touch rings
     # The blue poster, which rides the covered page; confined to the poster
     # row so the incoming page's blue back chevron is not counted.
@@ -30,6 +30,10 @@ PALETTE = {
 # for as long as anything does during a push, and beside the card during
 # a zoom. Only meaningful while the incoming page has not reached it.
 DIM_PATCH = (2, 520, 20, 40)  # x, y, w, h in points
+# A second patch well away from a zoom card until late in its flight, so
+# the card's shadow (which reaches the first patch) can be separated from
+# the dim: column dim2_y.
+DIM_PATCH2 = (2, 820, 20, 40)
 # Scanlines along which the first matching pixel of a class is reported,
 # as <class>_x<y>: the leading edge of a sliding page along one row is
 # immune to whatever else in the frame shares its colour.
@@ -98,10 +102,12 @@ def track_frame(args):
             row = masks[cls][int(y * scale)]
             hit = np.nonzero(row)[0]
             edges.append(f"{hit[0] / scale:.1f}" if len(hit) else "")
-    x, y, pw, ph = (int(c * scale) for c in DIM_PATCH)
-    patch = rgb[y:y + ph, x:x + pw].astype(np.float32)
-    lum = (0.2126 * patch[..., 0] + 0.7152 * patch[..., 1] + 0.0722 * patch[..., 2]).mean()
-    return int(name.stem), app_patch_white, boxes, edges, lum
+    lums = []
+    for px, py, pw, ph in (DIM_PATCH, DIM_PATCH2):
+        x, y, w, h = (int(c * scale) for c in (px, py, pw, ph))
+        patch = rgb[y:y + h, x:x + w].astype(np.float32)
+        lums.append((0.2126 * patch[..., 0] + 0.7152 * patch[..., 1] + 0.0722 * patch[..., 2]).mean())
+    return int(name.stem), app_patch_white, boxes, edges, lums
 
 
 def main(frames, out, scale=3.0):
@@ -119,16 +125,16 @@ def main(frames, out, scale=3.0):
             cols += [f"{name}_l", f"{name}_t", f"{name}_r", f"{name}_b"]
         for name, ys in SCANLINES.items():
             cols += [f"{name}_x{y}" for y in ys]
-        cols += ["dim_y", "app"]
+        cols += ["dim_y", "dim2_y", "app"]
         w.writerow(cols)
         app_up = False
-        for i, white, boxes, edges, lum in results:
+        for i, white, boxes, edges, lums in results:
             app_up = app_up or white
             row = [i, f"{times.get(i, 0):.4f}"]
             for b in boxes:
                 row += b if app_up else [""] * 4
             row += edges if app_up else [""] * len(edges)
-            row += [f"{lum:.1f}", int(app_up)]
+            row += [f"{lums[0]:.1f}", f"{lums[1]:.1f}", int(app_up)]
             w.writerow(row)
     print(f"tracked {len(names)} frames -> {out}")
 
