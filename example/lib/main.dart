@@ -345,8 +345,10 @@ class PosterPage extends StatelessWidget {
       backgroundColor: Parity.flat ? const Color(0xFFE0F0FF) : null,
       navigationBar: CupertinoNavigationBar(
         middle: Text(poster.title),
-        // Parity: SwiftUI's bar is opaque white over this page.
-        backgroundColor: Parity.flat ? CupertinoColors.white : null,
+        // Parity: SwiftUI's bar is opaque white over this page. A hair
+        // short of opaque, so the scaffold still lays the page out under
+        // the bar, where SwiftUI's scroll view starts.
+        backgroundColor: Parity.flat ? const Color(0xFEFFFFFF) : null,
         border: Parity.flat
             ? null
             : const Border(
