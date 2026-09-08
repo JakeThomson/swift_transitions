@@ -1,0 +1,53 @@
+name: NativeReference
+options:
+  bundleIdPrefix: com.swifttransitions
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGN_IDENTITY: ""
+targets:
+  NativeReference:
+    type: application
+    platform: iOS
+    sources: [NativeReference]
+    info:
+      path: NativeReference/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.swifttransitions.NativeReference
+        GENERATE_INFOPLIST_FILE: "NO"
+  ParityDriver:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [ParityDriver]
+    dependencies:
+      - target: NativeReference
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.swifttransitions.ParityDriver
+        TEST_TARGET_NAME: NativeReference
+schemes:
+  NativeReference:
+    build:
+      targets:
+        NativeReference: all
+        ParityDriver: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [ParityDriver]
