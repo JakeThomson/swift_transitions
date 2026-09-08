@@ -148,6 +148,36 @@ status bar and the nav bar's text), the XCUITest drives both apps through
 a push and a pop, and the tracker produces a plausible CSV for one
 recording of each.
 
+*Done 2026-09-08.* What the rig turned out to need, for whoever re-runs it:
+
+- **Reference iOS is 27.0 (24A5408d), not 26.** The iOS 26.0.1 runtime's
+  SpringBoard crashes at boot under this Xcode 27 / macOS 27 host, so the
+  parity simulator is an iPhone 17 on the 27.0 runtime (`Parity iPhone 17`,
+  UDID in `tools/parity/parity.env`), separate from any simulator in daily
+  use. `VERSIONS` in the recordings folder pins it.
+- The native project is generated with `xcodegen` from `project.yml`
+  (`../swift_transitions_native`, its own repository). Its home screen is
+  laid out by hand rather than with `List`, since SwiftUI's list rows are
+  52 pt and the example's tiles are 44 pt; the measured offsets are in
+  `Gallery.swift`. Home screens differ by 0.8 % of pixels at rest.
+- `xcodebuild test-without-building` forwards only environment variables
+  prefixed `TEST_RUNNER_` to the test runner, and Dart on iOS cannot read
+  the launch environment at all, so the example's Runner hands the
+  `PARITY_*` variables to Dart over a method channel. For a manual launch
+  use `SIMCTL_CHILD_PARITY_FLAT=1 xcrun simctl launch …`. The example
+  also hides its debug banner.
+- The tracker keys the start of a recording on the first frame the nav
+  bar is white and latches, because the simulator's home wallpaper is
+  orange and the bar dims during flights. Anti-aliased text blends toward
+  the palette colours, so the flat palette carries no poster titles and a
+  box needs 300 matching pixels.
+- The simulator records at 60 fps while something moves (median 16.6 ms)
+  with a handful of gaps over 40 ms per run; the three-runs rule stands.
+  The example is a debug build (release does not run on the simulator);
+  its first zoom-push frame lands 130 pt further along than native's,
+  which is either the post-frame flight preparation or debug-mode frame
+  pacing — stage 3's first question.
+
 ---
 
 ## 1. The push transition

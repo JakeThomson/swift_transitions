@@ -1,8 +1,49 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:swift_transitions/swift_transitions.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Parity.load();
   runApp(const ExampleApp());
+}
+
+/// Launch-environment switches shared with the native reference app, so
+/// the parity driver (docs/parity-plan.md) configures both the same way:
+/// `PARITY_SHOW_TOUCHES` draws a ring under every pointer and
+/// `PARITY_FLAT` swaps the poster gradients for flat colour. Dart cannot
+/// read the launch environment on iOS, so the Runner hands it over.
+abstract final class Parity {
+  static const MethodChannel _channel = MethodChannel(
+    'swift_transitions.example/parity',
+  );
+
+  /// Whether to draw a ring under every pointer.
+  static bool showTouches = false;
+
+  /// Whether to draw the posters and pages in flat colour.
+  static bool flat = false;
+
+  /// Reads the switches from the launch environment.
+  static Future<void> load() async {
+    var environment = Platform.environment;
+    if (Platform.isIOS) {
+      try {
+        final handed = await _channel.invokeMapMethod<String, String>(
+          'environment',
+        );
+        if (handed != null) {
+          environment = handed;
+        }
+      } on MissingPluginException {
+        // Not running in the example's own Runner.
+      }
+    }
+    showTouches = environment['PARITY_SHOW_TOUCHES'] == '1';
+    flat = environment['PARITY_FLAT'] == '1';
+  }
 }
 
 /// Demo app for `swift_transitions`.
@@ -15,7 +56,72 @@ class ExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CupertinoApp(home: GalleryPage());
+    return CupertinoApp(
+      home: const GalleryPage(),
+      debugShowCheckedModeBanner: false,
+      builder: (context, child) =>
+          Parity.showTouches ? TouchRings(child: child!) : child!,
+    );
+  }
+}
+
+/// Draws a ring under every pointer, above the app, so a recording of a
+/// gesture carries the finger's position. A [Listener] in the tree above
+/// the navigator sees every pointer without taking part in any arena.
+class TouchRings extends StatefulWidget {
+  /// Creates the overlay.
+  const TouchRings({super.key, required this.child});
+
+  /// The app.
+  final Widget child;
+
+  @override
+  State<TouchRings> createState() => _TouchRingsState();
+}
+
+class _TouchRingsState extends State<TouchRings> {
+  final Map<int, Offset> _pointers = <int, Offset>{};
+
+  void _update(PointerEvent event) {
+    setState(() {
+      if (event is PointerUpEvent || event is PointerCancelEvent) {
+        _pointers.remove(event.pointer);
+      } else {
+        _pointers[event.pointer] = event.position;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: _update,
+      onPointerMove: _update,
+      onPointerUp: _update,
+      onPointerCancel: _update,
+      child: Stack(
+        textDirection: TextDirection.ltr,
+        children: <Widget>[
+          widget.child,
+          for (final position in _pointers.values)
+            Positioned(
+              left: position.dx - 12,
+              top: position.dy - 12,
+              child: const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.fromBorderSide(
+                      BorderSide(color: Color(0xFF33FF33), width: 3),
+                    ),
+                  ),
+                  child: SizedBox(width: 24, height: 24),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -172,22 +278,29 @@ class PosterArt extends StatelessWidget {
       alignment: Alignment.bottomLeft,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            poster.color,
-            Color.lerp(poster.color, const Color(0xFF000000), 0.45)!,
-          ],
-        ),
+        color: Parity.flat ? poster.color : null,
+        gradient: Parity.flat
+            ? null
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  poster.color,
+                  Color.lerp(poster.color, const Color(0xFF000000), 0.45)!,
+                ],
+              ),
       ),
-      child: Text(
-        poster.title,
-        style: const TextStyle(
-          color: CupertinoColors.white,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      // Text blends into the colour it sits on, so the flat palette, which
+      // exists to be measured, carries none.
+      child: Parity.flat
+          ? null
+          : Text(
+              poster.title,
+              style: const TextStyle(
+                color: CupertinoColors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
     );
   }
 }
@@ -243,6 +356,7 @@ class PosterPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
+      backgroundColor: Parity.flat ? const Color(0xFFEEF4FF) : null,
       navigationBar: CupertinoNavigationBar(middle: Text(poster.title)),
       child: ListView(
         padding: EdgeInsets.zero,
@@ -288,6 +402,7 @@ class PushDemoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
+      backgroundColor: Parity.flat ? const Color(0xFFE8FFEE) : null,
       navigationBar: const CupertinoNavigationBar(middle: Text('Detail')),
       child: SafeArea(
         child: Center(

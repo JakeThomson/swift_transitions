@@ -1,0 +1,19 @@
+# Parity tooling
+
+Dev-only scripts for `docs/parity-plan.md`. Not part of the package.
+
+Requirements: Python 3 with numpy and Pillow, ffmpeg/ffprobe on the path,
+Xcode with the `swift_transitions_native` project built for the parity
+simulator, and the example built for the simulator
+(`flutter build ios --simulator --debug`).
+
+    ./record.sh <native|flutter> <TestName> <out.mov>   # scripted run + recording
+    python3 extract.py out.mov frames/                  # timestamped PNG frames
+    python3 track.py frames/ out.csv                    # colour-class boxes per frame
+    python3 compare.py native.csv ours.csv card_w       # RMS / timing / plot
+
+The simulator UDID lives in `parity.env`, along with the app bundle ids.
+`record.sh` forwards the parity switches with xcodebuild's `TEST_RUNNER_`
+prefix; for a manual launch use `SIMCTL_CHILD_PARITY_FLAT=1 xcrun simctl
+launch <udid> <bundle id>`. Recordings and frames go to
+`../swift_transitions_parity/<stage>/`, not the repository.
