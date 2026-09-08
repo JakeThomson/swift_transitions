@@ -811,9 +811,12 @@ begins a pop. In Flutter terms:
 
 ### 3.9 Physics
 
-- Push: `SpringDescription.withDurationAndBounce(duration: 500 ms, bounce: 0)`
-  as the starting point, calibrated against the 60 fps push strip (most of
-  the travel in the first ~120 ms). It reaches the controller through
+- Zoom push and pop: one critically damped spring from rest at ω = 19 rad/s
+  (stiffness 361, damping 38; a 52 ms time constant, 330 ms response),
+  fitted to the card's width on a native `NavigationStack` zoom to 4–6 pt
+  RMS of 282 pt of travel, push and pop alike (parity stage 3). A pure
+  exponential misses by three times that: the flight has a short ease-in,
+  unlike the push transition's slide. It reaches the controller through
   `TransitionRoute.createSimulation`, so the route's `animateWith` plumbing
   is the SDK's.
 - Dismissal landing and cancel: the same constructor with a slightly shorter
