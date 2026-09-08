@@ -118,14 +118,17 @@ class ZoomAlignmentRectContext {
 typedef ZoomAlignmentRectProvider =
     Rect? Function(ZoomAlignmentRectContext context);
 
-/// The default zoom flight spring: [SpringDescription.withDurationAndBounce]
-/// for 500 ms with no bounce, written out because that constructor is not
-/// const. Calibration against the 60 fps push strip is pending; see
-/// design.md section 3.9.
+/// The default zoom flight spring: critically damped, ω = 19 rad/s (a
+/// 52 ms time constant), written out because
+/// [SpringDescription.withDurationAndBounce] is not const. Fitted to the
+/// card's width on a native `NavigationStack` zoom, push and pop alike, to
+/// 4–6 pt RMS of 282 pt of travel (parity stage 3, iOS 27.0 simulator);
+/// a pure exponential misses by three times that, so the flight does have
+/// a short ease-in.
 const SpringDescription kZoomPushSpring = SpringDescription(
   mass: 1,
-  stiffness: 157.91367041742973, // (2π / 0.5 s)²
-  damping: 25.132741228718345, // 4π / 0.5 s
+  stiffness: 361, // ω²
+  damping: 38, // 2ω
 );
 
 /// Which gestures may dismiss a zoom route interactively.
