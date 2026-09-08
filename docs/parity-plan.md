@@ -268,6 +268,10 @@ radius interpolation, the alignment window (`ZoomTransitionLayer._growth`,
 square-root-of-area), and the fallback flight for a missing source
 (`fallbackInset` 0.05).
 
+Seen in the stage 0 recording and not yet drawn by the package: the
+native card casts a soft shadow onto the covered page, wide enough to
+darken a strip 20 pt from its edge. It belongs to this stage's tuning.
+
 **Recordings** (scripted, simulator): tap each of the three visible
 posters and pop each with the back button (three source positions: near
 the left edge, centre, right); the poster row scrolled so a source is
