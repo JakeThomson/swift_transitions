@@ -41,13 +41,17 @@ class ZoomFrame {
 }
 
 /// The fraction of a push (or a pop, from the other end) over which the
-/// source's pixels cross-fade with the page's, per design.md section 3.4.
-const double kZoomCrossFadeWindow = 0.4;
+/// source's pixels cross-fade with the page's. Read off a native flight
+/// where the copy sat over the page's light top strip: 0.58 at progress
+/// 0.21, 0.39 at 0.33, gone by 0.63 — a straight fade over the first
+/// 0.55 (parity stage 3).
+const double kZoomCrossFadeWindow = 0.55;
 
-/// How the covered route's dim follows the flight, per design.md section
-/// 3.4: an ease-in of the route animation, so the page underneath darkens
-/// mostly in the second half of the push. Used as the route's barrier curve.
-const Curve kZoomDimmingCurve = Curves.easeIn;
+/// How the covered route's dim follows the flight: in step with the route
+/// animation. Native's dim, read from a patch of the covered page well away
+/// from the card, was 0.15 × progress at every frame (parity stage 3).
+/// Used as the route's barrier curve.
+const Curve kZoomDimmingCurve = Curves.linear;
 
 /// The frame of a zoom flight (push, committed dismissal, or cancel) at
 /// progress [t], where `t = 0` is [source] at rest and `t = 1` is [screen]

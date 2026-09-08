@@ -171,11 +171,11 @@ void main() {
         .color
         .value!;
     expect(barrierColor().a, greaterThan(0));
-    expect(barrierColor().a, lessThan(0x33 / 0xFF));
+    expect(barrierColor().a, lessThan(0x26 / 0xFF));
 
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.text('home')), homeBefore);
-    expect(barrierColor().a, closeTo(0x33 / 0xFF, 0.01));
+    expect(barrierColor().a, closeTo(0x26 / 0xFF, 0.01));
   });
 
   testWidgets('the source is hidden while the route is up and shown after', (

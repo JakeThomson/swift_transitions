@@ -171,11 +171,11 @@ void main() {
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
 
-    // 240px at 1600px/s: 0.285 widths beyond the dead zone, and 2 widths/s
-    // projected over 120 ms is another 0.24. Past the midpoint together,
+    // 260px at 1600px/s: 0.31 widths beyond the dead zone, and 2 widths/s
+    // projected over 120 ms is another 0.24. Past the 53 % line together,
     // and past neither of the SDK's tests alone.
     expect(BackGestureController.projectedTravel(2), closeTo(0.24, 1e-9));
-    await tester.flingFrom(const Offset(5, 300), const Offset(240, 0), 1600);
+    await tester.flingFrom(const Offset(5, 300), const Offset(260, 0), 1600);
     await tester.pumpAndSettle();
 
     expect(find.text('second'), findsNothing);

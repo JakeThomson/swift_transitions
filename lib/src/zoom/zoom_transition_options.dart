@@ -11,7 +11,7 @@ class ZoomTransitionOptions {
     this.dismissGestures = ZoomDismissGestures.all,
     this.interactiveDismissShouldBegin,
     this.dismissPhysics = ZoomDismissPhysics.ios26,
-    this.dimmingColor = const Color(0x33000000),
+    this.dimmingColor = const Color(0x26000000),
     this.dimmingBlurSigma = 0.0,
     this.alignmentRect,
     this.pushSpring = kZoomPushSpring,

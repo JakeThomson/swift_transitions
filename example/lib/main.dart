@@ -217,25 +217,10 @@ class PosterRow extends StatelessWidget {
             borderRadius: _radius,
             child: GestureDetector(
               onTap: () {
-                // The art sits under the navigation bar at the page's width
-                // and the poster's aspect; that is what the poster grows
-                // into and shrinks back onto.
-                final artTop =
-                    MediaQuery.paddingOf(context).top +
-                    const CupertinoNavigationBar().preferredSize.height +
-                    13;
                 Navigator.of(context).push(
                   ZoomPageRoute<void>(
                     sourceTag: poster.title,
                     title: poster.title,
-                    options: ZoomTransitionOptions(
-                      alignmentRect: (context) => Rect.fromLTWH(
-                        0,
-                        artTop,
-                        context.pageSize.width,
-                        context.pageSize.width * 1.5,
-                      ),
-                    ),
                     builder: (_) => PosterPager(initial: index),
                   ),
                 );
@@ -361,7 +346,14 @@ class PosterPage extends StatelessWidget {
       navigationBar: CupertinoNavigationBar(middle: Text(poster.title)),
       child: ListView(
         // Below the bar, plus the 13 pt a SwiftUI scroll view leaves there.
-        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 13),
+        // This context is above the page's own scaffold, so the bar's
+        // height is not yet in the padding.
+        padding: EdgeInsets.only(
+          top:
+              MediaQuery.paddingOf(context).top +
+              const CupertinoNavigationBar().preferredSize.height +
+              13,
+        ),
         children: <Widget>[
           AspectRatio(
             aspectRatio: 2 / 3,

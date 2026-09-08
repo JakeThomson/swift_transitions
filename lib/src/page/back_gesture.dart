@@ -36,6 +36,11 @@ const double _kDeadZone = 12.0;
 /// separates them all; the scroll view's deceleration would be 500 ms.
 const double _kReleaseProjection = 0.12;
 
+/// The position, as a fraction of the width, a release must reach: native
+/// sprang back from 51 % and 52 % at rest and popped from 54 % (parity
+/// stage 2), so the line is a little past the midpoint.
+const double _kReleaseThreshold = 0.53;
+
 /// A controller for an iOS-style back gesture, ported from the SDK's
 /// private `_CupertinoBackGestureController` (`cupertino/route.dart`) so
 /// [SwiftPageRoute] gets the same drag-to-progress and release semantics.
@@ -91,7 +96,7 @@ class BackGestureController<T> {
   /// per second, positive toward the pop), committing or cancelling it.
   ///
   /// The pop commits if the page's position plus its projected travel
-  /// passes the midpoint, the rule that reproduces the native commit
+  /// passes 53 % of the width, the rule that reproduces the native commit
   /// table. The SDK's — commit past the midpoint, or at a fling of a full
   /// screen width per second either way — sends a short flick springing
   /// back. Either way the page lands on [releaseSpring], seeded with the
@@ -106,7 +111,8 @@ class BackGestureController<T> {
       animateForward = getIsActive();
     } else {
       final travelled = 1 - controller.value;
-      animateForward = travelled + projectedTravel(velocity) < 0.5;
+      animateForward =
+          travelled + projectedTravel(velocity) < _kReleaseThreshold;
     }
 
     // The controller runs from 1 (page on top) down to 0 (popped), so the

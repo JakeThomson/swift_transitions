@@ -64,6 +64,14 @@ class ZoomTransitionLayer extends StatelessWidget {
   /// The page.
   final Widget child;
 
+  // The card's shadow, from the luminance beside and below a native card at
+  // mid-flight (parity stage 3): about 10 % darker 4 pt out, 3 % at 20 pt,
+  // gone by 40 pt, a little stronger below than beside. A Gaussian of
+  // σ ≈ 18 pt at this alpha, offset 4 pt down, reproduces that profile.
+  static const double _shadowAlpha = 0.24;
+  static const Offset _shadowOffset = Offset(0, 4);
+  static const double _shadowBlurRadius = 30;
+
   /// How far the card's size is from [sourceSize] toward [pageSize], by
   /// the square root of area so a card halfway along a linear flight reads
   /// as about halfway; 1.0 without a source or an [alignmentRect].
@@ -112,47 +120,64 @@ class ZoomTransitionLayer extends StatelessWidget {
           rect: rect,
           child: Transform.rotate(
             angle: frame.rotation,
-            child: ClipRSuperellipse(
-              borderRadius: atRest ? BorderRadius.zero : frame.radii,
-              clipBehavior: atRest ? Clip.none : Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  OverflowBox(
-                    alignment: Alignment.topLeft,
-                    minWidth: 0,
-                    maxWidth: double.infinity,
-                    minHeight: 0,
-                    maxHeight: double.infinity,
-                    child: Transform(
-                      transform: Matrix4.translationValues(
-                        shift.dx,
-                        shift.dy,
-                        0,
-                      )..scaleByDouble(scale, scale, 1, 1),
-                      child: SizedBox.fromSize(size: pageSize, child: child),
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: atRest ? BorderRadius.zero : frame.radii,
+                ),
+                shadows: <BoxShadow>[
+                  if (!atRest)
+                    BoxShadow(
+                      color: const Color(
+                        0xFF000000,
+                      ).withValues(alpha: _shadowAlpha),
+                      offset: _shadowOffset,
+                      blurRadius: _shadowBlurRadius,
                     ),
-                  ),
-                  // A picture of the source, not the source: it neither
-                  // takes pointers (a grab mid-flight must reach the page)
-                  // nor ticks.
-                  if (showSource)
-                    IgnorePointer(
-                      child: Opacity(
-                        opacity: frame.sourceOpacity,
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
-                          clipBehavior: Clip.hardEdge,
-                          child: SizedBox.fromSize(
-                            size: sourceSize,
-                            child: flightChild,
+                ],
+              ),
+              child: ClipRSuperellipse(
+                borderRadius: atRest ? BorderRadius.zero : frame.radii,
+                clipBehavior: atRest ? Clip.none : Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    OverflowBox(
+                      alignment: Alignment.topLeft,
+                      minWidth: 0,
+                      maxWidth: double.infinity,
+                      minHeight: 0,
+                      maxHeight: double.infinity,
+                      child: Transform(
+                        transform: Matrix4.translationValues(
+                          shift.dx,
+                          shift.dy,
+                          0,
+                        )..scaleByDouble(scale, scale, 1, 1),
+                        child: SizedBox.fromSize(size: pageSize, child: child),
+                      ),
+                    ),
+                    // A picture of the source, not the source: it neither
+                    // takes pointers (a grab mid-flight must reach the page)
+                    // nor ticks.
+                    if (showSource)
+                      IgnorePointer(
+                        child: Opacity(
+                          opacity: frame.sourceOpacity,
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            clipBehavior: Clip.hardEdge,
+                            child: SizedBox.fromSize(
+                              size: sourceSize,
+                              child: flightChild,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

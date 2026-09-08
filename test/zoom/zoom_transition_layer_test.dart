@@ -97,4 +97,23 @@ void main() {
     expect(rect.top, greaterThan(card.top));
     expect(rect.right, lessThan(card.right));
   });
+
+  testWidgets('the card casts a shadow only while in flight', (tester) async {
+    await pumpLayer(tester, rect: source);
+    ShapeDecoration decoration() =>
+        tester
+                .widget<DecoratedBox>(
+                  find
+                      .descendant(
+                        of: find.byType(ZoomTransitionLayer),
+                        matching: find.byType(DecoratedBox),
+                      )
+                      .first,
+                )
+                .decoration
+            as ShapeDecoration;
+    expect(decoration().shadows, hasLength(1));
+    expect(decoration().shadows!.single.blurRadius, 30);
+    expect(decoration().shadows!.single.color.a, closeTo(0.24, 0.01));
+  });
 }
