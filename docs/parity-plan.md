@@ -344,8 +344,20 @@ initial velocity does not fit better. `kZoomPushSpring` is now ω = 19.
 Ours, aligned on the first moving frame, is within 5 pt of native at
 every sample of the push and fits ω = 19 to 1.3–2.1 pt RMS on the pop;
 before alignment it starts 60–80 ms late on the push and 30 ms on the
-pop (the debug-build latency above). Not yet measured: the other edges,
-the cross-fade, the dim and the card's shadow, the radii.
+pop (the debug-build latency above).
+
+*Measured 2026-09-09, flat palette.* SwiftUI scales the whole page into
+the card from its top, bar strip and all — there is no art alignment —
+so the example no longer passes an `alignmentRect` (the option stays for
+apps that want UIKit's provider). The card's shadow beside it at
+mid-flight: 10.5 % at 4 pt, 6.1 % at 12, 3.1 % at 20, 1.7 % at 28, gone
+by 40; below it 14 % at 2 pt, 9.2 % at 10, 5.7 % at 18, 3.1 % at 26 — a
+Gaussian of σ ≈ 18 pt at α 0.24 offset 4 pt down, now drawn by
+`ZoomTransitionLayer`. The dim, from a patch of the covered page far
+from the card, is 0.15 × progress at every frame; ours was 0.2 eased in
+and is now 0.15 linear. The source copy's opacity over the page's light
+top strip: 0.58 at progress 0.21, 0.39 at 0.33, 0.03 at 0.63 — a
+straight fade over 0.55 (ours was 0.4). Still open: the radii.
 
 ## 4. The pan dismissal
 

@@ -1,9 +1,16 @@
 ## 0.1.0-dev
 
+* Match the zoom transition to iOS, measured against a native
+  `NavigationStack` zoom (parity stage 3): the flight is one critically
+  damped spring at ω 19 rad/s for push and pop, the card casts the native
+  soft shadow (σ 18 pt at 24 %, 4 pt down), the covered page dims linearly
+  to 15 % black, and the source's copy cross-fades over the first 55 % of
+  the flight. Flights prepare before their first frame when pushed or
+  popped from outside a build.
 * Match the back swipe to iOS, measured against a native `NavigationStack`
   (parity stage 2): the page waits out a 12 pt dead zone from the touch
   before following the finger, a release commits when the page's position
-  plus its velocity over the next 120 ms passes the midpoint — so a short
+  plus its velocity over the next 120 ms passes 53 % of the width — so a short
   flick pops and a page pulled back slowly past the midpoint still does —
   and both the pop and the spring back land on one spring
   (`BackGestureController.releaseSpring`, ω 22, ζ 0.85) that covers 98 % of
