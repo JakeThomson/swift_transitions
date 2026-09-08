@@ -56,18 +56,26 @@ final class ParityDriver: XCTestCase {
 
     // MARK: Stage 0 smoke: push a row, pop it; zoom a poster, pop it.
 
+    /// Each transition is run twice and the second is the one measured:
+    /// the first build of a page in a Flutter debug build (the only kind
+    /// the simulator runs) takes tens of milliseconds while the animation
+    /// clock is already running, which no release build does.
     func testPushRow() {
-        firstRow.tap()
-        hold(1.5)
-        backButton.tap()
-        hold(1.5)
+        for _ in 0..<2 {
+            firstRow.tap()
+            hold(1.5)
+            backButton.tap()
+            hold(1.5)
+        }
     }
 
     func testZoomPoster() {
-        dunes.tap()
-        hold(1.5)
-        backButton.tap()
-        hold(1.5)
+        for _ in 0..<2 {
+            dunes.tap()
+            hold(1.5)
+            backButton.tap()
+            hold(1.5)
+        }
     }
 
     // MARK: Stage 2: the back swipe. Each test pushes the first row, waits,
