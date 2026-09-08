@@ -40,9 +40,9 @@ void main() {
   test('a push widens before it grows tall', () {
     expect(zoomPushVerticalProgress(0), 0);
     expect(zoomPushVerticalProgress(1), 1);
-    expect(zoomPushVerticalProgress(0.2), 0);
-    expect(zoomPushVerticalProgress(0.63), closeTo(0.58, 0.02));
-    expect(zoomPushVerticalProgress(0.85), closeTo(0.84, 0.02));
+    expect(zoomPushVerticalProgress(0.33), closeTo(0.29, 0.01));
+    expect(zoomPushVerticalProgress(0.63), closeTo(0.58, 0.01));
+    expect(zoomPushVerticalProgress(0.85), closeTo(0.83, 0.01));
     final frame = zoomFlightFrame(
       t: 0.63,
       source: source,

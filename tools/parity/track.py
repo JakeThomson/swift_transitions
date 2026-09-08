@@ -88,9 +88,27 @@ def box(mask, scale):
             f"{(xs.max() + 1) / scale:.1f}", f"{(ys.max() + 1) / scale:.1f}"]
 
 
+# The card as a whole — copy, page, bar strip and all — is whatever differs
+# from the home screen once the dim is taken out: column cardfull_*. The
+# dim is read from the far patch; the reference is the first frame with
+# the app up. Differences below this many levels are noise and shadow.
+CARD_DIFF = 40
+
+
+def card_full(rgb, home, dim, scale):
+    if home is None:
+        return [""] * 4
+    expected = home.astype(np.float32) * (1 - dim)
+    diff = np.abs(rgb.astype(np.float32) - expected).max(axis=-1) > CARD_DIFF
+    # Ignore the status bar and the touch ring.
+    diff[: int(59 * scale)] = False
+    return box(diff, scale)
+
+
 def track_frame(args):
-    name, scale = args
+    name, scale, home_name = args
     rgb = np.asarray(Image.open(name).convert("RGB"))
+    home = np.asarray(Image.open(home_name).convert("RGB")) if home_name else None
     ax, ay, aw, ah = (int(c * scale) for c in APP_PATCH)
     app_patch_white = bool(rgb[ay:ay + ah, ax:ax + aw].min() > 225)
     h, s, v = hsv(rgb)
@@ -107,7 +125,9 @@ def track_frame(args):
         x, y, w, h = (int(c * scale) for c in (px, py, pw, ph))
         patch = rgb[y:y + h, x:x + w].astype(np.float32)
         lums.append((0.2126 * patch[..., 0] + 0.7152 * patch[..., 1] + 0.0722 * patch[..., 2]).mean())
-    return int(name.stem), app_patch_white, boxes, edges, lums
+    dim = max(0.0, 1 - lums[1] / 253.0) if home is not None else 0.0
+    full = card_full(rgb, home, dim, scale)
+    return int(name.stem), app_patch_white, boxes, edges, lums, full
 
 
 def main(frames, out, scale=3.0):
@@ -116,8 +136,26 @@ def main(frames, out, scale=3.0):
     frames = Path(frames)
     times = {int(r["index"]): float(r["t"]) for r in csv.DictReader(open(frames / "times.csv"))}
     names = sorted(frames.glob("*.png"))
+    # The home screen at rest: the last frame before anything moves whose
+    # bar is white (the first such frame may still be fading in).
+    home = None
+    ax, ay, aw, ah = (int(c * scale) for c in APP_PATCH)
+    card = PALETTE["card"]
+    for n in names:
+        rgb = np.asarray(Image.open(n).convert("RGB"))
+        if rgb[ay:ay + ah, ax:ax + aw].min() < 225:
+            if home is not None:
+                break
+            continue
+        h, s, v = hsv(rgb)
+        b = box(mask_for(card, rgb, h, s, v, scale), scale)
+        if b[0] == "" or float(b[2]) - float(b[0]) > 121:
+            if home is not None:
+                break
+            continue
+        home = n
     with Pool() as pool:
-        results = pool.map(track_frame, [(n, scale) for n in names], chunksize=4)
+        results = pool.map(track_frame, [(n, scale, home) for n in names], chunksize=4)
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
         cols = ["index", "t"]
@@ -125,16 +163,18 @@ def main(frames, out, scale=3.0):
             cols += [f"{name}_l", f"{name}_t", f"{name}_r", f"{name}_b"]
         for name, ys in SCANLINES.items():
             cols += [f"{name}_x{y}" for y in ys]
-        cols += ["dim_y", "dim2_y", "app"]
+        cols += ["dim_y", "dim2_y", "cardfull_l", "cardfull_t", "cardfull_r", "cardfull_b", "app"]
         w.writerow(cols)
         app_up = False
-        for i, white, boxes, edges, lums in results:
+        for i, white, boxes, edges, lums, full in results:
             app_up = app_up or white
             row = [i, f"{times.get(i, 0):.4f}"]
             for b in boxes:
                 row += b if app_up else [""] * 4
             row += edges if app_up else [""] * len(edges)
-            row += [f"{lums[0]:.1f}", f"{lums[1]:.1f}", int(app_up)]
+            row += [f"{lums[0]:.1f}", f"{lums[1]:.1f}"]
+            row += full if app_up else [""] * 4
+            row.append(int(app_up))
             w.writerow(row)
     print(f"tracked {len(names)} frames -> {out}")
 

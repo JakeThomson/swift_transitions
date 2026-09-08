@@ -57,13 +57,13 @@ const double kZoomCrossFadeWindow = 0.55;
 const Curve kZoomDimmingCurve = Curves.linear;
 
 /// How far a pushed card's top and bottom edges have travelled when its
-/// side edges have travelled [t]: on a native push the card widens first
-/// and grows tall afterwards — at a third of the sideways travel the
-/// vertical travel is a tenth, at 0.63 it is 0.56, at 0.85 it is 0.80 —
-/// converging by the end (parity stage 3, read off the page's bar strip
-/// inside the card at ten progresses). A pop grows both together.
+/// side edges have travelled [t]: on a native push the card widens a
+/// little ahead of growing tall — its bottom edge reads 0.29 at a third
+/// of the sideways travel, 0.58 at 0.63, 0.73 at 0.76, 0.83 at 0.85 —
+/// converging by the end (parity stage 3, from the card's outline against
+/// the covered page). A pop grows both together.
 double zoomPushVerticalProgress(double t) =>
-    math.pow(((t - 0.25) / 0.75).clamp(0.0, 1.0), 0.8).toDouble();
+    (t - 0.05 * math.sin(math.pi * t)).clamp(0.0, 1.0);
 
 /// The frame of a zoom flight (push, committed dismissal, or cancel) at
 /// progress [t], where `t = 0` is [source] at rest and `t = 1` is [screen]
