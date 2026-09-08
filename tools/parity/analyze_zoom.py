@@ -29,8 +29,13 @@ def segments(rows):
             while j + 1 < len(rows) and SOURCE_W + 0.5 < width(rows[j]) < SCREEN_W - 0.5:
                 j += 1
             seg = rows[max(i - 1, 0):j + 1]
-            name = "push" if width(seg[-1]) > width(seg[0]) else "pop"
-            out.append((name, seg))
+            span = float(seg[-1]["t"]) - float(seg[0]["t"])
+            ends = (width(seg[0]), width(seg[-1]))
+            # A flight runs from one end to the other within a second;
+            # anything else is the launch or a poster scrolling.
+            if span < 1.2 and min(ends) < SOURCE_W + 3 and max(ends) > SCREEN_W - 3:
+                name = "push" if ends[1] > ends[0] else "pop"
+                out.append((name, seg))
             i = j + 1
         else:
             i += 1
