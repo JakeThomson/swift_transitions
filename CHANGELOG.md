@@ -33,10 +33,13 @@
   `interactiveDismissShouldBegin` and `dismissPhysics`, and the route
   exposes the `ZoomScrollController` it installs as the page's primary
   scroll controller.
-* Match the push transition's covered page to iOS: it travels 0.29 of the
-  width on the same curve as the arriving page, so the two move in lockstep
+* Match the push transition to iOS, measured frame by frame against a
+  native `NavigationStack`: the arriving page's remaining distance decays
+  exponentially (`SwiftCurves.push`, a 61 ms time constant over a 400 ms
+  transition) with the pop the same decay in reverse, the covered page
+  travels 0.30 of the width on the same curve so the two move in lockstep
   and track the finger together, and it is dimmed by the transition at
-  0.115 × progress. `SwiftPageRoute` has no barrier colour; a covered
+  0.10 × progress. `SwiftPageRoute` has no barrier colour; a covered
   `CupertinoPageRoute` or Material route gets the same motion and dim
   through `SwiftPageTransition.delegatedTransition`.
 * Add `ZoomPageRoute`, `ZoomPage` and `ZoomTransitionSource`: the iOS 18

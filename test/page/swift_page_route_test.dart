@@ -286,7 +286,7 @@ void main() {
     },
   );
 
-  testWidgets('the covered page keeps pace at 0.29 of the width and dims', (
+  testWidgets('the covered page keeps pace at 0.30 of the width and dims', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -303,8 +303,8 @@ void main() {
     final arrivingX = tester.getTopLeft(find.byType(ClipRSuperellipse).last).dx;
     final coveredX = tester.getTopLeft(find.byType(ClipRSuperellipse).first).dx;
     expect(arrivingX, inExclusiveRange(0, 800));
-    expect(coveredX, closeTo(-0.29 * (800 - arrivingX), 1));
-    expect(coveredDim(tester), closeTo(0.115 * (800 - arrivingX) / 800, 0.005));
+    expect(coveredX, closeTo(-0.30 * (800 - arrivingX), 1));
+    expect(coveredDim(tester), closeTo(0.10 * (800 - arrivingX) / 800, 0.005));
 
     await tester.pumpAndSettle();
     expect(coveredDim(tester), 0);
@@ -325,9 +325,9 @@ void main() {
     // 200px of an 800px drag leaves the controller at 0.75.
     expect(
       tester.getTopLeft(find.byType(ClipRSuperellipse).first).dx,
-      closeTo(-0.29 * 800 * 0.75, 1),
+      closeTo(-0.30 * 800 * 0.75, 1),
     );
-    expect(coveredDim(tester), closeTo(0.115 * 600 / 800, 0.005));
+    expect(coveredDim(tester), closeTo(0.10 * 600 / 800, 0.005));
 
     await gesture.up();
     await tester.pumpAndSettle();

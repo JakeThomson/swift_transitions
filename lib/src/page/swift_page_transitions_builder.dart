@@ -32,7 +32,7 @@ class SwiftPageTransitionsBuilder extends PageTransitionsBuilder {
 
   @override
   Duration get transitionDuration =>
-      CupertinoRouteTransitionMixin.kTransitionDuration;
+      SwiftPageTransitionMixin.kTransitionDuration;
 
   @override
   DelegatedTransitionBuilder? get delegatedTransition =>

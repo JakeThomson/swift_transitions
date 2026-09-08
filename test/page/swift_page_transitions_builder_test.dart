@@ -49,7 +49,7 @@ void main() {
           .getTopLeft(find.byType(ClipRSuperellipse).first)
           .dx;
       expect(arrivingX, inExclusiveRange(0, 800));
-      expect(coveredX, closeTo(-0.29 * (800 - arrivingX), 1));
+      expect(coveredX, closeTo(-0.30 * (800 - arrivingX), 1));
 
       await tester.pumpAndSettle();
       expect(find.text('second'), findsOneWidget);

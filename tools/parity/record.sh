@@ -4,6 +4,13 @@
 set -e
 source "$(dirname "$0")/parity.env"
 which=$1; test=$2; out=$3; flat=${4:-0}
+# A loaded host drops frames from the recording; wait for it to calm down.
+for i in {1..120}; do
+  load=$(sysctl -n vm.loadavg | awk '{print int($2)}')
+  [ "$load" -lt "${PARITY_MAX_LOAD:-10}" ] && break
+  [ "$i" -eq 1 ] && echo "load average $load; waiting for < ${PARITY_MAX_LOAD:-10}"
+  sleep 10
+done
 xcrun simctl io "$PARITY_SIM" recordVideo --codec h264 --force "$out" &
 rec=$!
 sleep 1

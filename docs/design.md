@@ -68,9 +68,11 @@ at-rest frames):
 
 | Quantity | Observed | Flutter SDK |
 |---|---|---|
-| Covered page travel at full progress | 0.29 of the width (0.283–0.288 across progress 0.49–0.94, push and swipe alike) | 1/3 |
+| Covered page travel at full progress | 0.30 of the width (0.299–0.302 at every frame of a push and a pop, parity stage 1; 0.283–0.288 across a held swipe in the earlier device recording) | 1/3 |
+| Arriving page's curve | exponential decay of the remaining distance, time constant 61 ms (log-linear fit over 24 frames, residual 0.06); the pop is the same decay toward the far side; no ease-in (the first frame moves a fifth of the width); settled to half a point at 400 ms (parity stage 1, iOS 27.0 simulator) | `fastEaseInToSlowEaseOut` over 500 ms |
 | Covered page timing | linear in the top page's progress: one progress drives both pages, in the push and under the finger | its own `linearToEaseOut` curve; linear only during the gesture, and only when the covered route runs its own transition |
-| Dim on the covered page | black at alpha 0.115 × progress, linear (white 253 → 229 under the settled page) | barrier `0x18000000` (alpha 0.094) on `Curves.ease`; none at all for a Material route |
+| Dim on the covered page | black at alpha 0.10 × progress, linear (0.089–0.104 at every frame of a push, read beside the arriving edge; parity stage 1. The earlier device recording read 0.115 under the settled page, where the arriving page's shadow also falls) | barrier `0x18000000` (alpha 0.094) on `Curves.ease`; none at all for a Material route |
+| Leading-edge shadow | about 2 % darker at the edge, gone within 16–18 pt, at every progress (parity stage 1) | `0x04000000` gradient over 5 % of the width |
 
 The same app recorded through swift_transitions installed as a
 `PageTransitionsTheme` showed the covered page lagging on a curve during the

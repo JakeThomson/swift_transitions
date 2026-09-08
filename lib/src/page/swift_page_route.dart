@@ -9,9 +9,17 @@ import 'swift_page_transition.dart';
 /// [CupertinoRouteTransitionMixin.buildPageTransitions] with the display
 /// clip and the configurable back-gesture region added.
 mixin SwiftPageTransitionMixin<T> on PageRoute<T> {
+  /// How long a push or pop takes: 400 ms, by which point
+  /// [SwiftCurves.push] has half a point of the width left. The SDK's
+  /// Cupertino routes take 500 ms on a different curve.
+  static const Duration kTransitionDuration = Duration(milliseconds: 400);
+
   /// Where the interactive back swipe may start. Defaults to the SDK's own
   /// leading-edge region.
   BackGestureRegion get backGestureRegion => BackGestureRegion.leadingEdge;
+
+  @override
+  Duration get transitionDuration => kTransitionDuration;
 
   /// Overrides [DisplayCornerRadii.of] for the incoming page's clip.
   BorderRadius? get cornerRadii => null;

@@ -1,16 +1,18 @@
 import 'package:flutter/cupertino.dart';
 
 import '../corners/display_corner_radii.dart';
+import '../physics/curves.dart';
 
-// The incoming page's slide and curve are the SDK's, ported from
-// `cupertino/route.dart` (`_kRightMiddleTween` and
-// `_CupertinoPageTransitionState._setupAnimation`). The covered page's
-// motion is not: it was measured from a native recording (design.md section
-// 1.1) and differs from the SDK in three ways. It travels 0.29 of the width
-// rather than a third, it follows the same curve as the incoming page rather
-// than its own `linearToEaseOut`, so the two pages move in lockstep, and it
-// is dimmed by the transition rather than a barrier, so the dim also tracks
-// the finger and exists under a route with no barrier colour.
+// The incoming page's slide is the SDK's, ported from `cupertino/route.dart`
+// (`_kRightMiddleTween` and `_CupertinoPageTransitionState._setupAnimation`),
+// on the measured curve [SwiftCurves.push] rather than the SDK's
+// `fastEaseInToSlowEaseOut`. The covered page's motion was measured too
+// (design.md section 1.1, parity stage 1) and differs from the SDK in three
+// ways. It travels 0.30 of the width rather than a third, it follows the
+// same curve as the incoming page rather than its own `linearToEaseOut`, so
+// the two pages move in lockstep, and it is dimmed by the transition rather
+// than a barrier, so the dim also tracks the finger and exists under a
+// route with no barrier colour.
 
 // Offset from offscreen to the right to fully on screen.
 final Animatable<Offset> _kRightMiddleTween = Tween<Offset>(
@@ -19,8 +21,9 @@ final Animatable<Offset> _kRightMiddleTween = Tween<Offset>(
 );
 
 /// How far the covered page travels, as a fraction of the width. Native
-/// measured 0.283–0.288 across the whole of a push and a held back swipe.
-const double _kCoveredPageTravel = 0.29;
+/// measured 0.299–0.302 at every frame of a push and a pop (parity stage 1),
+/// and 0.283–0.288 across a held back swipe in an earlier recording.
+const double _kCoveredPageTravel = 0.30;
 
 // Offset from fully on screen to [_kCoveredPageTravel] offscreen to the left.
 final Animatable<Offset> _kMiddleLeftTween = Tween<Offset>(
@@ -29,8 +32,9 @@ final Animatable<Offset> _kMiddleLeftTween = Tween<Offset>(
 );
 
 /// The black overlaid on the covered page at full progress. Native measured
-/// 0.109–0.118 × progress, linear.
-const double _kCoveredPageDimAlpha = 0.115;
+/// 0.089–0.104 × progress at every frame of a push, linear, read from a
+/// patch beside the arriving page's edge (parity stage 1).
+const double _kCoveredPageDimAlpha = 0.10;
 
 /// The iOS push transition: the SDK's slide for the arriving page, the
 /// measured parallax and dim for the covered page, and the moving page's
@@ -161,15 +165,15 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
     if (!widget.linearTransition) {
       _primaryPositionCurve = CurvedAnimation(
         parent: widget.primaryRouteAnimation,
-        curve: Curves.fastEaseInToSlowEaseOut,
-        reverseCurve: Curves.fastEaseInToSlowEaseOut.flipped,
+        curve: SwiftCurves.push,
+        reverseCurve: SwiftCurves.push.flipped,
       );
       // The same curve as the primary, so the covered page keeps pace with
       // the page covering it (the SDK gives it linearToEaseOut of its own).
       _secondaryPositionCurve = CurvedAnimation(
         parent: widget.secondaryRouteAnimation,
-        curve: Curves.fastEaseInToSlowEaseOut,
-        reverseCurve: Curves.fastEaseInToSlowEaseOut.flipped,
+        curve: SwiftCurves.push,
+        reverseCurve: SwiftCurves.push.flipped,
       );
       _shadowCurve = CurvedAnimation(
         parent: widget.primaryRouteAnimation,
