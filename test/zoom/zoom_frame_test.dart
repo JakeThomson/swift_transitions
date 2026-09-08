@@ -43,6 +43,10 @@ void main() {
     expect(zoomPushVerticalProgress(0.33), closeTo(0.29, 0.01));
     expect(zoomPushVerticalProgress(0.63), closeTo(0.58, 0.01));
     expect(zoomPushVerticalProgress(0.85), closeTo(0.83, 0.01));
+    // A pop runs the other way, by less.
+    expect(zoomVerticalProgress(0.64, pushing: false), closeTo(0.667, 0.01));
+    expect(zoomVerticalProgress(0, pushing: false), 0);
+    expect(zoomVerticalProgress(1, pushing: false), 1);
     final frame = zoomFlightFrame(
       t: 0.63,
       source: source,
@@ -58,9 +62,10 @@ void main() {
     );
   });
 
-  test('the rect and radii are a plain lerp at the midpoint', () {
+  test('the side edges and radii are a plain lerp at the midpoint', () {
     final frame = frameAt(0.5);
-    expect(frame.rect, Rect.lerp(source, screen, 0.5));
+    expect(frame.rect.left, lerpDouble(source.left, screen.left, 0.5));
+    expect(frame.rect.right, lerpDouble(source.right, screen.right, 0.5));
     expect(frame.radii, BorderRadius.lerp(sourceRadii, screenRadii, 0.5));
   });
 }

@@ -357,7 +357,16 @@ Gaussian of σ ≈ 18 pt at α 0.24 offset 4 pt down, now drawn by
 from the card, is 0.15 × progress at every frame; ours was 0.2 eased in
 and is now 0.15 linear. The source copy's opacity over the page's light
 top strip: 0.58 at progress 0.21, 0.39 at 0.33, 0.03 at 0.63 — a
-straight fade over 0.55 (ours was 0.4). Still open: the radii.
+straight fade over 0.55 (ours was 0.4). The card's outline against the
+covered page (dim-compensated differencing) gives its bottom edge: on the
+push it trails the side edges by up to 0.05 of the travel (0.29 at 0.33,
+0.58 at 0.63, 0.83 at 0.85), on the pop it leads by about 0.03; the
+frame now carries both (`zoomVerticalProgress`). Verified: our push
+bottom edge is within 1–3 pt of native's at every width up to 93 % of
+the travel (native's page tint ends 17 pt above the screen bottom, so
+the last 7 % cannot be read); pop within 13 pt over five samples before
+the lead was applied. Still open: the radii, and the pop lead's
+verification.
 
 ## 4. The pan dismissal
 

@@ -56,19 +56,26 @@ const double kZoomCrossFadeWindow = 0.55;
 /// Used as the route's barrier curve.
 const Curve kZoomDimmingCurve = Curves.linear;
 
-/// How far a pushed card's top and bottom edges have travelled when its
-/// side edges have travelled [t]: on a native push the card widens a
-/// little ahead of growing tall — its bottom edge reads 0.29 at a third
-/// of the sideways travel, 0.58 at 0.63, 0.73 at 0.76, 0.83 at 0.85 —
-/// converging by the end (parity stage 3, from the card's outline against
-/// the covered page). A pop grows both together.
+/// How far a card's top and bottom edges have travelled when its side
+/// edges have travelled [t]. On a native push the card widens a little
+/// ahead of growing tall — its bottom edge reads 0.29 at a third of the
+/// sideways travel, 0.58 at 0.63, 0.73 at 0.76, 0.83 at 0.85 — and on a
+/// pop it shrinks a little ahead of narrowing, by about half as much
+/// (parity stage 3, from the card's outline against the covered page);
+/// both converge by the end.
+double zoomVerticalProgress(double t, {required bool pushing}) {
+  final lead = pushing ? -0.05 : 0.03;
+  return (t + lead * math.sin(math.pi * t)).clamp(0.0, 1.0);
+}
+
+/// [zoomVerticalProgress] for a push.
 double zoomPushVerticalProgress(double t) =>
-    (t - 0.05 * math.sin(math.pi * t)).clamp(0.0, 1.0);
+    zoomVerticalProgress(t, pushing: true);
 
 /// The frame of a zoom flight (push, committed dismissal, or cancel) at
 /// progress [t], where `t = 0` is [source] at rest and `t = 1` is [screen]
-/// at rest. With [pushing], the vertical edges lag the horizontal ones by
-/// [zoomPushVerticalProgress].
+/// at rest. The vertical edges run a little behind the horizontal ones on
+/// a push and a little ahead on a pop, per [zoomVerticalProgress].
 ///
 /// [sourceRadii] and [screenRadii] are interpolated in the card's own space
 /// (against its interpolated size, not the navigator's), so the visible
@@ -84,7 +91,7 @@ ZoomFrame zoomFlightFrame({
   bool pushing = false,
 }) {
   assert(t >= 0 && t <= 1, 'flight progress must be normalised, got $t');
-  final ty = pushing ? zoomPushVerticalProgress(t) : t;
+  final ty = zoomVerticalProgress(t, pushing: pushing);
   return ZoomFrame(
     rect: Rect.fromLTRB(
       lerpDouble(source.left, screen.left, t)!,

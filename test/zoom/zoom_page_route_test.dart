@@ -118,6 +118,18 @@ Matcher rectCloseTo(Rect expected, {double distance = 0.5}) => predicate<Rect>(
 void main() {
   const screen = Rect.fromLTWH(0, 0, 800, 600);
 
+  /// Where a popping card is at progress [t]: a lerp whose vertical edges
+  /// run a little ahead.
+  Rect popRect(Rect source, double t) {
+    final ty = zoomVerticalProgress(t, pushing: false);
+    return Rect.fromLTRB(
+      lerpDouble(source.left, screen.left, t)!,
+      lerpDouble(source.top, screen.top, ty)!,
+      lerpDouble(source.right, screen.right, t)!,
+      lerpDouble(source.bottom, screen.bottom, ty)!,
+    );
+  }
+
   testWidgets('the card starts on the source and lands on the screen', (
     tester,
   ) async {
@@ -230,7 +242,7 @@ void main() {
 
     final t = detailRoute(tester).animation!.value;
     expect(t, inExclusiveRange(0, 1));
-    expect(cardRect(tester), rectCloseTo(Rect.lerp(posterRect, screen, t)!));
+    expect(cardRect(tester), rectCloseTo(popRect(posterRect, t)));
   });
 
   testWidgets('a changed sourceTag lands the pop on the new source', (
@@ -247,10 +259,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     final t = route.animation!.value;
-    expect(
-      cardRect(tester),
-      rectCloseTo(Rect.lerp(otherPosterRect, screen, t)!),
-    );
+    expect(cardRect(tester), rectCloseTo(popRect(otherPosterRect, t)));
     expect(sourceHidden(tester, 'other'), isTrue);
     expect(sourceHidden(tester, 'poster'), isFalse);
 
