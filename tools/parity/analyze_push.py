@@ -19,16 +19,19 @@ WHITE = 253.0
 
 
 def load(path):
-    return [r for r in csv.DictReader(open(path)) if r["app"] == "1" and r["push_pg_x600"]]
+    rows = [r for r in csv.DictReader(open(path)) if r["app"] == "1"]
+    # Keep the frames without an edge as separators, so a pop that ends with
+    # the page gone does not run into the next push.
+    return rows
 
 
 def runs(rows):
     """(name, rows) for the push (edge falling from the right) and the pop."""
-    es = [float(r["push_pg_x600"]) for r in rows]
+    es = [float(r["push_pg_x600"]) if r["push_pg_x600"] else WIDTH for r in rows]
     out = []
     i = 0
     while i < len(rows):
-        if es[i] < WIDTH - 5 and (i == 0 or es[i - 1] >= WIDTH - 5 or rows[i - 1]["push_pg_x600"] == ""):
+        if rows[i]["push_pg_x600"] and es[i] < WIDTH - 5 and (i == 0 or es[i - 1] >= WIDTH - 5):
             j = i
             while j + 1 < len(rows) and es[j] > 0.5:
                 j += 1
@@ -36,7 +39,7 @@ def runs(rows):
             i = j + 1
         elif es[i] > 0.5 and i > 0 and es[i - 1] <= 0.5:
             j = i
-            while j + 1 < len(rows) and es[j] < WIDTH - 0.5:
+            while j + 1 < len(rows) and es[j] < WIDTH - 0.5 and rows[j + 1]["push_pg_x600"]:
                 j += 1
             out.append(("pop", rows[i:j + 1]))
             i = j + 1
