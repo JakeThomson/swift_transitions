@@ -43,6 +43,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   BorderRadius? get cornerRadii => null;
 
   Route<dynamic>? _previousRoute;
+  ZoomFlightDirection? _pendingFlight;
   ZoomTransitionSourceState? _source;
   ZoomFlightSource? _flightSource;
   Rect? _alignmentRect;
@@ -111,11 +112,14 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   void didChangePrevious(Route<dynamic>? previousRoute) {
     _previousRoute = previousRoute;
     super.didChangePrevious(previousRoute);
+    // The navigator announces the route underneath after didPush, still
+    // before the frame: a push's flight can be prepared now.
+    _prepareFlightNowOrLater();
   }
 
   @override
   TickerFuture didPush() {
-    _scheduleFlight();
+    _scheduleFlight(ZoomFlightDirection.push);
     return super.didPush();
   }
 
@@ -124,7 +128,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     if (!controller!.isDismissed) {
       // Popped from the start — an interactive dismissal that has already
       // landed — there is no flight to prepare.
-      _scheduleFlight();
+      _scheduleFlight(ZoomFlightDirection.pop);
     }
     return super.didPop(result);
   }
@@ -294,21 +298,47 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     }
   }
 
-  /// Prepares the flight at the end of the current frame, the deferral
-  /// [HeroController] makes for the same reasons: the route underneath has
-  /// certainly been laid out by then, and the element tree can be walked,
-  /// which it cannot during a build — where a pages-based [Navigator] pushes
-  /// and pops. The first frame of a push therefore draws nothing (the
-  /// fallback card at zero opacity) and the first frame of a pop draws the
-  /// previous flight's card at full screen; neither is visible.
-  void _scheduleFlight() {
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (navigator == null) {
-        return; // Disposed before the frame ended.
+  /// Prepares the flight for a push or pop that has just happened: now if
+  /// it came from outside a frame — a tap handler, say — where the route
+  /// underneath is laid out and the element tree can be walked, so the
+  /// very first frame is a flight frame (a frame late and the card appears
+  /// a fifth of the way along, as the parity recordings showed). Otherwise
+  /// at the end of the frame, the deferral [HeroController] makes for the
+  /// same reason: the tree cannot be walked during a build, which is where
+  /// a pages-based [Navigator] pushes and pops. The first frame then draws
+  /// nothing (the fallback card at zero opacity) or the previous flight's
+  /// card at full screen; neither is visible.
+  void _scheduleFlight(ZoomFlightDirection direction) {
+    _pendingFlight = direction;
+    _prepareFlightNowOrLater();
+  }
+
+  void _prepareFlightNowOrLater() {
+    final direction = _pendingFlight;
+    if (direction == null) {
+      return;
+    }
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final outsideFrame =
+        phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks;
+    // A push's route underneath is announced by didChangePrevious, which
+    // follows didPush; until then there is nothing to look in.
+    if (outsideFrame &&
+        (direction == ZoomFlightDirection.pop || _previousRoute != null)) {
+      _pendingFlight = null;
+      _prepareFlight(direction);
+      if (direction == ZoomFlightDirection.pop) {
+        changedInternalState();
       }
-      _prepareFlight(
-        isActive ? ZoomFlightDirection.push : ZoomFlightDirection.pop,
-      );
+      return;
+    }
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (navigator == null || _pendingFlight != direction) {
+        return; // Disposed before the frame ended, or prepared already.
+      }
+      _pendingFlight = null;
+      _prepareFlight(direction);
       changedInternalState();
     }, debugLabel: 'ZoomRouteTransitionMixin.prepareFlight');
   }

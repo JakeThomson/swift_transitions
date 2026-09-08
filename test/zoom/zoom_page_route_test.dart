@@ -185,10 +185,8 @@ void main() {
     final slot = sourceRect(tester, 'poster');
     await tester.tap(find.text('push'));
     await tester.pump();
-    // The source is found at the end of the first frame and its placeholder
-    // takes over from the next one.
-    expect(sourceHidden(tester, 'poster'), isFalse);
-    await tester.pump();
+    // Pushed from a tap, the source is found before the first frame and
+    // its placeholder is already in.
     expect(sourceHidden(tester, 'poster'), isTrue);
     expect(sourceRect(tester, 'poster'), slot);
 

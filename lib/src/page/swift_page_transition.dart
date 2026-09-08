@@ -123,11 +123,9 @@ class SwiftPageTransition extends StatefulWidget {
 class _SwiftPageTransitionState extends State<SwiftPageTransition> {
   late Animation<Offset> _primaryPositionAnimation;
   late Animation<Offset> _secondaryPositionAnimation;
-  late Animation<double> _shadowAnimation;
   late Animation<double> _dimAnimation;
   CurvedAnimation? _primaryPositionCurve;
   CurvedAnimation? _secondaryPositionCurve;
-  CurvedAnimation? _shadowCurve;
 
   @override
   void initState() {
@@ -155,10 +153,8 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
   void _disposeCurves() {
     _primaryPositionCurve?.dispose();
     _secondaryPositionCurve?.dispose();
-    _shadowCurve?.dispose();
     _primaryPositionCurve = null;
     _secondaryPositionCurve = null;
-    _shadowCurve = null;
   }
 
   void _setupAnimation() {
@@ -175,10 +171,6 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
         curve: SwiftCurves.push,
         reverseCurve: SwiftCurves.push.flipped,
       );
-      _shadowCurve = CurvedAnimation(
-        parent: widget.primaryRouteAnimation,
-        curve: Curves.linearToEaseOut,
-      );
     }
     _primaryPositionAnimation =
         (_primaryPositionCurve ?? widget.primaryRouteAnimation).drive(
@@ -188,7 +180,6 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
         (_secondaryPositionCurve ?? widget.secondaryRouteAnimation).drive(
           _kMiddleLeftTween,
         );
-    _shadowAnimation = _shadowCurve ?? widget.primaryRouteAnimation;
     _dimAnimation = _secondaryPositionCurve ?? widget.secondaryRouteAnimation;
   }
 
@@ -209,7 +200,6 @@ class _SwiftPageTransitionState extends State<SwiftPageTransition> {
         child: _ClippedPage(
           primaryRouteAnimation: widget.primaryRouteAnimation,
           secondaryRouteAnimation: widget.secondaryRouteAnimation,
-          shadowAnimation: _shadowAnimation,
           dimAnimation: _dimAnimation,
           cornerRadii: widget.cornerRadii,
           child: widget.child,
@@ -227,7 +217,6 @@ class _ClippedPage extends StatelessWidget {
   const _ClippedPage({
     required this.primaryRouteAnimation,
     required this.secondaryRouteAnimation,
-    required this.shadowAnimation,
     required this.dimAnimation,
     required this.cornerRadii,
     required this.child,
@@ -235,7 +224,6 @@ class _ClippedPage extends StatelessWidget {
 
   final Animation<double> primaryRouteAnimation;
   final Animation<double> secondaryRouteAnimation;
-  final Animation<double> shadowAnimation;
 
   /// The covered page's progress, on the same curve as its slide; the dim is
   /// [_kCoveredPageDimAlpha] of black at 1.
@@ -243,12 +231,14 @@ class _ClippedPage extends StatelessWidget {
   final BorderRadius? cornerRadii;
   final Widget child;
 
-  /// Peak darkness of the shadow, matching the SDK's `0x04000000` gradient
-  /// start once the blur has spread it.
+  // The leading-edge shadow, from the luminance profile beside a native
+  // page's edge at mid-flight (parity stage 1): about 2 % darker at the
+  // edge, gone within 18 pt, the same at every progress of a push and a
+  // pop. A Gaussian of this radius offset this far under the page gives
+  // 2.1 % at 2 pt, 1.5 % at 6 pt and 0.4 % at 14 pt.
   static const double _shadowAlpha = 0.03;
-
-  /// The shadow's reach as a fraction of the page width — the SDK's 5%.
-  static const double _shadowWidthFraction = 0.05;
+  static const double _shadowOffset = 6;
+  static const double _shadowBlurRadius = 12;
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +247,6 @@ class _ClippedPage extends StatelessWidget {
       listenable: Listenable.merge(<Listenable>[
         primaryRouteAnimation,
         secondaryRouteAnimation,
-        shadowAnimation,
         dimAnimation,
       ]),
       child: child,
@@ -271,11 +260,6 @@ class _ClippedPage extends StatelessWidget {
         final shape = RoundedSuperellipseBorder(
           borderRadius: active ? radii : BorderRadius.zero,
         );
-        final shadowWidth =
-            MediaQuery.sizeOf(context).width * _shadowWidthFraction;
-        final shadowStrength = inMotion
-            ? shadowAnimation.value.clamp(0.0, 1.0)
-            : 0.0;
         final dim = inMotion
             ? _kCoveredPageDimAlpha * dimAnimation.value.clamp(0.0, 1.0)
             : 0.0;
@@ -283,17 +267,17 @@ class _ClippedPage extends StatelessWidget {
           decoration: ShapeDecoration(
             shape: shape,
             shadows: <BoxShadow>[
-              if (shadowStrength > 0)
+              if (inMotion)
                 BoxShadow(
                   color: const Color(
                     0xFF000000,
-                  ).withValues(alpha: _shadowAlpha * shadowStrength),
+                  ).withValues(alpha: _shadowAlpha),
                   // Cast toward the leading edge only; the page covers the rest.
                   offset: Offset(switch (textDirection) {
-                    TextDirection.ltr => -shadowWidth / 2,
-                    TextDirection.rtl => shadowWidth / 2,
+                    TextDirection.ltr => -_shadowOffset,
+                    TextDirection.rtl => _shadowOffset,
                   }, 0),
-                  blurRadius: shadowWidth,
+                  blurRadius: _shadowBlurRadius,
                 ),
             ],
           ),
