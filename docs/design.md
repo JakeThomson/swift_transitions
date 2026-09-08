@@ -823,6 +823,11 @@ begins a pop. In Flutter terms:
   duration, seeded with the release velocity projected onto the remaining
   travel. Rotation and translation share the spring's normalised progress so
   the card lands as one object.
+- Back swipe release: `BackGestureController.releaseSpring`, ω = 22 rad/s,
+  ζ = 0.85, fitted to native releases from seven positions, pop and cancel
+  alike (parity stage 2). The page follows the finger after a 12 pt dead
+  zone, and a release commits when its position plus 120 ms of its
+  velocity passes the midpoint.
 - The SDK's Cupertino spring (stiffness 522.35, critically damped, 0.404 s)
   is available as `SwiftSprings.standard` for apps that want the exact SDK
   feel on the push transition.

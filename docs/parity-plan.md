@@ -272,6 +272,25 @@ touch slop rather than at the edge.
 each of the four positions, and the commit table (position × velocity →
 outcome) agrees on all cases.
 
+*Measured 2026-09-08, thirteen native runs.* Tracking is not identity:
+the page stays put for the first 12 pt from the touch and then sits
+12 pt behind the finger (26 pt while moving at 300 pt/s, of which
+~10 pt is a two-frame display lag that the ring shares with any real
+finger). Every release lands on one spring, ω = 22, ζ = 0.85, from
+positions of 16–76 % of the width, popping and springing back alike, to
+0.7–6 pt RMS; 98 % of the distance is covered in 200–220 ms whatever the
+distance, so there is no duration scaling. Outcomes: 16 % at 1200 pt/s
+popped; 29 % at 400 pt/s, 30 % at 150 pt/s, 41 % and 51 % at rest sprang
+back; 60 % at 150 pt/s and 76 % at rest popped; 66 % moving *back* at
+500 pt/s popped. Around the boundary at rest: 52 % back, 54 % and 56 %
+popped, 58 % back — so the synthetic lift carries velocity jitter and
+the boundary is 0.50–0.53 with a projection window of 115–130 ms on
+whatever velocity iOS reads. The package now uses the 12 pt dead zone,
+that spring, and the midpoint with a 120 ms projection. XCUITest lifts
+leave Flutter's velocity tracker reading zero (its 40 ms stopped-pointer
+rule) where UIKit still reads the drag speed; real fingers on a device
+are needed for the velocity column of the table.
+
 ## 3. The zoom push and programmatic pop
 
 **Owns** (`lib/src/zoom/`): `kZoomPushSpring` (500 ms, no bounce; the
