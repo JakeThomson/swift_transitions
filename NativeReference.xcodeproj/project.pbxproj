@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		2B83BB9A16A196CD1385B889 /* ParityDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F9EEB684E82421F7E647297 /* ParityDriver.swift */; };
 		3C83DCBB91A69350D4741D98 /* Gallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54440166FFD45F041989CD8F /* Gallery.swift */; };
+		BE8D4F4B4EEDF88D71564CC2 /* Touch.m in Sources */ = {isa = PBXBuildFile; fileRef = 629BCA2FA715B90A4412A1D1 /* Touch.m */; };
 		E7929D23AA4C2D83A94C7E74 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597073FE5D499ED8A01E7C14 /* App.swift */; };
 /* End PBXBuildFile section */
 
@@ -27,6 +28,9 @@
 		38A462DBFC0B3BAD650C2E84 /* ParityDriver.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParityDriver.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		54440166FFD45F041989CD8F /* Gallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gallery.swift; sourceTree = "<group>"; };
 		597073FE5D499ED8A01E7C14 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		629BCA2FA715B90A4412A1D1 /* Touch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Touch.m; sourceTree = "<group>"; };
+		736F943221E7E1A29EF44AA7 /* ParityDriver-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ParityDriver-Bridging-Header.h"; sourceTree = "<group>"; };
+		9907A9C3815FFA0640F44769 /* Touch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Touch.h; sourceTree = "<group>"; };
 		B3E5CCF09595B7CCDCC56044 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BAFFC76C11A7CF2712A35BEE /* NativeReference.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NativeReference.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -54,7 +58,10 @@
 		73BD9E46EB9CFA08B58ED772 /* ParityDriver */ = {
 			isa = PBXGroup;
 			children = (
+				736F943221E7E1A29EF44AA7 /* ParityDriver-Bridging-Header.h */,
 				2F9EEB684E82421F7E647297 /* ParityDriver.swift */,
+				9907A9C3815FFA0640F44769 /* Touch.h */,
+				629BCA2FA715B90A4412A1D1 /* Touch.m */,
 			);
 			path = ParityDriver;
 			sourceTree = "<group>";
@@ -155,6 +162,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2B83BB9A16A196CD1385B889 /* ParityDriver.swift in Sources */,
+				BE8D4F4B4EEDF88D71564CC2 /* Touch.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -322,6 +330,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.swifttransitions.ParityDriver;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "ParityDriver/ParityDriver-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = NativeReference;
 			};
@@ -355,6 +364,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.swifttransitions.ParityDriver;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "ParityDriver/ParityDriver-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = NativeReference;
 			};

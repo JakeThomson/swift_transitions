@@ -40,6 +40,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.swifttransitions.ParityDriver
         TEST_TARGET_NAME: NativeReference
+        SWIFT_OBJC_BRIDGING_HEADER: ParityDriver/ParityDriver-Bridging-Header.h
 schemes:
   NativeReference:
     build:

@@ -54,6 +54,49 @@ final class ParityDriver: XCTestCase {
         _ = seconds
     }
 
+    /// A finger's path, built segment by segment and run as one touch
+    /// through `ParityTouch`, so a drag can turn or reverse without lifting
+    /// and can lift while still moving. Each segment is one keyframe: the
+    /// daemon interpolates between keyframes at the display rate, and paths
+    /// with keyframes a few milliseconds apart are played back compressed.
+    struct Finger {
+        private(set) var points: [CGPoint]
+        private(set) var times: [Double]
+
+        init(at start: CGPoint) {
+            points = [start]
+            times = [0]
+        }
+
+        var position: CGPoint { points.last! }
+        var time: Double { times.last! }
+
+        /// A straight segment at `speed` pt/s.
+        mutating func line(to end: CGPoint, speed: CGFloat) {
+            let from = position
+            points.append(end)
+            times.append(time + Double(hypot(end.x - from.x, end.y - from.y) / speed))
+        }
+
+        /// Keeps the finger still for `seconds`.
+        mutating func hold(_ seconds: Double) {
+            points.append(position)
+            times.append(time + seconds)
+        }
+
+        /// Runs the path, lifting `after` seconds past the last point: 8 ms
+        /// for a release while moving (a real finger's lift), longer for a
+        /// release at rest.
+        func lift(after: Double = 0.008) {
+            let path = ParityPath(points: points.map { NSValue(cgPoint: $0) }, times: times.map { NSNumber(value: $0) }, lift: time + after)
+            do {
+                try ParityTouch.run([path])
+            } catch {
+                XCTFail("touch synthesis failed: \(error)")
+            }
+        }
+    }
+
     // MARK: Stage 0 smoke: push a row, pop it; zoom a poster, pop it.
 
     /// Each transition is run twice and the second is the one measured:
@@ -119,4 +162,90 @@ final class ParityDriver: XCTestCase {
         far.press(forDuration: 0.0, thenDragTo: back, withVelocity: XCUIGestureVelocity(rawValue: 500), thenHoldForDuration: 0)
         hold(1.2)
     }
+
+    // MARK: Stage 5: the edge swipe on the zoom page. Each test opens the
+    // Dunes poster, waits, then drags from the leading edge at the page's
+    // vertical centre; names give the finger's end as a fraction of the
+    // width and how it is released.
+
+    func openDunes() {
+        dunes.tap()
+        hold(1.2)
+    }
+
+    /// The first 20 pt go at 300 pt/s whatever the speed: a first move that
+    /// lands past the edge region misses the edge recognizer, and the poster
+    /// pager takes the swipe instead.
+    func zoomEdgeSwipe(to fraction: CGFloat, speed: CGFloat, rest: Bool) {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 24, y: 437), speed: 300)
+        finger.line(to: CGPoint(x: 402 * fraction, y: 437), speed: speed)
+        if rest { finger.hold(0.6) }
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testZoomEdge20Rest() { zoomEdgeSwipe(to: 0.2, speed: 300, rest: true) }
+    func testZoomEdge40Rest() { zoomEdgeSwipe(to: 0.4, speed: 300, rest: true) }
+    func testZoomEdge60Rest() { zoomEdgeSwipe(to: 0.6, speed: 300, rest: true) }
+    // Around the commit boundary: 36 % of the width (scale 0.76) sprang back
+    // and 56 % (0.62) landed.
+    func testZoomEdge44Rest() { zoomEdgeSwipe(to: 0.44, speed: 300, rest: true) }
+    func testZoomEdge48Rest() { zoomEdgeSwipe(to: 0.48, speed: 300, rest: true) }
+    func testZoomEdge52Rest() { zoomEdgeSwipe(to: 0.52, speed: 300, rest: true) }
+    func testZoomEdge20Fling() { zoomEdgeSwipe(to: 0.2, speed: 1200, rest: false) }
+    func testZoomEdge40Fling() { zoomEdgeSwipe(to: 0.4, speed: 800, rest: false) }
+    func testZoomEdge60Fling() { zoomEdgeSwipe(to: 0.6, speed: 800, rest: false) }
+
+    /// To 40 %, then 200 pt straight down, held and released at rest: the
+    /// card follows the finger freely once it is off the edge.
+    func testZoomEdge40Down() {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 402 * 0.4, y: 437), speed: 300)
+        finger.hold(0.3)
+        finger.line(to: CGPoint(x: 402 * 0.4, y: 637), speed: 300)
+        finger.hold(0.6)
+        finger.lift()
+        hold(1.5)
+    }
+
+    /// To 20 %, then 300 pt down and 60 pt back up, for the vertical follow
+    /// at a second scale and on the way back.
+    func testZoomEdge20DownUp() {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 402 * 0.2, y: 437), speed: 300)
+        finger.hold(0.3)
+        finger.line(to: CGPoint(x: 402 * 0.2, y: 737), speed: 300)
+        finger.hold(0.3)
+        finger.line(to: CGPoint(x: 402 * 0.2, y: 677), speed: 300)
+        finger.hold(0.6)
+        finger.lift()
+        hold(1.5)
+    }
+
+    /// To 40 %, then back to the edge, released while still moving.
+    func testZoomEdge40Return() {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 402 * 0.4, y: 437), speed: 300)
+        finger.hold(0.3)
+        finger.line(to: CGPoint(x: 20, y: 437), speed: 300)
+        finger.lift()
+        hold(1.5)
+    }
+
+    /// Smoke test for the synthesizer: an edge swipe on a pushed page pops it.
+    func testFingerPops() {
+        pushFirstRow()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 320, y: 437), speed: 400)
+        finger.hold(0.5)
+        finger.lift()
+        hold(1.0)
+        XCTAssertTrue(app.staticTexts["Push — leading edge back swipe"].exists, "the swipe did not pop")
+    }
+
 }
