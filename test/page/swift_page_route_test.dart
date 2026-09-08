@@ -154,8 +154,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // 100px is well short of the 400px midpoint of the default 800px test
-    // view; only the release velocity can be committing this.
-    await tester.flingFrom(const Offset(5, 300), const Offset(100, 0), 1600);
+    // view; only the release velocity can be committing this: 4 widths/s
+    // projected over 120 ms is another 0.48.
+    await tester.flingFrom(const Offset(5, 300), const Offset(100, 0), 3200);
     await tester.pumpAndSettle();
 
     expect(find.text('second'), findsNothing);
@@ -170,17 +171,17 @@ void main() {
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
 
-    // 120px at 600px/s: 0.15 widths travelled, and 0.75 widths/s coasts
-    // another 0.37 at the iOS deceleration rate. Short of the SDK's fling
-    // threshold, past the midpoint once projected.
-    expect(BackGestureController.projectedTravel(0.75), closeTo(0.374, 0.001));
-    await tester.flingFrom(const Offset(5, 300), const Offset(120, 0), 600);
+    // 240px at 1600px/s: 0.285 widths beyond the dead zone, and 2 widths/s
+    // projected over 120 ms is another 0.24. Past the midpoint together,
+    // and past neither of the SDK's tests alone.
+    expect(BackGestureController.projectedTravel(2), closeTo(0.24, 1e-9));
+    await tester.flingFrom(const Offset(5, 300), const Offset(240, 0), 1600);
     await tester.pumpAndSettle();
 
     expect(find.text('second'), findsNothing);
   });
 
-  testWidgets('a page pulled back at the release cancels even past midpoint', (
+  testWidgets('a page pulled back at the release still pops past midpoint', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -190,7 +191,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Dragged 70% across, then moving back at 500px/s when let go: the
-    // coast takes it back to 0.39, so it springs home.
+    // projection only takes 0.075 off, so it pops, as native does from 66%
+    // moving back at that speed.
     // Stamped by hand: the velocity tracker reads event times, and a pause
     // before the pull back keeps the drag out of its window.
     final gesture = await tester.startGesture(const Offset(5, 300));
@@ -205,7 +207,7 @@ void main() {
     await gesture.up(timeStamp: at);
     await tester.pumpAndSettle();
 
-    expect(find.text('second'), findsOneWidget);
+    expect(find.text('second'), findsNothing);
   });
 
   testWidgets('a short drag on the leading edge cancels the pop', (
@@ -317,8 +319,10 @@ void main() {
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
 
+    // The first 12px of the drag are the dead zone; the page follows the
+    // remaining 200.
     final gesture = await tester.startGesture(const Offset(5, 300));
-    await gesture.moveBy(const Offset(200, 0));
+    await gesture.moveBy(const Offset(212, 0));
     await tester.pump();
 
     expect(tester.getTopLeft(find.byType(ClipRSuperellipse).last).dx, 200);

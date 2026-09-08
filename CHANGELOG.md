@@ -1,9 +1,14 @@
 ## 0.1.0-dev
 
-* Decide the back swipe's release by projecting where the page would coast
-  to at iOS's scroll deceleration rate, instead of the SDK's midpoint-or-
-  fling rule: a short flick pops, and a page pulled back at the release
-  springs home even past the midpoint.
+* Match the back swipe to iOS, measured against a native `NavigationStack`
+  (parity stage 2): the page waits out a 12 pt dead zone from the touch
+  before following the finger, a release commits when the page's position
+  plus its velocity over the next 120 ms passes the midpoint — so a short
+  flick pops and a page pulled back slowly past the midpoint still does —
+  and both the pop and the spring back land on one spring
+  (`BackGestureController.releaseSpring`, ω 22, ζ 0.85) that covers 98 % of
+  its distance in about 210 ms whatever the distance, instead of the SDK's
+  350 ms curve.
 * Make the zoom route's interactive dismissal interruptible the whole way:
   a committed release lands the card before the route pops, so a card on
   its way down — or springing back — can be caught and dragged again, and

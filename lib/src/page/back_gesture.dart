@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 /// Where a [SwiftBackGestureDetector] starts its interactive back swipe.
@@ -22,11 +23,18 @@ enum BackGestureRegion {
 
 const double _kBackGestureWidth = 20.0;
 
-/// `UIScrollView.DecelerationRate.normal`: how a release coasts on iOS.
-const double _kDecelerationRate = 0.998;
-const Duration _kDroppedSwipePageAnimationDuration = Duration(
-  milliseconds: 350,
-);
+/// How far the finger travels from where it went down before the page
+/// starts to follow it. Native's page stayed put for the first 12 pt of
+/// every swipe and then sat 12 pt behind the finger (parity stage 2, once
+/// a two-frame display lag is taken out).
+const double _kDeadZone = 12.0;
+
+/// How long a release's velocity is projected over when deciding whether
+/// the page has passed the midpoint. From the native commit table (parity
+/// stage 2): 16 % at 1200 pt/s popped, 29 % at 400 pt/s sprang back, and
+/// 66 % moving back at 500 pt/s still popped — one window of 115–130 ms
+/// separates them all; the scroll view's deceleration would be 500 ms.
+const double _kReleaseProjection = 0.12;
 
 /// A controller for an iOS-style back gesture, ported from the SDK's
 /// private `_CupertinoBackGestureController` (`cupertino/route.dart`) so
@@ -63,25 +71,32 @@ class BackGestureController<T> {
     controller.value -= delta;
   }
 
-  /// Where a release at [velocity] (screen widths per second) would coast
-  /// to, in screen widths, at the iOS scroll deceleration: the projection
-  /// from "Designing Fluid Interfaces" (WWDC 2018),
-  /// `velocity × rate / (1 − rate)` with velocity per millisecond.
+  /// The spring a released page lands on, popping or springing back:
+  /// ω = 22 rad/s, ζ = 0.85. Fitted to native releases from seven
+  /// positions between 16 % and 76 % of the width (parity stage 2) to
+  /// 0.7–6 pt RMS; every one covers 98 % of its distance in 200–220 ms
+  /// however far it has to go, so it is one spring rather than a duration.
+  static const SpringDescription releaseSpring = SpringDescription(
+    mass: 1,
+    stiffness: 484, // ω²
+    damping: 37.4, // 2ζω
+  );
+
+  /// How far a release at [velocity] (screen widths per second) is taken
+  /// to carry the page, in screen widths, when deciding the outcome.
   static double projectedTravel(double velocity) =>
-      velocity / 1000 * _kDecelerationRate / (1 - _kDecelerationRate);
+      velocity * _kReleaseProjection;
 
   /// Ends the gesture with a release [velocity] (a fraction of the drag axis
   /// per second, positive toward the pop), committing or cancelling it.
   ///
-  /// The pop commits if the page, coasting from where it is at the release
-  /// velocity, would pass the midpoint. The SDK's rule — commit past the
-  /// midpoint, or at a fling of a full screen width per second in either
-  /// direction — leaves a short flick springing back and lets a page that
-  /// is being pulled back past the midpoint pop anyway; a projection
-  /// handles both, and is the rule iOS uses for coasting releases. Its
-  /// calibration against the native pop is parity-plan stage 2.
+  /// The pop commits if the page's position plus its projected travel
+  /// passes the midpoint, the rule that reproduces the native commit
+  /// table. The SDK's — commit past the midpoint, or at a fling of a full
+  /// screen width per second either way — sends a short flick springing
+  /// back. Either way the page lands on [releaseSpring], seeded with the
+  /// release velocity.
   void dragEnd(double velocity) {
-    const animationCurve = Curves.fastEaseInToSlowEaseOut;
     final isCurrent = getIsCurrent();
     final bool animateForward;
 
@@ -94,11 +109,11 @@ class BackGestureController<T> {
       animateForward = travelled + projectedTravel(velocity) < 0.5;
     }
 
+    // The controller runs from 1 (page on top) down to 0 (popped), so the
+    // page's velocity toward the pop is the controller's negative velocity.
     if (animateForward) {
-      controller.animateTo(
-        1,
-        duration: _kDroppedSwipePageAnimationDuration,
-        curve: animationCurve,
+      controller.animateWith(
+        SpringSimulation(releaseSpring, controller.value, 1, -velocity),
       );
     } else {
       if (isCurrent) {
@@ -106,10 +121,8 @@ class BackGestureController<T> {
       }
       // The pop above may have finished the controller inline.
       if (controller.isAnimating) {
-        controller.animateBack(
-          0,
-          duration: _kDroppedSwipePageAnimationDuration,
-          curve: animationCurve,
+        controller.animateBackWith(
+          SpringSimulation(releaseSpring, controller.value, 0, -velocity),
         );
       }
     }
@@ -165,12 +178,19 @@ class _SwiftBackGestureDetectorState<T>
   // the wrong way never touches the navigator's user-gesture state at all.
   bool _awaitingDirection = false;
 
+  // Travel since the touch went down, in pixels toward the pop; the page
+  // follows only the part beyond the dead zone.
+  double _dragged = 0;
+
   late HorizontalDragGestureRecognizer _recognizer;
 
   @override
   void initState() {
     super.initState();
     _recognizer = HorizontalDragGestureRecognizer(debugOwner: this)
+      // Deltas from the touch point itself, so the dead zone is measured
+      // from there rather than from wherever the drag was recognised.
+      ..dragStartBehavior = DragStartBehavior.down
       ..onStart = _handleDragStart
       ..onUpdate = _handleDragUpdate
       ..onEnd = _handleDragEnd
@@ -192,6 +212,7 @@ class _SwiftBackGestureDetectorState<T>
   }
 
   void _handleDragStart(DragStartDetails details) {
+    _dragged = 0;
     if (widget.region == BackGestureRegion.anywhere) {
       _awaitingDirection = true;
     } else {
@@ -200,9 +221,7 @@ class _SwiftBackGestureDetectorState<T>
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    final delta = _convertToLogical(
-      details.primaryDelta! / context.size!.width,
-    );
+    final delta = _convertToLogical(details.primaryDelta!);
     if (_awaitingDirection) {
       _awaitingDirection = false;
       if (delta <= 0) {
@@ -210,7 +229,10 @@ class _SwiftBackGestureDetectorState<T>
       }
       _backGestureController = widget.onStartPopGesture();
     }
-    _backGestureController?.dragUpdate(delta);
+    final before = math.max(0.0, _dragged - _kDeadZone);
+    _dragged += delta;
+    final after = math.max(0.0, _dragged - _kDeadZone);
+    _backGestureController?.dragUpdate((after - before) / context.size!.width);
   }
 
   void _handleDragEnd(DragEndDetails details) {
