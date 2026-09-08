@@ -188,6 +188,7 @@ class ZoomPageTransition extends StatelessWidget {
                 screen: screen,
                 sourceRadii: source?.radii ?? screenRadii,
                 screenRadii: screenRadii,
+                pushing: animation.status == AnimationStatus.forward,
               );
             }
             final atRest = animation.isCompleted && held == null;

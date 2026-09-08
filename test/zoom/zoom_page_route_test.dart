@@ -1,5 +1,8 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swift_transitions/src/zoom/zoom_frame.dart';
 import 'package:swift_transitions/src/zoom/zoom_transition_layer.dart';
 import 'package:swift_transitions/swift_transitions.dart';
 
@@ -144,7 +147,18 @@ void main() {
 
     final t = detailRoute(tester).animation!.value;
     expect(t, inExclusiveRange(0, 1));
-    expect(cardRect(tester), rectCloseTo(Rect.lerp(posterRect, screen, t)!));
+    final ty = zoomPushVerticalProgress(t);
+    expect(
+      cardRect(tester),
+      rectCloseTo(
+        Rect.fromLTRB(
+          lerpDouble(posterRect.left, screen.left, t)!,
+          lerpDouble(posterRect.top, screen.top, ty)!,
+          lerpDouble(posterRect.right, screen.right, t)!,
+          lerpDouble(posterRect.bottom, screen.bottom, ty)!,
+        ),
+      ),
+    );
     expect(
       cardClip(tester).borderRadius,
       BorderRadius.lerp(

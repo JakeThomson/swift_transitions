@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swift_transitions/src/zoom/zoom_frame.dart';
@@ -33,6 +35,27 @@ void main() {
   test('the source fades out within the cross-fade window', () {
     expect(frameAt(kZoomCrossFadeWindow).sourceOpacity, 0);
     expect(frameAt(kZoomCrossFadeWindow / 2).sourceOpacity, closeTo(0.5, 1e-9));
+  });
+
+  test('a push widens before it grows tall', () {
+    expect(zoomPushVerticalProgress(0), 0);
+    expect(zoomPushVerticalProgress(1), 1);
+    expect(zoomPushVerticalProgress(0.2), 0);
+    expect(zoomPushVerticalProgress(0.63), closeTo(0.58, 0.02));
+    expect(zoomPushVerticalProgress(0.85), closeTo(0.84, 0.02));
+    final frame = zoomFlightFrame(
+      t: 0.63,
+      source: source,
+      screen: screen,
+      sourceRadii: sourceRadii,
+      screenRadii: screenRadii,
+      pushing: true,
+    );
+    expect(frame.rect.left, lerpDouble(source.left, screen.left, 0.63));
+    expect(
+      frame.rect.top,
+      lerpDouble(source.top, screen.top, zoomPushVerticalProgress(0.63)),
+    );
   });
 
   test('the rect and radii are a plain lerp at the midpoint', () {

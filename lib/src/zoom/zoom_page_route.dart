@@ -205,6 +205,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         screen: screen,
         sourceRadii: source?.radii ?? screenRadii,
         screenRadii: screenRadii,
+        pushing: controller!.status == AnimationStatus.forward,
       );
     }
     return ZoomPageTransition.departureFrameAt(

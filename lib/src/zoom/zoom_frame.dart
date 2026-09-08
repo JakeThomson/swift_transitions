@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/widgets.dart';
 
 /// The card geometry for one frame of a zoom transition, computed once per
@@ -53,9 +56,19 @@ const double kZoomCrossFadeWindow = 0.55;
 /// Used as the route's barrier curve.
 const Curve kZoomDimmingCurve = Curves.linear;
 
+/// How far a pushed card's top and bottom edges have travelled when its
+/// side edges have travelled [t]: on a native push the card widens first
+/// and grows tall afterwards — at a third of the sideways travel the
+/// vertical travel is a tenth, at 0.63 it is 0.56, at 0.85 it is 0.80 —
+/// converging by the end (parity stage 3, read off the page's bar strip
+/// inside the card at ten progresses). A pop grows both together.
+double zoomPushVerticalProgress(double t) =>
+    math.pow(((t - 0.25) / 0.75).clamp(0.0, 1.0), 0.8).toDouble();
+
 /// The frame of a zoom flight (push, committed dismissal, or cancel) at
 /// progress [t], where `t = 0` is [source] at rest and `t = 1` is [screen]
-/// at rest.
+/// at rest. With [pushing], the vertical edges lag the horizontal ones by
+/// [zoomPushVerticalProgress].
 ///
 /// [sourceRadii] and [screenRadii] are interpolated in the card's own space
 /// (against its interpolated size, not the navigator's), so the visible
@@ -68,10 +81,17 @@ ZoomFrame zoomFlightFrame({
   required Rect screen,
   required BorderRadius sourceRadii,
   required BorderRadius screenRadii,
+  bool pushing = false,
 }) {
   assert(t >= 0 && t <= 1, 'flight progress must be normalised, got $t');
+  final ty = pushing ? zoomPushVerticalProgress(t) : t;
   return ZoomFrame(
-    rect: Rect.lerp(source, screen, t)!,
+    rect: Rect.fromLTRB(
+      lerpDouble(source.left, screen.left, t)!,
+      lerpDouble(source.top, screen.top, ty)!,
+      lerpDouble(source.right, screen.right, t)!,
+      lerpDouble(source.bottom, screen.bottom, ty)!,
+    ),
     rotation: 0,
     radii: BorderRadius.lerp(sourceRadii, screenRadii, t)!,
     sourceOpacity: 1 - (t / kZoomCrossFadeWindow).clamp(0, 1),

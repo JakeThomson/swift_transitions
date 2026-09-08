@@ -343,17 +343,21 @@ class PosterPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: Parity.flat ? const Color(0xFFE0F0FF) : null,
-      navigationBar: CupertinoNavigationBar(middle: Text(poster.title)),
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(poster.title),
+        // Parity: SwiftUI's bar is opaque white over this page.
+        backgroundColor: Parity.flat ? CupertinoColors.white : null,
+        border: Parity.flat
+            ? null
+            : const Border(
+                bottom: BorderSide(color: Color(0x4D000000), width: 0),
+              ),
+      ),
       child: ListView(
-        // Below the bar, plus the 13 pt a SwiftUI scroll view leaves there.
-        // This context is above the page's own scaffold, so the bar's
-        // height is not yet in the padding.
-        padding: EdgeInsets.only(
-          top:
-              MediaQuery.paddingOf(context).top +
-              const CupertinoNavigationBar().preferredSize.height +
-              13,
-        ),
+        // Where SwiftUI's scroll view puts the art: 40 pt below the status
+        // bar, the first 17 pt of it under the bar. This context is above
+        // the page's own scaffold, so its padding is the status bar alone.
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 40),
         children: <Widget>[
           AspectRatio(
             aspectRatio: 2 / 3,
