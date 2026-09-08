@@ -99,6 +99,11 @@ final class ParityDriver: XCTestCase {
     func testSwipe45Rest() { edgeSwipe(to: 0.45, speed: 300, rest: true) }
     func testSwipe55Rest() { edgeSwipe(to: 0.55, speed: 300, rest: true) }
     func testSwipe80Rest() { edgeSwipe(to: 0.8, speed: 300, rest: true) }
+    // Around the position threshold: 51 % of the page sprang back, 60 % popped.
+    func testSwipe52Rest() { edgeSwipe(to: 0.52 + 0.04, speed: 300, rest: true) }
+    func testSwipe54Rest() { edgeSwipe(to: 0.54 + 0.04, speed: 300, rest: true) }
+    func testSwipe56Rest() { edgeSwipe(to: 0.56 + 0.04, speed: 300, rest: true) }
+    func testSwipe58Rest() { edgeSwipe(to: 0.58 + 0.04, speed: 300, rest: true) }
     func testSwipe20Fling() { edgeSwipe(to: 0.2, speed: 1200, rest: false) }
     func testSwipe35Slow() { edgeSwipe(to: 0.35, speed: 150, rest: false) }
     func testSwipe35Medium() { edgeSwipe(to: 0.35, speed: 400, rest: false) }
