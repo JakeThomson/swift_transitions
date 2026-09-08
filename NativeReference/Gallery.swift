@@ -203,7 +203,7 @@ struct PosterPage: View {
                 .padding(16)
             }
         }
-        .background(Parity.flat ? Color(hex: 0xEEF4FF) : Color.white)
+        .background(Parity.flat ? Color(hex: 0xE0F0FF) : Color.white)
     }
 }
 
@@ -221,7 +221,7 @@ struct PushDemoView: View {
             .accessibilityIdentifier("push_another")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Parity.flat ? Color(hex: 0xE8FFEE) : Color.white)
+        .background(Parity.flat ? Color(hex: 0xD8FFE0) : Color.white)
         .navigationTitle("Detail")
         .navigationBarTitleDisplayMode(.inline)
     }
