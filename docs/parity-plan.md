@@ -212,6 +212,20 @@ matched, the shadow slice is within 2 % luminance, and pop is checked
 with the same three quantities (pop is the reverse of push on iOS; verify
 rather than assume).
 
+*Measured 2026-09-08, five native runs.* The arriving edge's remaining
+distance decays exponentially from the first frame, τ = 59–61 ms, and
+the pop is the same decay toward the far side (τ = 60), settled at
+450 ms; the covered page travels 0.301–0.302 of the arriving page's at
+every frame; the dim is 0.096–0.100 of black per unit of progress; the
+shadow is 2.1–2.5 % at 2 pt from the edge, 1.2 % at 10 pt, 0.4 % at 16 pt.
+All four are now the package's constants (`SwiftCurves.push` over
+400 ms, 0.30, 0.10, and a 12 pt Gaussian offset 6 pt at 3 %). Ours reads
+0.300, 0.099 and a shadow within 0.5 % of native's at every offset. The
+curve itself could not be confirmed to the frame on the simulator: the
+Flutter example is a debug build (release does not run there), whose
+first frame after a tap arrives 30–80 ms late, and the host was loaded
+during every Flutter run. Confirm the curve and the latency on a device.
+
 ## 2. The back swipe
 
 **Owns** (`lib/src/page/back_gesture.dart`): the edge width
@@ -302,6 +316,17 @@ trace disagrees with square-root-of-area.
 positions on push and pop, opacity and dim are matched, radius is within
 1 pt at the three checkpoints, and the dynamic-source pop lands on the
 right poster in both.
+
+*Measured 2026-09-08, four native runs (width only so far).* Push and pop
+each fit one critically damped spring from rest at ω = 18–19.75 rad/s to
+2.3–7.9 pt RMS; the pop reads as the same spring started 16–24 ms early
+(its first frame is already a quarter of the way), which a spring with
+initial velocity does not fit better. `kZoomPushSpring` is now ω = 19.
+Ours, aligned on the first moving frame, is within 5 pt of native at
+every sample of the push and fits ω = 19 to 1.3–2.1 pt RMS on the pop;
+before alignment it starts 60–80 ms late on the push and 30 ms on the
+pop (the debug-build latency above). Not yet measured: the other edges,
+the cross-fade, the dim and the card's shadow, the radii.
 
 ## 4. The pan dismissal
 
