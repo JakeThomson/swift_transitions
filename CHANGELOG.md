@@ -10,6 +10,10 @@
   What is knowingly different, with the size of each difference, is
   listed in `docs/design.md` section 1.7, and every calibrated constant
   is in section 1.6 with the recording it came from.
+* Estimate the back swipe's release velocity the way iOS does, with
+  `IOSScrollViewFlingVelocityTracker` (parity stage 2). Flutter's default
+  tracker read a 1200 pt/s fling as 497, so a flick that natively pops
+  sprang back instead; all nine scripted swipes now agree with native.
 * Fade the zoom card's shadow out as it reaches its source (parity
   stage 9). A native card lands with no shadow at all — the page 12 and
   20 pt beside it reads its own colour from a twentieth of the flight in

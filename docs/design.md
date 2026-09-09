@@ -162,6 +162,7 @@ grab the card at any time during any animation.
 | Card scale mid-pinch | ~0.6 | `pinch.mp4` 1.3 s |
 | Pinch scale vs fingers' distance | 1:1 from 8.7 pt of closing; turn 1:1; 0.515 sprang back, 0.494 landed | parity stage 6, `native_ZoomPinch*` |
 | On-screen corner radius during a flight | 13 pt at the source, 22 a quarter of the way, 33 at half, 44 at three quarters | a straight line from the source's radius to the display's in the flight's progress (parity stage 8, `native_zoom_f`) |
+| Release velocity of a flick | the default tracker reads 497 and 121 pt/s where the finger moved at 1200 and 400; `IOSScrollViewFlingVelocityTracker` reads 1312 and 288 | parity stage 2, `testSwipe20Fling`, `testSwipe35Medium` |
 | Card shadow during a zoom flight | 10 % darker 4 pt out, 3 % at 20, gone by 40; none at all within a twentieth of the source | parity stages 3 and 9, the page beside a landing card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale under a zoom | 0.914 or smaller | a sibling poster in the grid, 116.6 pt wide mid-flight against 119.3 at rest, back at rest about 200 ms after the card lands; the package holds the covered page at 1.0 (section 1.7) |
@@ -986,7 +987,12 @@ Flutter terms:
   ζ = 0.85, fitted to native releases from seven positions, pop and cancel
   alike (parity stage 2). The page follows the finger after a 12 pt dead
   zone, and a release commits when its position plus 120 ms of its
-  velocity passes the midpoint.
+  velocity passes the midpoint. That velocity is estimated by
+  `IOSScrollViewFlingVelocityTracker`, iOS's own fling estimate, which a
+  `Scrollable` on iOS uses for the same reason: the default least-squares
+  tracker reads a flick at a third to a half of the speed the finger was
+  really moving, and a fling that natively pops sprang back instead
+  (parity stage 2).
 - The SDK's Cupertino spring (stiffness 522.35, critically damped, 0.404 s)
   is available as `SwiftSprings.standard` for apps that want the exact SDK
   feel on the push transition.

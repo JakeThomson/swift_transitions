@@ -197,6 +197,12 @@ class _SwiftBackGestureDetectorState<T>
       // Deltas from the touch point itself, so the dead zone is measured
       // from there rather than from wherever the drag was recognised.
       ..dragStartBehavior = DragStartBehavior.down
+      // iOS's own estimate of the speed a finger left at, which a
+      // Scrollable on iOS uses for the same reason: the default
+      // least-squares tracker reads a flick at a third to a half of the
+      // speed the finger was really moving (parity stage 2).
+      ..velocityTrackerBuilder = ((event) =>
+          IOSScrollViewFlingVelocityTracker(event.kind))
       ..onStart = _handleDragStart
       ..onUpdate = _handleDragUpdate
       ..onEnd = _handleDragEnd

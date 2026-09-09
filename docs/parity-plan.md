@@ -852,6 +852,21 @@ from where the fingers are, the finger that only rests leaves the pan
 alone. What native does with either is still unmeasured, and joins the
 device list.
 
+*Measured 2026-09-10, from the stage 2 scripts re-run with a probe on the
+release.* A flung back swipe sprang back where native popped, and the
+momentum was gone before the physics saw it: Flutter's default
+least-squares velocity tracker reported 497 pt/s for the 1200 pt/s fling
+of `testSwipe20Fling` and 121 for the 400 of `testSwipe35Medium`, which
+the commit rule reads as 0.35 and 0.38 of the width — both short of the
+0.53 threshold stage 2 fitted. `IOSScrollViewFlingVelocityTracker`, which
+a `Scrollable` on iOS already uses to match the platform's own fling,
+reads the same two releases at 1312 and 288 and leaves a release at rest
+at zero. With it the outcome of all nine stage 2 scripts matches native,
+the fling included, and a cancelled flick carries on past the finger
+first as native's does — 6 pt against native's 5.4. The release curve is
+unchanged (the fling settles in 212 ms against native's 193, τ 38 against
+43; the slow pop 217 against 232).
+
 *Measured 2026-09-09, from every native landing already recorded, read
 past the frame `analyze_landing.py` stops at.* A landing does not stop on
 the source: it carries the card past it and eases back. Native goes 1.9 %
