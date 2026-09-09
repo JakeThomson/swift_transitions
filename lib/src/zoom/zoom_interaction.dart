@@ -180,28 +180,29 @@ class ZoomDismissController {
   Offset _pointer;
   Offset? _pointerAtOpen;
   double _horizontalRaw = 0;
-  double _horizontalOffset = 0;
-  double _horizontalVelocity = 0;
-  double _horizontalTarget = 0;
-  SpringDescription? _horizontalSpring;
+  final _Chase _horizontal = _Chase(0, tolerance: 0.01);
   Duration _lastTick = Duration.zero;
   bool _released = false;
 
-  // Pinch state: the fingers' initial and current distance, angle and
-  // focal point, and a short history of distances for the release speed.
+  // Pinch state: the fingers' initial distance, angle and focal point, the
+  // scale, turn and focal offset the card chases them with, where the
+  // fingers are now, and a short history of distances for the release
+  // speed.
   double _pinchDistance0 = 1;
   double _pinchAngle0 = 0;
   Offset _pinchFocal0 = Offset.zero;
-  double _pinchScale = 1;
-  double _pinchRotation = 0;
-  Offset _pinchFocal = Offset.zero;
+  final _Chase _pinchScale = _Chase(1, tolerance: 0.0001);
+  final _Chase _pinchRotation = _Chase(0, tolerance: 0.0001);
+  final _Chase _pinchShiftX = _Chase(0, tolerance: 0.01);
+  final _Chase _pinchShiftY = _Chase(0, tolerance: 0.01);
+  double _pinchFingersScale = 1;
   final List<(Duration, double)> _pinchSamples = <(Duration, double)>[];
 
   /// The card's current scale relative to [restingFrame].
   double get scale => switch (gesture) {
     ZoomGesture.pan => physics.scaleFor(_travel),
     ZoomGesture.edgeSwipe => physics.edgeSwipeScaleFor(_travel),
-    ZoomGesture.pinch => _pinchScale,
+    ZoomGesture.pinch => _pinchScale.value,
   };
 
   /// Whether the card has been dragged away from where it was grabbed.
@@ -248,29 +249,47 @@ class ZoomDismissController {
     restingFrame = _frame();
     restingProgress = controller.value;
     gesture = ZoomGesture.pinch;
-    _retargetHorizontal(0, physics.returnSpring);
+    _retarget(_horizontal, 0, physics.returnSpring);
     _pinchDistance0 = math.max(1, (second - first).distance);
     _pinchAngle0 = (second - first).direction;
     _pinchFocal0 = (first + second) / 2;
-    _pinchScale = 1;
-    _pinchRotation = 0;
-    _pinchFocal = _pinchFocal0;
+    _pinchFingersScale = 1;
+    for (final chase in [
+      _pinchScale,
+      _pinchRotation,
+      _pinchShiftX,
+      _pinchShiftY,
+    ]) {
+      chase.settle();
+    }
     _pinchSamples
       ..clear()
       ..add((timeStamp, _pinchDistance0));
     _publish();
   }
 
-  /// Feeds the two fingers' positions in navigator coordinates.
+  /// Feeds the two fingers' positions in navigator coordinates. The card
+  /// chases their distance, angle and focal point through the tracking
+  /// spring: natively it settles a few frames behind them.
   void pinchUpdate(Offset first, Offset second, Duration timeStamp) {
     if (_released || gesture != ZoomGesture.pinch) {
       return;
     }
     final distance = math.max(1.0, (second - first).distance);
     // A card cannot grow past the size it was pinched at.
-    _pinchScale = (distance / _pinchDistance0).clamp(physics.minimumScale, 1.0);
-    _pinchRotation = (second - first).direction - _pinchAngle0;
-    _pinchFocal = (first + second) / 2;
+    _pinchFingersScale = (distance / _pinchDistance0).clamp(
+      physics.minimumScale,
+      1.0,
+    );
+    final shift = (first + second) / 2 - _pinchFocal0;
+    _retarget(_pinchScale, _pinchFingersScale, physics.trackingSpring);
+    _retarget(
+      _pinchRotation,
+      (second - first).direction - _pinchAngle0,
+      physics.trackingSpring,
+    );
+    _retarget(_pinchShiftX, shift.dx, physics.trackingSpring);
+    _retarget(_pinchShiftY, shift.dy, physics.trackingSpring);
     _pinchSamples.add((timeStamp, distance));
     while (_pinchSamples.length > 2 &&
         timeStamp - _pinchSamples[1].$1 > const Duration(milliseconds: 100)) {
@@ -324,7 +343,8 @@ class ZoomDismissController {
                         restingFrame.rect.width,
               ) <
               physics.dismissThreshold,
-        ZoomGesture.pinch => scale < physics.dismissThreshold,
+        // Read where the fingers are, not where the card has caught up to.
+        ZoomGesture.pinch => _pinchFingersScale < physics.pinchDismissThreshold,
       };
     }
     if (!commit && controller.value > 1 - _kReturnStart) {
@@ -339,7 +359,7 @@ class ZoomDismissController {
       toSource: commit,
     );
     liveFrame.value = null;
-    _retargetHorizontal(0, physics.returnSpring);
+    _retarget(_horizontal, 0, physics.returnSpring);
     // The rate the shrink was running at, in progress units per second.
     // A pinch's scale is the fingers' distance over their initial distance,
     // so its rate needs no gain.
@@ -418,19 +438,20 @@ class ZoomDismissController {
         // point would put it.
         final pivot = _pinchFocal0;
         final scaledCentre = pivot + (rest.center - pivot) * scale;
-        final spun = pivot + _rotate(scaledCentre - pivot, _pinchRotation);
-        final centre = spun + (_pinchFocal - _pinchFocal0);
+        final spun =
+            pivot + _rotate(scaledCentre - pivot, _pinchRotation.value);
+        final centre = spun + Offset(_pinchShiftX.value, _pinchShiftY.value);
         rect = Rect.fromCenter(
           center: centre,
           width: rest.width * scale,
           height: rest.height * scale,
         );
-        rotation += _pinchRotation;
+        rotation += _pinchRotation.value;
       case ZoomGesture.pan:
         rect = physics.dismissedRect(
           restingRect: rest,
           travel: _travel,
-          horizontalOffset: _horizontalOffset,
+          horizontalOffset: _horizontal.value,
           anchor: _anchor,
         );
       case ZoomGesture.edgeSwipe:
@@ -447,7 +468,7 @@ class ZoomDismissController {
         );
         rect = scaled.shift(
           Offset(
-            _horizontalOffset,
+            _horizontal.value,
             physics.crossAxisOffsetFor(delta.dy, width: rest.width),
           ),
         );
@@ -491,7 +512,7 @@ class ZoomDismissController {
       if (_pointerAtOpen != null) {
         _pointerAtOpen = null;
         _horizontalRaw = 0;
-        _retargetHorizontal(0, physics.returnSpring);
+        _retarget(_horizontal, 0, physics.returnSpring);
       }
       return;
     }
@@ -499,7 +520,8 @@ class ZoomDismissController {
     // on the way here does not snap in.
     final origin = _pointerAtOpen ??= _pointer;
     _horizontalRaw = _pointer.dx - origin.dx;
-    _retargetHorizontal(
+    _retarget(
+      _horizontal,
       gesture == ZoomGesture.pan
           ? physics.crossAxisOffsetFor(
               _horizontalRaw,
@@ -510,23 +532,29 @@ class ZoomDismissController {
     );
   }
 
-  /// Points the chase at [target] without disturbing its position or
+  /// Every value chasing a target through a spring.
+  List<_Chase> get _chases => [
+    _horizontal,
+    _pinchScale,
+    _pinchRotation,
+    _pinchShiftX,
+    _pinchShiftY,
+  ];
+
+  /// Points [chase] at [target] without disturbing its position or
   /// velocity: the spring only changes its mind about where it is going.
-  void _retargetHorizontal(double target, SpringDescription spring) {
-    _horizontalTarget = target;
-    _horizontalSpring = spring;
-    if (_ticker.isActive) {
-      return;
-    }
-    if ((_horizontalOffset - target).abs() < 0.01 &&
-        _horizontalVelocity.abs() < 0.01) {
+  void _retarget(_Chase chase, double target, SpringDescription spring) {
+    chase
+      ..target = target
+      ..spring = spring;
+    if (_ticker.isActive || chase.atRest) {
       return;
     }
     _lastTick = Duration.zero;
     _ticker.start();
   }
 
-  /// One closed-form spring step per frame toward wherever the target is
+  /// One closed-form spring step per frame toward wherever each target is
   /// now. Integrated by hand because `animateWith` restarts its clock on
   /// every retarget, which would freeze the chase under a moving finger.
   void _tick(Duration elapsed) {
@@ -534,23 +562,50 @@ class ZoomDismissController {
         (elapsed - _lastTick).inMicroseconds / Duration.microsecondsPerSecond;
     _lastTick = elapsed;
     if (dt > 0) {
-      final simulation = SpringSimulation(
-        _horizontalSpring!,
-        _horizontalOffset,
-        _horizontalTarget,
-        _horizontalVelocity,
-      );
-      _horizontalOffset = simulation.x(dt);
-      _horizontalVelocity = simulation.dx(dt);
+      for (final chase in _chases) {
+        if (!chase.atRest) {
+          chase.step(dt);
+        }
+      }
     }
-    if ((_horizontalOffset - _horizontalTarget).abs() < 0.01 &&
-        _horizontalVelocity.abs() < 0.5) {
-      _horizontalOffset = _horizontalTarget;
-      _horizontalVelocity = 0;
+    if (_chases.every((chase) => chase.atRest)) {
+      for (final chase in _chases) {
+        chase.settle();
+      }
       _ticker.stop();
     }
     if (!_released) {
-      liveFrame.value = _frame();
+      _publish();
     }
+  }
+}
+
+/// A value chasing a moving target through a spring, one closed-form step
+/// per frame.
+class _Chase {
+  _Chase(this.value, {required this.tolerance}) : target = value;
+
+  double value;
+  double velocity = 0;
+  double target;
+  SpringDescription? spring;
+
+  /// How close to the target, and how slow, counts as there.
+  final double tolerance;
+
+  bool get atRest =>
+      spring == null ||
+      (value - target).abs() < tolerance && velocity.abs() < tolerance * 50;
+
+  void step(double dt) {
+    final simulation = SpringSimulation(spring!, value, target, velocity);
+    value = simulation.x(dt);
+    velocity = simulation.dx(dt);
+  }
+
+  /// Puts the value on its target, at rest.
+  void settle() {
+    value = target;
+    velocity = 0;
   }
 }

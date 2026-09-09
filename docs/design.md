@@ -160,6 +160,7 @@ grab the card at any time during any animation.
 | Card scale mid-pan | ~0.54 | `drag.mov` 3.0 s, card width 370 of 686 px |
 | Card scale at the end of a long, wandering pan | ~0.42 | `drag_land` strip |
 | Card scale mid-pinch | ~0.6 | `pinch.mp4` 1.3 s |
+| Pinch scale vs fingers' distance | 1:1 from 8.7 pt of closing; turn 1:1; 0.515 sprang back, 0.494 landed | parity stage 6, `native_ZoomPinch*` |
 | On-screen corner radius at scale 0.55–0.6 | ~13–17 pt | consistent with a radius interpolated in the card's own space, so it scales with the card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale during dismissal | 1.0 | no scale-down of the page underneath |
@@ -318,7 +319,8 @@ class ZoomDismissPhysics {
     this.trackingSpring = const SpringDescription(mass: 1, stiffness: 2000, damping: 89),
     this.returnSpring = const SpringDescription(mass: 1, stiffness: 484, damping: 39.6), // ω 22, ζ 0.9
     this.panDismissThreshold = 0.905, // card scale below which a pan's release dismisses (0.914 sprang back, 0.900 landed)
-    this.dismissThreshold = 0.70, // the same for an edge swipe or pinch (0.715 sprang back, 0.678 landed)
+    this.dismissThreshold = 0.70, // card scale below which an edge swipe's release dismisses (0.715 sprang back, 0.678 landed)
+    this.pinchDismissThreshold = 0.5, // the same for a pinch, read without projection (0.515 sprang back, 0.494 landed)
     this.releaseProjection = 0.12, // seconds of release velocity a release is projected by
     this.maxCommitVelocity = 10.0, // progress units/s the commit spring may be seeded with
   });
@@ -621,8 +623,14 @@ The edge swipe was calibrated on the same rig (stage 5): it has no knee —
 the card shrinks at `scaleGain` per screen width all the way, and a finger
 cannot travel far enough to reach the floor — measured past the same 12 pt
 dead zone as the back swipe, and it does not fall; it follows the finger
-up or down at `crossAxisGain` instead. The pinch uses the recognizer's
-scale and rotation directly, clamped to `minimumScale`.
+up or down at `crossAxisGain` instead. The pinch (stage 6) takes hold
+once the fingers' distance has changed by half the slop (natively 8.7 pt)
+and from there scales the card 1:1 with their distance, never past the
+size it was pinched at, turns it 1:1 with their angle and carries it 1:1
+with their focal point, about the card as it was, all three chased
+through `trackingSpring` (the native card settles two or three frames
+behind the fingers); a turn alone, the fingers never closing, does
+nothing.
 
 **Rendering** of a `ZoomFrame`:
 
@@ -743,10 +751,12 @@ Details that matter:
 - **Release rules.** A pan or edge swipe is projected `releaseProjection`
   (120 ms) ahead on its release velocity, and dismisses if the card's scale
   there is below its threshold: `panDismissThreshold` (0.905, a sixth of the
-  height) for the pan, `dismissThreshold` (0.70) for the edge swipe and, for
-  now, the pinch, which is read at rest. So a short flick lands, a pull
-  back up past the boundary springs back, and a card released moving up
-  from well past it still lands, as natively. Otherwise cancel. Both
+  height) for the pan and `dismissThreshold` (0.70) for the edge swipe. So
+  a short flick lands, a pull back up past the boundary springs back, and
+  a card released moving up from well past it still lands, as natively. A
+  pinch is read where the fingers are, without projection: it dismisses
+  below `pinchDismissThreshold` (0.5, half the size), however fast the
+  fingers were closing. Otherwise cancel. Both
   outcomes use springs seeded with the release velocity so there is no
   visible kink. The
   commit seed is the rate the shrink was running at, converted to progress
@@ -802,9 +812,11 @@ As implemented (M3), with the departures from the sketch above:
   usually before the second finger lands, and a recognizer that lost that
   arena stops tracking the finger, so an eager-accept recognizer can never
   see both fingers over a scrolled list. The `Listener` sees every finger
-  regardless of the arena; when the second one lands, the live gesture (or
-  a new one) becomes a pinch with the card as it is at that moment as its
-  resting frame, and the route cancels the scroll view's drag through the
+  regardless of the arena; once the second one has landed and their
+  distance has changed by half the slop, the live gesture (or a new one)
+  becomes a pinch with the card as it is at that moment as its resting
+  frame, anchored on the distance where the dead zone ended, and the route
+  cancels the scroll view's drag through the
   scroll position's cancel hook — the sheet's mechanism — after which the
   scroll view ignores the rest of that drag. This is the plan's fallback
   without its "only at rest" limitation. The card scales with the fingers'

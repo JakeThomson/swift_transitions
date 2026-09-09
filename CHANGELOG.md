@@ -1,5 +1,17 @@
 ## 0.1.0-dev
 
+* Match the zoom route's pinch to iOS, measured against a native
+  `NavigationStack` zoom (parity stage 6): the card holds its size until
+  the fingers' distance has changed by half the platform's slop (8.7 pt
+  natively), then scales 1:1 with the distance from there, turns 1:1
+  with the fingers' angle — a turn alone does nothing — and follows their
+  focal point, chasing all three through the tracking spring as the
+  native card does, and a release lands below half the size wherever the
+  fingers were headed (0.515 at rest sprang back, 0.494 landed; fast
+  releases went by the fingers' distance, not the card's lagging scale).
+  A scroll view winning the first finger's arena no longer ends the pinch
+  as it begins. `ZoomDismissPhysics` gains `pinchDismissThreshold`;
+  `dismissThreshold` is the edge swipe's alone.
 * Match the zoom route's pan to iOS, measured against a native
   `NavigationStack` zoom (parity stage 4): the card holds still for the
   platform's slop, shrinks at 0.67 per screen height about the touch point

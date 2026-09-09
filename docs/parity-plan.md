@@ -535,6 +535,58 @@ not the pan's.
 **Done when** all three traces are identity to 2 pt / 1° and the landing
 matches. Trackpad pinches are out of scope (not implemented).
 
+*Measured 2026-09-09, flat palette, twenty-eight native runs.* Two
+synthesized fingers 300 pt apart about the page's centre, closed to
+0.4–0.9 of their distance at 150–800 pt/s each and released at rest or
+still moving; turned 15° at 0.7 and 45° at 0.5 along an arc, and 30°
+without closing; carried 100 pt sideways at 0.7; spread to 1.3; closed to
+0.6 and reopened to 0.9; a pinch on the scrolled page. The native card
+holds its size until the fingers' distance has changed by 8.7 pt (half
+the slop) and from there scales 1:1 with the distance about the focal
+point — 0.925 held at 0.9 of the start, 0.824 at 0.8, 0.618 at 0.6,
+0.412 at 0.4: `distance / (start − 8.7)` to 0.003 — never past 1.0
+(spreading does nothing, and a card reopened to 0.9 sits at 0.925 as if
+it had only closed that far), turns 1:1 with the fingers' angle and
+follows the focal point 1:1, all three settling two or three frames
+behind the fingers: a spring of ω 45, ζ 0.7–1.0 fits the scale trace to
+0.01 RMS, which is the pan's `trackingSpring`. A turn alone, the fingers
+never closing, does nothing. A pinch on the scrolled page works as on the
+unscrolled one. Releases: at rest 0.515 sprang back and 0.494, 0.463,
+0.412 landed — half the size — and a release still closing goes by where
+the fingers are, not where the card has caught up to (fingers at 0.458
+with the card at 0.630 landed; at 0.553 with the card at 0.744 sprang
+back), with no projection: a 37 ms pinch to 0.8 at 800 pt/s sprang back
+from a card that had not yet moved. Cancels return on the stage 5 spring
+(ω 22.5, ζ 0.9); a turned card un-rotates over the return slightly ahead
+of the scale (at 15°, within 0.8° of linear in the scale's progress
+either way; at 45°, 4–8° ahead of linear and 4° behind a lerp of the
+transform), which the rounded corners bias at large turns. Landings at
+rest reach the source in 180 ms with a 6 % overshoot (ω 17, ζ 0.7, 0.015
+RMS) rather than on the critically damped flight spring; native short
+pan landings in the stage 4 recordings read the same (ω 16, ζ 0.8) while
+long ones fit ζ ≥ 1, so the landing's spring is a cross-gesture question
+for stage 8, not a pinch rule. The package now waits out `kTouchSlop / 2`
+of distance and anchors the pinch where the dead zone ends, chases the
+scale, turn and focal offset through `trackingSpring`, commits on the
+fingers' ratio against `pinchDismissThreshold` 0.5 without projection,
+and no longer ends a pinch when a scroll view wins the first finger's
+arena (which cancelled the pan recognizer under it — every two-finger
+pinch begun on a list died on its first move). Verified on the rebuilt
+example, twenty-three runs each: held scale within 0.009 of native at
+0.4–0.9 (ours reads 11 pt of dead zone to the native 8.7), the scale
+within 0.01 of native's at every finger position on the way and settled
+within two frames of it, the card where the fingers were at release
+within 0.04 on every moving release, the focal follow within 1 pt, the
+turn within 2° (the box reading is biased by the corner radii, which
+stage 3 has yet to match), and the outcome table agrees on all
+twenty-three cases. Not measured: the un-rotate at large turns beyond
+the reading above, the landing seed for fast releases (native lands in
+65–127 ms from a fast pinch, ours in 200–300), and a second finger
+landing during a pan. The example's poster pager follows one finger, so
+a two-finger turn over it can scroll the posters (75 pt in one of two
+runs) where UIKit's centroid stays put: an example-app difference, not
+the transition's.
+
 ## 7. Interruptions
 
 **Owns**: the grab during a push (the frame it is caught at, and that the

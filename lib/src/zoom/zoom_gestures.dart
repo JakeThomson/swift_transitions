@@ -27,6 +27,11 @@ const double _kEdgeDeadZone = 12.0;
 /// every move from the first pixel.
 const double _kPanDeadZone = kTouchSlop;
 
+/// How far two fingers' distance changes before a pinch takes the card:
+/// natively the card held its size until the fingers had closed 8.7 pt
+/// (parity stage 6), half the slop, and scaled from that distance on.
+const double _kPinchDeadZone = kTouchSlop / 2;
+
 /// Installs the dismissal gestures over a zoom route's page.
 ///
 /// Three inputs feed one [ZoomDismissController]: a vertical drag
@@ -112,8 +117,11 @@ class _ZoomDismissGestureDetectorState
   /// Every finger on the page, by pointer id, in navigator coordinates.
   final Map<int, Offset> _pointers = <int, Offset>{};
 
-  /// The two fingers of a live pinch, or null.
+  /// The two fingers of a pinch, or null, and their distance when the
+  /// second landed: the pinch waits out its dead zone before it begins.
   (int, int)? _pinchPointers;
+  double _pinchDistanceAtDown = 0;
+  bool _pinchBegun = false;
 
   @override
   void initState() {
@@ -164,7 +172,7 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePanEnd(DragEndDetails details) {
-    _end(details.velocity.pixelsPerSecond.dy);
+    _endDrag(details.velocity.pixelsPerSecond.dy);
   }
 
   /// An edge swipe's controller is fed from here rather than from the raw
@@ -195,11 +203,21 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handleEdgeEnd(DragEndDetails details) {
-    _end(_toLogical(details.velocity.pixelsPerSecond.dx));
+    _endDrag(_toLogical(details.velocity.pixelsPerSecond.dx));
   }
 
   void _handleCancel() {
-    _end(0);
+    _endDrag(0);
+  }
+
+  /// A one-finger recognizer letting go of the gesture. Nothing to a pinch,
+  /// whose fingers' lift ends it: a scroll view winning the first finger's
+  /// arena cancels the pan recognizer just as the second finger lands.
+  void _endDrag(double velocity) {
+    if (_pinchPointers != null) {
+      return;
+    }
+    _end(velocity);
   }
 
   /// A scroll view at its top edge is handing a downward drag across. The
@@ -220,7 +238,7 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handleScrollDragEnd(double velocity) {
-    _end(-velocity);
+    _endDrag(-velocity);
   }
 
   @override
@@ -298,6 +316,7 @@ class _ZoomDismissGestureDetectorState
     _controller = null;
     _pointerDriven = false;
     _pinchPointers = null;
+    _pinchBegun = false;
     controller?.dragEnd(velocity);
     if (controller != null) {
       // Disposed after the settle: the ticker only drives the sideways
@@ -311,7 +330,9 @@ class _ZoomDismissGestureDetectorState
     _lastPointer = event.position;
     _pointers[event.pointer] = _toNavigator(event.position);
     if (widget.pinch && _pointers.length == 2 && _pinchPointers == null) {
-      _beginPinch(event.timeStamp);
+      final ids = _pointers.keys.toList();
+      _pinchPointers = (ids[0], ids[1]);
+      _pinchDistanceAtDown = _pinchDistance;
       return;
     }
     if (widget.pan) {
@@ -337,19 +358,25 @@ class _ZoomDismissGestureDetectorState
     _lastPointer = event.position;
     final position = _toNavigator(event.position);
     _pointers[event.pointer] = position;
-    final controller = _controller;
-    if (controller == null) {
-      return;
-    }
     final pinch = _pinchPointers;
-    if (pinch != null) {
+    if (pinch != null && _pinchBegun) {
       if (event.pointer == pinch.$1 || event.pointer == pinch.$2) {
-        controller.pinchUpdate(
+        _controller?.pinchUpdate(
           _pointers[pinch.$1]!,
           _pointers[pinch.$2]!,
           event.timeStamp,
         );
       }
+      return;
+    }
+    if (pinch != null &&
+        (_pinchDistance - _pinchDistanceAtDown).abs() >= _kPinchDeadZone) {
+      // Out of the dead zone: whatever the first finger was doing gives way.
+      _beginPinch(event.timeStamp);
+      return;
+    }
+    final controller = _controller;
+    if (controller == null) {
       return;
     }
     if (_pointerDriven) {
@@ -366,7 +393,12 @@ class _ZoomDismissGestureDetectorState
     final pinch = _pinchPointers;
     if (pinch != null) {
       if (event.pointer == pinch.$1 || event.pointer == pinch.$2) {
-        _end(_controller?.pinchReleaseVelocity ?? 0);
+        if (_pinchBegun) {
+          _end(_controller?.pinchReleaseVelocity ?? 0);
+        } else {
+          // A finger lifted inside the dead zone: no pinch after all.
+          _pinchPointers = null;
+        }
       }
       return;
     }
@@ -375,26 +407,44 @@ class _ZoomDismissGestureDetectorState
     }
   }
 
-  /// The second finger has landed: the live gesture, or a new one, becomes
-  /// a pinch, and any scroll view drag lets go of its finger.
+  /// The fingers of a waiting pinch, apart.
+  double get _pinchDistance {
+    final (a, b) = _pinchPointers!;
+    return (_pointers[b]! - _pointers[a]!).distance;
+  }
+
+  /// The pinch is out of its dead zone: the live gesture, or a new one,
+  /// becomes a pinch anchored on the fingers as they are now, and any
+  /// scroll view drag lets go of its finger.
   void _beginPinch(Duration timeStamp) {
-    final ids = _pointers.keys.toList();
-    final first = _pointers[ids[0]]!;
-    final second = _pointers[ids[1]]!;
+    final (a, b) = _pinchPointers!;
+    final first = _pointers[a]!;
+    final second = _pointers[b]!;
     if (_controller == null) {
       final controller = widget.onStart(
         ZoomGesture.pinch,
         (first + second) / 2,
       );
       if (controller == null) {
+        _pinchPointers = null;
         return;
       }
       _controller = controller;
     }
-    _pinchPointers = (ids[0], ids[1]);
+    _pinchBegun = true;
     _pointerDriven = false;
     widget.scrollController.cancelDrag();
-    _controller!.beginPinch(first, second, timeStamp);
+    // Anchored where the dead zone ends, not at the first move seen past
+    // it, so the card scales from there.
+    final distance = (second - first).distance;
+    final anchored =
+        _pinchDistanceAtDown +
+        (distance < _pinchDistanceAtDown ? -_kPinchDeadZone : _kPinchDeadZone);
+    final focal = (first + second) / 2;
+    final half = (second - first) * (anchored / distance / 2);
+    _controller!
+      ..beginPinch(focal - half, focal + half, timeStamp)
+      ..pinchUpdate(first, second, timeStamp);
   }
 
   @override

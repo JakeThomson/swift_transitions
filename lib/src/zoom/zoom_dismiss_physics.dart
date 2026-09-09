@@ -7,8 +7,8 @@ import 'package:flutter/widgets.dart';
 /// release hands to the landing spring. One value object, so the numbers
 /// that were measured together stay together.
 ///
-/// The numbers are from the parity rig (parity-plan.md, stages 4 and 5):
-/// scripted drags on a full-screen zoom page against a native
+/// The numbers are from the parity rig (parity-plan.md, stages 4–6):
+/// scripted drags and pinches on a full-screen zoom page against a native
 /// `NavigationStack` zoom, iOS 27.0, with touch rings. The pan's shape —
 /// linear shrink to a knee, then iOS's rubber band toward a floor, the
 /// shrink pivoting on the grabbed point — is the iOS 26 fit from
@@ -39,6 +39,7 @@ class ZoomDismissPhysics {
     ),
     this.panDismissThreshold = 0.905,
     this.dismissThreshold = 0.70,
+    this.pinchDismissThreshold = 0.5,
     this.releaseProjection = 0.12,
     this.maxCommitVelocity = 10,
   });
@@ -71,9 +72,12 @@ class ZoomDismissPhysics {
   /// 8 pt out at 30 % and 20 at 80 %); the edge swipe does not fall.
   final double fallLag;
 
-  /// The spring the card chases the finger's sideways offset through while
-  /// the finger drives it: stiff and critically damped (ω ≈ 45), so a fast
-  /// sweep visibly trails and a slow drag reads as 1:1.
+  /// The spring the card chases the fingers through while they drive it —
+  /// a pan's sideways offset, and a pinch's scale, turn and focal point:
+  /// stiff and critically damped (ω ≈ 45), so a fast sweep visibly trails
+  /// and a slow drag reads as 1:1. Native pinches at 300 pt/s a finger
+  /// trailed the fingers' distance by 0.06 of the scale and settled two or
+  /// three frames after they stopped, which ω 45 fits to 0.01 RMS.
   final SpringDescription trackingSpring;
 
   /// The spring a cancelled release returns the card to full screen on, and
@@ -103,11 +107,17 @@ class ZoomDismissPhysics {
   /// than the edge swipe's boundary.
   final double panDismissThreshold;
 
-  /// The card scale below which an edge swipe's (or a pinch's) release
-  /// dismisses. Native edge swipes released at rest at 0.715 sprang back
-  /// and at 0.678 landed (parity stage 5); the pinch shares the value until
-  /// stage 6 measures its own.
+  /// The card scale below which an edge swipe's release dismisses. Native
+  /// edge swipes released at rest at 0.715 sprang back and at 0.678 landed
+  /// (parity stage 5).
   final double dismissThreshold;
+
+  /// The card scale below which a pinch's release dismisses: half its size,
+  /// with no projection — native pinches released at rest at 0.515 sprang
+  /// back and at 0.494 landed, and ones released with the fingers still
+  /// closing fast went by where the card was, not where they were headed
+  /// (parity stage 6).
+  final double pinchDismissThreshold;
 
   /// How far ahead a release is projected, in seconds: it commits if the
   /// card, carried on at the release velocity for this long, would shrink
@@ -242,6 +252,7 @@ class ZoomDismissPhysics {
       other.returnSpring == returnSpring &&
       other.panDismissThreshold == panDismissThreshold &&
       other.dismissThreshold == dismissThreshold &&
+      other.pinchDismissThreshold == pinchDismissThreshold &&
       other.releaseProjection == releaseProjection &&
       other.maxCommitVelocity == maxCommitVelocity;
 
@@ -257,6 +268,7 @@ class ZoomDismissPhysics {
     returnSpring,
     panDismissThreshold,
     dismissThreshold,
+    pinchDismissThreshold,
     releaseProjection,
     maxCommitVelocity,
   );

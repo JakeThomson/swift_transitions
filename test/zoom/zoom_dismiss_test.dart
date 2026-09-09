@@ -621,13 +621,24 @@ void main() {
       const Offset(500, 300),
       pointer: 2,
     );
-    await first.moveTo(const Offset(350, 300));
-    await second.moveTo(const Offset(450, 300));
+    await first.moveTo(const Offset(304, 300));
+    await second.moveTo(const Offset(496, 300));
     await tester.pump();
 
-    // The fingers closed from 200 to 100 apart.
-    expect(cardRect(tester).width, closeTo(400, 0.5));
-    expect(cardRect(tester).height, closeTo(300, 0.5));
+    // The first 9 pt of closing are the pinch's dead zone.
+    expect(cardRect(tester), screen);
+
+    await first.moveTo(const Offset(305, 300));
+    await second.moveTo(const Offset(495, 300));
+    await first.moveTo(const Offset(355, 300));
+    await second.moveTo(const Offset(445, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The fingers closed from 191 apart, where the pinch took hold, to 90:
+    // under half, which a release lands.
+    expect(cardRect(tester).width, closeTo(800 * 90 / 191, 0.5));
+    expect(cardRect(tester).height, closeTo(600 * 90 / 191, 0.5));
     expect(cardRect(tester).center.dx, closeTo(400, 0.5));
     expect(navigatorOf(tester).userGestureInProgress, isTrue);
 
@@ -635,6 +646,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsNothing);
     await second.up();
+  });
+
+  testWidgets('a pinch trails the fingers through the tracking spring', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final first = await tester.startGesture(const Offset(300, 300), pointer: 1);
+    final second = await tester.startGesture(
+      const Offset(500, 300),
+      pointer: 2,
+    );
+    await first.moveTo(const Offset(305, 300));
+    await second.moveTo(const Offset(495, 300));
+    await first.moveTo(const Offset(355, 300));
+    await second.moveTo(const Offset(445, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // A frame in, the card is on its way to 90/191 of its size, not there.
+    expect(cardRect(tester).width, lessThan(800));
+    expect(cardRect(tester).width, greaterThan(800 * 90 / 191 + 20));
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(cardRect(tester).width, closeTo(800 * 90 / 191, 0.5));
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a pinch rotates the card and it un-rotates on release', (
@@ -647,14 +685,25 @@ void main() {
       pointer: 2,
     );
     const angle = math.pi / 6;
+    // A turn alone does nothing: the pinch takes hold on distance.
     await second.moveTo(
       Offset(300 + 200 * math.cos(angle), 300 + 200 * math.sin(angle)),
     );
     await tester.pump();
+    expect(cardRotation(tester), 0);
+    expect(cardRect(tester), screen);
+
+    await second.moveTo(const Offset(500, 300));
+    await second.moveTo(const Offset(491, 300));
+    await second.moveTo(
+      Offset(300 + 191 * math.cos(angle), 300 + 191 * math.sin(angle)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(cardRotation(tester), closeTo(angle, 1e-6));
-    // The fingers are the same distance apart, so the card keeps its size
-    // (its bounding rect is wider, being rotated).
+    // The fingers are as far apart as when the pinch took hold, so the card
+    // keeps its size (its bounding rect is wider, being rotated).
     expect(
       tester.getSize(
         find.descendant(
@@ -695,16 +744,43 @@ void main() {
     await second.moveTo(const Offset(400, 380));
     await first.moveTo(const Offset(400, 230));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    // The fingers closed from 300 to 150 apart; the list did not scroll
-    // with either of them.
-    expect(cardRect(tester).width, closeTo(400, 0.5));
+    // The fingers closed from 300 to 150 apart, the pinch taking hold 9 pt
+    // in; the list did not scroll with either of them once it had.
+    expect(cardRect(tester).width, closeTo(800 * 150 / 291, 0.5));
     expect(list.position.pixels, closeTo(200, 1));
 
     await first.up();
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsNothing);
     await second.up();
+  });
+
+  testWidgets('a pinch begun with both fingers on a list outlives the pan', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, listDetail());
+    final first = await tester.startGesture(const Offset(400, 150), pointer: 1);
+    final second = await tester.startGesture(
+      const Offset(400, 450),
+      pointer: 2,
+    );
+    // The list wins the first finger's arena on these moves and cancels
+    // the pan recognizer under the pinch.
+    for (var i = 0; i < 18; i++) {
+      await first.moveBy(const Offset(0, 5));
+      await second.moveBy(const Offset(0, -5));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+    // 300 apart to 120, the pinch taking hold 9 pt in.
+    expect(cardRect(tester).width, closeTo(800 * 120 / 291, 0.5));
+
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
   });
 
   testWidgets('a second finger turns a pan into a pinch', (tester) async {
@@ -720,11 +796,13 @@ void main() {
       const Offset(400, 568),
       pointer: 2,
     );
-    await second.moveTo(const Offset(400, 443));
+    await second.moveTo(const Offset(400, 428));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    // 250 apart to 125 apart: half the size the pan left the card at.
-    expect(cardRect(tester).width, closeTo(panned.width / 2, 0.5));
+    // 250 apart to 110, the pinch taking hold 9 pt in: 110/241 of the size
+    // the pan left the card at, under half of it.
+    expect(cardRect(tester).width, closeTo(panned.width * 110 / 241, 0.5));
 
     await first.up();
     await tester.pumpAndSettle();
