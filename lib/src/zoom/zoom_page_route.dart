@@ -49,10 +49,15 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   Rect? _alignmentRect;
   ZoomDismissController? _dismiss;
 
-  /// What the next pop's simulation is seeded with, in progress units per
-  /// second toward the source: a committed dismissal's release rate over
-  /// what its landing has left.
+  /// What the next pop's simulation is seeded with, in units of what the
+  /// landing has left per second: a committed dismissal's release rate
+  /// over the shrink still to come. It also stiffens the landing spring
+  /// ([ZoomDismissPhysics.landingSpringFor]).
   double _releaseSeed = 0;
+
+  /// How fast the fingers were moving at that release, in resting card
+  /// widths per second: what the landing spring is quickened by.
+  double _landingSpeed = 0;
   bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
   final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
@@ -109,13 +114,18 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       return null;
     }
     final seed = forward ? 0.0 : _releaseSeed;
+    final speed = forward ? 0.0 : _landingSpeed;
     _releaseSeed = 0;
+    _landingSpeed = 0;
     final landing = !forward && (_departure?.toSource ?? false);
     return SpringSimulation(
-      landing ? options.dismissPhysics.landingSpring : options.pushSpring,
+      landing
+          ? options.dismissPhysics.landingSpringFor(speed)
+          : options.pushSpring,
       controller!.value,
       forward ? 1 : 0,
-      -seed,
+      // The seed is per unit of the landing, which runs from here to zero.
+      -seed * controller!.value,
     );
   }
 
@@ -319,19 +329,16 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         }
         changedInternalState();
       },
-      onCommit: (rate) {
-        // The pop's progress runs from the departure frame to the source:
-        // the seed is the rate over what is left, in what is left of the
-        // progress.
+      onCommit: (rate, speed) {
+        // The rate over the shrink the landing still has to make.
         final source =
             _flightSource?.rect ?? ZoomPageTransition.fallbackRectFor(screen);
-        _releaseSeed =
-            options.dismissPhysics.commitVelocityFor(
-              rate: rate,
-              remainingScale:
-                  (_departure!.frame.rect.width - source.width) / screen.width,
-            ) *
-            controller!.value;
+        _releaseSeed = options.dismissPhysics.commitVelocityFor(
+          rate: rate,
+          remainingScale:
+              (_departure!.frame.rect.width - source.width) / screen.width,
+        );
+        _landingSpeed = speed;
         navigator.pop();
       },
       onSettled: () {

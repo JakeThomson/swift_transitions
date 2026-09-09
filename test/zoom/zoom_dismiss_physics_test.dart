@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swift_transitions/swift_transitions.dart';
@@ -184,5 +186,30 @@ void main() {
       expect(physics.commitVelocityFor(rate: -1, remainingScale: 0.5), 0);
       expect(physics.commitVelocityFor(rate: 1, remainingScale: 0), 0);
     });
+  });
+
+  group('landingSpringFor', () {
+    test('a release at rest lands on the landing spring itself', () {
+      expect(physics.landingSpringFor(0), physics.landingSpring);
+      expect(physics.landingSpringFor(-1), physics.landingSpring);
+    });
+
+    test(
+      'a release on the move lands on a quicker spring, damped the same',
+      () {
+        final quick = physics.landingSpringFor(2);
+        final ratio =
+            physics.landingSpring.damping /
+            (2 * math.sqrt(physics.landingSpring.stiffness));
+        expect(
+          quick.damping / (2 * math.sqrt(quick.stiffness)),
+          closeTo(ratio, 1e-9),
+        );
+        expect(
+          math.sqrt(quick.stiffness / physics.landingSpring.stiffness),
+          closeTo(1 + 2 * physics.landingQuickening, 1e-9),
+        );
+      },
+    );
   });
 }

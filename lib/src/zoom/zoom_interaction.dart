@@ -208,8 +208,11 @@ class ZoomDismissController {
 
   /// Called at a committed release, after [onRelease], with the rate the
   /// card was shrinking at in resting sizes per second, for the landing's
-  /// seed: the route pops now and lands on the pop's transition.
-  final ValueSetter<double> onCommit;
+  /// seed, and how fast the fingers themselves were moving in resting
+  /// widths per second, which is what shortens it
+  /// ([ZoomDismissPhysics.landingSpringFor]): the route pops now and lands
+  /// on the pop's transition.
+  final void Function(double rate, double speed) onCommit;
 
   /// Called once the settle animation completes.
   final VoidCallback onSettled;
@@ -425,9 +428,20 @@ class ZoomDismissController {
         physics.scaleGain * towardTarget / restingFrame.rect.width,
       ZoomGesture.pinch => towardTarget / _pinchDistance0,
     };
+    // How fast a finger itself was going, which shortens the landing —
+    // for every gesture but the pan, which lands in a rest release's time
+    // however hard it was flung. A pinch's velocity is the two fingers
+    // closing, so a finger is going half of it.
+    final speed = switch (gesture) {
+      ZoomGesture.pan => 0.0,
+      ZoomGesture.edgeSwipe =>
+        math.max(0.0, towardTarget) / restingFrame.rect.width,
+      ZoomGesture.pinch =>
+        math.max(0.0, towardTarget) / 2 / restingFrame.rect.width,
+    };
     onRelease(departure);
     if (commit) {
-      onCommit(rate);
+      onCommit(rate, speed);
     } else {
       // Progress scales with the card, so a resting size per second is
       // restingProgress per second.

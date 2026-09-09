@@ -20,6 +20,10 @@ simulator, and the example built for the simulator
     python3 analyze_edge.py run.csv                     # stage 5: an edge swipe's gain, follow, release
     python3 analyze_landing.py run.csv [...]            # stage 8: the landing spring of any dismissal, one line each
     python3 compare_edge.py dir native flutter          # stage 5 side by side, one line per script
+    python3 analyze_lead.py outline.csv                 # stage 9: a flight's vertical lead
+    python3 analyze_outline.py frames/ out.csv          # stage 9: the card's box against the covered page
+    python3 compare_landing.py dir native ours Script   # stage 9 settle times, one line per release
+    python3 sidebyside.py native.csv ours.csv out.mp4   # stage 9 clip of the two runs, cut to the same frame
 
 The driver's `Finger` (ParityDriver.swift) runs multi-segment drags
 through XCTest's private event paths, one keyframe per segment; it lifts

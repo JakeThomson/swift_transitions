@@ -42,6 +42,7 @@ class ZoomDismissPhysics {
       stiffness: 225,
       damping: 22.5,
     ),
+    this.landingQuickening = 0.4,
     this.panDismissThreshold = 0.905,
     this.dismissThreshold = 0.70,
     this.pinchDismissThreshold = 0.5,
@@ -97,9 +98,21 @@ class ZoomDismissPhysics {
   /// of the way in 230–270 ms, and overshoot the source by 3 % of the way
   /// before easing onto it over the next 300 ms — slower and looser than
   /// the push's spring (parity stage 8). Edge swipes and pinches land on
-  /// it too, from rest within 2.3 pt; released moving they land sooner,
-  /// which is the seed's doing ([commitVelocityFor]).
+  /// it too, from rest within 2.3 pt; released moving they land sooner and
+  /// firmer, which is the seed's doing ([commitVelocityFor],
+  /// [landingSpringFor]).
   final SpringDescription landingSpring;
+
+  /// How much of [landingSpring]'s frequency a landing gains for each
+  /// resting card width per second a finger was moving when it let go.
+  /// Native landings shorten with the fingers' own speed rather than with
+  /// the shrink they were driving, and by the same amount in either
+  /// gesture: 200–245 ms released at rest, 170 at 400 pt/s a finger, 100
+  /// (edge swipe) to 117 (pinch) at 800 and 103 at 1200, where those
+  /// speeds mean quite different shrink rates and landing distances
+  /// (parity stages 5, 6 and 9). A pan hands nothing over: flung at
+  /// 150–800 pt/s it lands in the 233–272 ms of a release at rest.
+  final double landingQuickening;
 
   /// How far the card moves for each point the finger moves across the
   /// gesture's axis — sideways during a pan, up or down during an edge
@@ -143,12 +156,11 @@ class ZoomDismissPhysics {
   /// *up* at 800 pt/s still landed, as the projection says.
   final double releaseProjection;
 
-  /// The most a release may seed [landingSpring] with, in progress units
-  /// per second. At 8 the spring lands 98 % of the way in 180 ms and
-  /// overshoots by 3.6 %, against 2.8 % from rest; native fast pinches
-  /// landed in 117 ms with no more overshoot than rest ones, which a
-  /// seeded linear spring cannot give, so the cap trades the last 60 ms
-  /// for a landing that does not bounce.
+  /// The most a release may seed the landing with, in units of what the
+  /// landing has left per second: enough for the card to carry on at the
+  /// rate the fingers left it at, not enough to bounce. At 8 the seeded
+  /// landing overshoots by 3.6 % against 2.8 % from rest; the quickening
+  /// is what makes a fast release land sooner ([landingSpringFor]).
   final double maxCommitVelocity;
 
   /// The damped travel the scale floor implies, in card heights.
@@ -244,15 +256,14 @@ class ZoomDismissPhysics {
   }
 
   /// What a release shrinking the card at [rate] of its resting size per
-  /// second seeds [landingSpring] with, in progress units per second: the
-  /// rate over the [remainingScale] the landing has to cover, capped at
-  /// [maxCommitVelocity]. Zero for a release that was not shrinking, so the
-  /// landing starts from rest. Native pinches released with the fingers
-  /// still closing landed in 117 ms at 800 pt/s a finger and 170 ms at 400
-  /// where rest releases took 200–215 ms, and an edge swipe flung at
-  /// 800 pt/s landed in 100 ms against 213–245 ms at rest, both as the
-  /// fingers' rate over what was left; pans hand nothing over
-  /// (parity stage 8).
+  /// second seeds the landing with, in units of what the landing has left
+  /// per second: the rate over the [remainingScale] it has to cover,
+  /// capped at [maxCommitVelocity]. Zero for a release that was not
+  /// shrinking, so the landing starts from rest. Native pinches released
+  /// with the fingers still closing landed in 133 ms at 800 pt/s a finger
+  /// and an edge swipe flung at 1200 in 103 ms, where rest releases took
+  /// 200–270 ms, both fitting the fingers' rate over what was left; pans
+  /// hand nothing over (parity stages 8 and 9).
   double commitVelocityFor({
     required double rate,
     required double remainingScale,
@@ -261,6 +272,22 @@ class ZoomDismissPhysics {
       return 0;
     }
     return math.min(maxCommitVelocity, rate / remainingScale);
+  }
+
+  /// [landingSpring] quickened for a release at [speed] resting card
+  /// widths per second, per [landingQuickening]: the same damping, so a
+  /// quick landing overshoots the source by the same 3 % a slow one does.
+  /// A release at rest lands on the spring itself.
+  SpringDescription landingSpringFor(double speed) {
+    if (speed <= 0) {
+      return landingSpring;
+    }
+    final quicker = 1 + landingQuickening * speed;
+    return SpringDescription(
+      mass: landingSpring.mass,
+      stiffness: landingSpring.stiffness * quicker * quicker,
+      damping: landingSpring.damping * quicker,
+    );
   }
 
   @override
@@ -275,6 +302,7 @@ class ZoomDismissPhysics {
       other.trackingSpring == trackingSpring &&
       other.returnSpring == returnSpring &&
       other.landingSpring == landingSpring &&
+      other.landingQuickening == landingQuickening &&
       other.panDismissThreshold == panDismissThreshold &&
       other.dismissThreshold == dismissThreshold &&
       other.pinchDismissThreshold == pinchDismissThreshold &&
@@ -292,6 +320,7 @@ class ZoomDismissPhysics {
     trackingSpring,
     returnSpring,
     landingSpring,
+    landingQuickening,
     panDismissThreshold,
     dismissThreshold,
     pinchDismissThreshold,
