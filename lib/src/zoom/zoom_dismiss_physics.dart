@@ -37,11 +37,16 @@ class ZoomDismissPhysics {
       stiffness: 484,
       damping: 39.6,
     ),
+    this.landingSpring = const SpringDescription(
+      mass: 1,
+      stiffness: 225,
+      damping: 22.5,
+    ),
     this.panDismissThreshold = 0.905,
     this.dismissThreshold = 0.70,
     this.pinchDismissThreshold = 0.5,
     this.releaseProjection = 0.12,
-    this.maxCommitVelocity = 10,
+    this.maxCommitVelocity = 8,
   });
 
   /// The iOS 26 fit.
@@ -86,6 +91,16 @@ class ZoomDismissPhysics {
   /// back in 230 ms, and it is the back swipe's release spring too.
   final SpringDescription returnSpring;
 
+  /// The spring a committed release lands on the source with, whichever
+  /// gesture released it. ω 15, ζ 0.75: native pans released at rest from
+  /// 0.55–0.90 of the screen fit it to 0.4–2.9 pt on the card's edge, 98 %
+  /// of the way in 230–270 ms, and overshoot the source by 3 % of the way
+  /// before easing onto it over the next 300 ms — slower and looser than
+  /// the push's spring (parity stage 8). Edge swipes and pinches land on
+  /// it too, from rest within 2.3 pt; released moving they land sooner,
+  /// which is the seed's doing ([commitVelocityFor]).
+  final SpringDescription landingSpring;
+
   /// How far the card moves for each point the finger moves across the
   /// gesture's axis — sideways during a pan, up or down during an edge
   /// swipe once it is off the edge — at first: the card trails the finger
@@ -128,8 +143,12 @@ class ZoomDismissPhysics {
   /// *up* at 800 pt/s still landed, as the projection says.
   final double releaseProjection;
 
-  /// The most a fling may seed the landing spring with, in progress units
-  /// per second — about four times the resting landing's own start.
+  /// The most a release may seed [landingSpring] with, in progress units
+  /// per second. At 8 the spring lands 98 % of the way in 180 ms and
+  /// overshoots by 3.6 %, against 2.8 % from rest; native fast pinches
+  /// landed in 117 ms with no more overshoot than rest ones, which a
+  /// seeded linear spring cannot give, so the cap trades the last 60 ms
+  /// for a landing that does not bounce.
   final double maxCommitVelocity;
 
   /// The damped travel the scale floor implies, in card heights.
@@ -224,19 +243,24 @@ class ZoomDismissPhysics {
     return grounded.shift(Offset(horizontalOffset, 0));
   }
 
-  /// What a release at [velocity] logical pixels per second (positive away
-  /// from the identity state) seeds the landing spring with, in progress
-  /// units per second toward the source: the rate the shrink was running
-  /// at, [scaleGain] per card height, capped at [maxCommitVelocity]. Zero for
-  /// a release that was not shrinking, so the landing starts from rest.
+  /// What a release shrinking the card at [rate] of its resting size per
+  /// second seeds [landingSpring] with, in progress units per second: the
+  /// rate over the [remainingScale] the landing has to cover, capped at
+  /// [maxCommitVelocity]. Zero for a release that was not shrinking, so the
+  /// landing starts from rest. Native pinches released with the fingers
+  /// still closing landed in 117 ms at 800 pt/s a finger and 170 ms at 400
+  /// where rest releases took 200–215 ms, and an edge swipe flung at
+  /// 800 pt/s landed in 100 ms against 213–245 ms at rest, both as the
+  /// fingers' rate over what was left; pans hand nothing over
+  /// (parity stage 8).
   double commitVelocityFor({
-    required double velocity,
-    required double cardHeight,
+    required double rate,
+    required double remainingScale,
   }) {
-    if (cardHeight <= 0 || velocity <= 0) {
+    if (remainingScale <= 0 || rate <= 0) {
       return 0;
     }
-    return math.min(maxCommitVelocity, scaleGain * velocity / cardHeight);
+    return math.min(maxCommitVelocity, rate / remainingScale);
   }
 
   @override
@@ -250,6 +274,7 @@ class ZoomDismissPhysics {
       other.crossAxisLimit == crossAxisLimit &&
       other.trackingSpring == trackingSpring &&
       other.returnSpring == returnSpring &&
+      other.landingSpring == landingSpring &&
       other.panDismissThreshold == panDismissThreshold &&
       other.dismissThreshold == dismissThreshold &&
       other.pinchDismissThreshold == pinchDismissThreshold &&
@@ -266,6 +291,7 @@ class ZoomDismissPhysics {
     crossAxisLimit,
     trackingSpring,
     returnSpring,
+    landingSpring,
     panDismissThreshold,
     dismissThreshold,
     pinchDismissThreshold,

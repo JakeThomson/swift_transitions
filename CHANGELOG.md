@@ -1,5 +1,19 @@
 ## 0.1.0-dev
 
+* Match the zoom route's landing to iOS, measured against a native
+  `NavigationStack` zoom (parity stage 8): a committed release lands on
+  its own spring, `ZoomDismissPhysics.landingSpring` (ω 15, ζ 0.75 —
+  98 % of the way in 230–270 ms with a 3 % overshoot), not the push's,
+  seeded with the release rate over what the landing has left for a
+  pinch or an edge swipe and not at all for a pan, which natively lands
+  from rest however it was flung; `commitVelocityFor` takes the rate and
+  the remaining scale, and `maxCommitVelocity` is 8. The card's corners,
+  measured through the flight, already run straight from the source's
+  radius to the display's. A held card is let go of when the window's
+  size changes, as iOS lets go when the device turns. Under Reduce
+  Motion the zoom cross-fades over 140 ms, as the native page does. The
+  example's poster page keeps its bar opaque at the top of the scroll,
+  as SwiftUI's is.
 * Match the zoom route's response to a touch in flight to iOS, measured
   against a native `NavigationStack` zoom (parity stage 7): a finger on a
   flying card no longer stops it — the pan begins as it leaves its dead

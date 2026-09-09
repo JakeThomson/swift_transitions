@@ -113,6 +113,13 @@ class _ZoomDismissGestureDetectorState
   double _pinchDistanceAtDown = 0;
   bool _pinchBegun = false;
 
+  /// The window's size when last built, and whether the fingers down now
+  /// were let go of: a held card is released when the size changes, as
+  /// iOS lets go when the device turns, and the rest of that touch is not
+  /// a new grab.
+  Size? _size;
+  bool _letGo = false;
+
   @override
   void initState() {
     super.initState();
@@ -151,6 +158,9 @@ class _ZoomDismissGestureDetectorState
   /// zone counts against it again, so a card dragged down and back up
   /// returns to rest where the finger started.
   void _handlePanUpdate(DragUpdateDetails details) {
+    if (_letGo) {
+      return;
+    }
     final before = _panDragged;
     // From the global positions: the recognizer's delta is in the page's
     // own coordinates, which a card in flight scales.
@@ -174,6 +184,9 @@ class _ZoomDismissGestureDetectorState
   /// pointer stream, which runs ahead of the recognizer and would see the
   /// dead zone a move late.
   void _handleEdgeUpdate(DragUpdateDetails details) {
+    if (_letGo) {
+      return;
+    }
     final before = _edgeDragged;
     _edgeDragged = _toLogical(details.globalPosition.dx - _edgeDown.dx);
     if (_edgeDragged <= _kEdgeDeadZone) {
@@ -242,6 +255,23 @@ class _ZoomDismissGestureDetectorState
       _detachScrollController(oldWidget.scrollController);
       _attachScrollController(widget.scrollController);
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final size = MediaQuery.sizeOf(context);
+    if (_controller != null && _size != null && size != _size) {
+      // A release at rest: the card lands or returns from where it is.
+      // After this build, since the release publishes a frame.
+      _letGo = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _letGo) {
+          _end(0);
+        }
+      });
+    }
+    _size = size;
   }
 
   @override
@@ -354,6 +384,7 @@ class _ZoomDismissGestureDetectorState
       return;
     }
     if (pinch != null &&
+        !_letGo &&
         (_pinchDistance - _pinchDistanceAtDown).abs() >= _kPinchDeadZone) {
       // Out of the dead zone: whatever the first finger was doing gives way.
       _beginPinch(event.timeStamp);
@@ -371,6 +402,9 @@ class _ZoomDismissGestureDetectorState
 
   void _handlePointerUp(PointerEvent event) {
     _pointers.remove(event.pointer);
+    if (_pointers.isEmpty) {
+      _letGo = false;
+    }
     final pinch = _pinchPointers;
     if (pinch != null) {
       if (event.pointer == pinch.$1 || event.pointer == pinch.$2) {

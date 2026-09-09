@@ -107,10 +107,11 @@ def main():
     l0, t0, r0, b0 = card(last)
     print(f"release at scale {max((r0 - l0) / art_w, (b0 - t0) / art_h):.3f}: {outcome}")
     if landed:
-        # A landing's art is confounded by the cross-fade; its edges are not.
-        # Fit whichever of top and left has the longer way to go.
-        if abs(t0 - SOURCE[1]) >= abs(l0 - SOURCE[0]):
-            w, w0, target = boxes[:, 1], t0, SOURCE[1]
+        # A landing's art is confounded by the cross-fade, and so is its top
+        # edge, where the copy fades in first; fit the left edge, or the
+        # width when the card is against the left edge.
+        if l0 < 5:
+            w, w0, target = boxes[:, 2] - boxes[:, 0], r0 - l0, SOURCE[2] - SOURCE[0]
         else:
             w, w0, target = boxes[:, 0], l0, SOURCE[0]
     else:
@@ -131,7 +132,7 @@ def main():
     best = min(
         (np.sqrt(np.mean((remaining(t + dt, om, z, v) - rem) ** 2)), om, z, v, dt)
         for om in np.arange(8, 40, 0.5) for z in [1.0] + list(np.arange(0.6, 2.0, 0.1))
-        for v in np.arange(-2, 8, 0.5) for dt in np.arange(0, 0.05, 0.008))
+        for v in np.arange(-24, 6, 0.5) for dt in np.arange(0, 0.05, 0.008))
     print(f"  best spring: omega {best[1]:.1f}, zeta {best[2]:.2f}, v0 {best[3]:.1f}, lag {best[4] * 1000:.0f} ms, rms {best[0] * abs(w0 - target):.1f} pt")
 
 

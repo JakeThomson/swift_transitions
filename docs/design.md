@@ -161,10 +161,10 @@ grab the card at any time during any animation.
 | Card scale at the end of a long, wandering pan | ~0.42 | `drag_land` strip |
 | Card scale mid-pinch | ~0.6 | `pinch.mp4` 1.3 s |
 | Pinch scale vs fingers' distance | 1:1 from 8.7 pt of closing; turn 1:1; 0.515 sprang back, 0.494 landed | parity stage 6, `native_ZoomPinch*` |
-| On-screen corner radius at scale 0.55–0.6 | ~13–17 pt | consistent with a radius interpolated in the card's own space, so it scales with the card |
+| On-screen corner radius during a flight | 13 pt at the source, 22 a quarter of the way, 33 at half, 44 at three quarters | a straight line from the source's radius to the display's in the flight's progress (parity stage 8, `native_zoom_f`) |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale during dismissal | 1.0 | no scale-down of the page underneath |
-| Landing from near the target | ~0.2 s | `drag_land` strip |
+| Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 117 ms from a fast pinch | parity stage 8, `native_ZoomPan*`, `native_ZoomPinch*` |
 | Pan scale on a screen-sized card | 0.812 at 0.3 screen heights, 0.678 at 0.5, 0.545 at 0.8 | `ZoomDismissPhysics.ios26`, section 3.4; parity stage 4 (the 0.42 of `drag.mov` was a long, wandering drag) |
 
 ### 1.5 Apple's API surface
@@ -832,8 +832,11 @@ As implemented (M3), with the departures from the sketch above:
   finger that landed on the way down (the navigator cancels active
   pointers on every navigation), and iOS gives that finger to the page
   underneath (section 3.8). A card springing back from a cancelled release
-  can be grabbed again, as the same gesture to the navigator. Not yet:
-  trackpad pinches.
+  can be grabbed again, as the same gesture to the navigator. A change of
+  the window's size while a card is held lets go of it — a release at
+  rest, landing or returning to the window as it is now, and the rest of
+  that touch is not a new grab — as iOS lets go when the device turns.
+  Not yet: trackpad pinches.
 
 ### 3.8 Interruptible push
 
@@ -876,10 +879,17 @@ Flutter terms:
   unlike the push transition's slide. It reaches the controller through
   `TransitionRoute.createSimulation`, so the route's `animateWith` plumbing
   is the SDK's.
-- Dismissal landing and cancel: the same constructor with a slightly shorter
-  duration, seeded with the release velocity projected onto the remaining
-  travel. Rotation and translation share the spring's normalised progress so
-  the card lands as one object.
+- Dismissal landing: `ZoomDismissPhysics.landingSpring`, ω = 15 rad/s,
+  ζ = 0.75 (stiffness 225, damping 22.5), fitted to the card's edge on
+  native pans released at rest from 0.55–0.90 of the screen to 0.4–2.9 pt,
+  98 % of the way in 230–270 ms with a 3 % overshoot the card eases back
+  from over the next 300 ms (parity stage 8); edge swipes and pinches land
+  on it too. It is seeded with the release rate over what the landing has
+  left — a pinch's fingers or an edge swipe's speed, never a pan's, which
+  natively lands from rest however it was flung — capped at
+  `maxCommitVelocity` 8 so the landing does not bounce. Rotation and
+  translation share the spring's normalised progress so the card lands as
+  one object.
 - Back swipe release: `BackGestureController.releaseSpring`, ω = 22 rad/s,
   ζ = 0.85, fitted to native releases from seven positions, pop and cancel
   alike (parity stage 2). The page follows the finger after a 12 pt dead
@@ -897,7 +907,9 @@ Flutter terms:
 ### 3.10 Accessibility and platforms
 
 - `MediaQuery.disableAnimationsOf(context)` (Reduce Motion) turns both
-  transitions into a cross-fade of the same duration; gestures still pop.
+  transitions into a cross-fade — the zoom's over `kZoomReduceMotionDuration`,
+  140 ms, as a native page fades in and out (parity stage 8); gestures
+  still pop.
 - The zoomed page keeps `Semantics(scopesRoute: true)` and the dimmed page
   underneath is excluded from semantics while covered, as `ModalRoute` does
   with its barrier.
@@ -1120,9 +1132,16 @@ the route.
 - The shell hoists navigation bar chrome above the navigator and retreats it
   on the covered route's `secondaryAnimation`, freezes it while
   `userGestureInProgress` is true, and plays its own commit animation when the
-  route stops being active. Section 3.1 satisfies all three. This also
-  matches what the recordings show: bar items stay pinned while the zoomed
-  card shrinks, and cross-fade only when the pop commits.
+  route stops being active. Section 3.1 satisfies all three. The native
+  bar itself (parity stage 8) keeps its items pinned above the card, which
+  passes under them, and cross-fades them in place: on a push the back
+  button fades in over the first 140 ms and the title swaps in a 50 ms
+  cross-fade 90 ms in, while a dismissal swaps the bar to the covered
+  page's items 150 ms into the drag and back if it is cancelled. With a
+  `CupertinoNavigationBar` on each page the Cupertino hero flight runs
+  instead, sliding the new title in over the whole flight and switching
+  on the pop rather than the drag; a bar above the navigator is the
+  native shape.
 - The zoom route is non-opaque. An app that decides whether native chrome
   under a route must hide by reading `route.opaque` needs a subclass of
   `ZoomPageRoute` implementing its own "obscures chrome" interface, the same

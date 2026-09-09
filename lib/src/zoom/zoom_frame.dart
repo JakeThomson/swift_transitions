@@ -56,6 +56,11 @@ const double kZoomCrossFadeWindow = 0.55;
 /// Used as the route's barrier curve.
 const Curve kZoomDimmingCurve = Curves.linear;
 
+/// How long the cross-fade takes with Reduce Motion on: a native page
+/// fades in over about 140 ms on the push and out over the same on the
+/// pop, the bar switching with it (parity stage 8).
+const Duration kZoomReduceMotionDuration = Duration(milliseconds: 140);
+
 /// How far a card's top and bottom edges have travelled when its side
 /// edges have travelled [t]. On a native push the card widens a little
 /// ahead of growing tall — its bottom edge reads 0.29 at a third of the
@@ -77,10 +82,11 @@ double zoomPushVerticalProgress(double t) =>
 /// at rest. The vertical edges run a little behind the horizontal ones on
 /// a push and a little ahead on a pop, per [zoomVerticalProgress].
 ///
-/// [sourceRadii] and [screenRadii] are interpolated in the card's own space
-/// (against its interpolated size, not the navigator's), so the visible
-/// radius scales with the card rather than the flight distance. The dim of
-/// the covered route is not part of the frame: it is the route's modal
+/// The corners run straight from [sourceRadii] to [screenRadii] with the
+/// progress: a native card's top-left corner reads 13 pt at the source,
+/// 22 at a quarter of the way, 33 at half and 44 at three quarters, within
+/// 3 pt of this line at every point (parity stage 8). The dim of the
+/// covered route is not part of the frame: it is the route's modal
 /// barrier, driven by the same animation through [kZoomDimmingCurve].
 ZoomFrame zoomFlightFrame({
   required double t,

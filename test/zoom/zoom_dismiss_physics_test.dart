@@ -162,24 +162,27 @@ void main() {
   });
 
   group('commitVelocityFor', () {
-    test('a fling hands the landing the speed it was shrinking at', () {
+    test('a release hands the landing its rate over what is left', () {
       expect(
-        physics.commitVelocityFor(velocity: 400, cardHeight: 400),
-        closeTo(physics.scaleGain, 1e-9),
+        physics.commitVelocityFor(rate: 1, remainingScale: 0.5),
+        closeTo(2, 1e-9),
       );
       expect(
-        physics.commitVelocityFor(velocity: 400, cardHeight: 200),
-        closeTo(2 * physics.scaleGain, 1e-9),
+        physics.commitVelocityFor(rate: 0.6, remainingScale: 0.3),
+        closeTo(2, 1e-9),
       );
     });
 
     test('a flick is capped rather than trusted', () {
-      expect(physics.commitVelocityFor(velocity: 20000, cardHeight: 400), 10);
+      expect(
+        physics.commitVelocityFor(rate: 100, remainingScale: 0.5),
+        physics.maxCommitVelocity,
+      );
     });
 
-    test('nothing is handed over by a release that was not falling', () {
-      expect(physics.commitVelocityFor(velocity: -900, cardHeight: 400), 0);
-      expect(physics.commitVelocityFor(velocity: 900, cardHeight: 0), 0);
+    test('nothing is handed over by a release that was not shrinking', () {
+      expect(physics.commitVelocityFor(rate: -1, remainingScale: 0.5), 0);
+      expect(physics.commitVelocityFor(rate: 1, remainingScale: 0), 0);
     });
   });
 }

@@ -43,6 +43,8 @@ def segments(rows):
 
 
 def remaining(t, omega, zeta, v0):
+    """Fraction of the way still to go at t for a unit spring released from 1
+    with velocity v0 — positive away from the target, negative toward it."""
     if abs(zeta - 1) < 1e-6:
         return (1 + (omega + v0) * t) * np.exp(-omega * t)
     if zeta > 1:

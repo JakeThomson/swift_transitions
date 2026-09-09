@@ -50,7 +50,8 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   ZoomDismissController? _dismiss;
 
   /// What the next pop's simulation is seeded with, in progress units per
-  /// second toward the source: a committed dismissal's release velocity.
+  /// second toward the source: a committed dismissal's release rate over
+  /// what its landing has left.
   double _releaseSeed = 0;
   bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
@@ -80,6 +81,11 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   @override
   Curve get barrierCurve => kZoomDimmingCurve;
 
+  /// The cross-fade's length with Reduce Motion on; the springs set the
+  /// pace otherwise ([createSimulation]).
+  @override
+  Duration get transitionDuration => kZoomReduceMotionDuration;
+
   @override
   ImageFilter? get filter => options.dimmingBlurSigma > 0
       ? ImageFilter.blur(
@@ -94,14 +100,19 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   /// A spring from wherever the controller is: the flight's far end after
   /// a push or a programmatic pop, mid-flight when a push is popped before
-  /// it lands, or the departure frame of a committed dismissal, seeded
-  /// with its release velocity.
+  /// it lands, or the departure frame of a committed dismissal, which
+  /// lands on the dismissal's own spring seeded with its release rate.
   @override
   Simulation? createSimulation({required bool forward}) {
+    if (MediaQuery.maybeOf(navigator!.context)?.disableAnimations ?? false) {
+      // A cross-fade over [transitionDuration], not a flight.
+      return null;
+    }
     final seed = forward ? 0.0 : _releaseSeed;
     _releaseSeed = 0;
+    final landing = !forward && (_departure?.toSource ?? false);
     return SpringSimulation(
-      options.pushSpring,
+      landing ? options.dismissPhysics.landingSpring : options.pushSpring,
       controller!.value,
       forward ? 1 : 0,
       -seed,
@@ -308,8 +319,19 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         }
         changedInternalState();
       },
-      onCommit: (seed) {
-        _releaseSeed = seed;
+      onCommit: (rate) {
+        // The pop's progress runs from the departure frame to the source:
+        // the seed is the rate over what is left, in what is left of the
+        // progress.
+        final source =
+            _flightSource?.rect ?? ZoomPageTransition.fallbackRectFor(screen);
+        _releaseSeed =
+            options.dismissPhysics.commitVelocityFor(
+              rate: rate,
+              remainingScale:
+                  (_departure!.frame.rect.width - source.width) / screen.width,
+            ) *
+            controller!.value;
         navigator.pop();
       },
       onSettled: () {
@@ -323,7 +345,6 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
           changedInternalState();
         }
       },
-      settleSpring: options.pushSpring,
       vsync: navigator,
       flight: flight,
     );

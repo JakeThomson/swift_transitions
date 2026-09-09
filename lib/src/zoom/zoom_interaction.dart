@@ -143,7 +143,6 @@ class ZoomDismissController {
     required this.onRelease,
     required this.onCommit,
     required this.onSettled,
-    required this.settleSpring,
     required TickerProvider vsync,
     this.flight,
   }) : restingProgress = controller.isCompleted ? 1 : controller.value,
@@ -207,17 +206,13 @@ class ZoomDismissController {
   /// Called at release with where the card is departing from.
   final ValueSetter<ZoomDeparture> onRelease;
 
-  /// Called at a committed release, after [onRelease], with what the
-  /// landing spring is seeded with in progress units per second: the route
-  /// pops now and lands on the pop's transition.
+  /// Called at a committed release, after [onRelease], with the rate the
+  /// card was shrinking at in resting sizes per second, for the landing's
+  /// seed: the route pops now and lands on the pop's transition.
   final ValueSetter<double> onCommit;
 
   /// Called once the settle animation completes.
   final VoidCallback onSettled;
-
-  /// The spring a committed dismissal lands on. A cancelled one returns on
-  /// [ZoomDismissPhysics.returnSpring].
-  final SpringDescription settleSpring;
 
   /// The flight the gesture began during, or null on a settled page. The
   /// controller flies [restingFrame] on to full screen itself, so the route
@@ -415,33 +410,30 @@ class ZoomDismissController {
     );
     liveFrame.value = null;
     _retarget(_horizontal, 0, physics.returnSpring);
-    // The rate the shrink was running at, in progress units per second.
-    // A pinch's scale is the fingers' distance over their initial distance,
-    // so its rate needs no gain.
+    // The rate the card was shrinking at, in resting sizes per second: a
+    // pinch's is the fingers' distance over their initial distance. A pan's
+    // does not carry over to the landing — native pans flung at 800 pt/s
+    // landed in the 250–270 ms a rest release takes, where a pinch's
+    // fingers or an edge swipe's speed shortened it.
     final towardTarget = commit ? velocity : -velocity;
-    final seed =
-        switch (gesture) {
-          ZoomGesture.pan => physics.commitVelocityFor(
-            velocity: towardTarget,
-            cardHeight: restingFrame.rect.height,
-          ),
-          ZoomGesture.edgeSwipe => physics.commitVelocityFor(
-            velocity: towardTarget,
-            cardHeight: restingFrame.rect.width,
-          ),
-          ZoomGesture.pinch =>
-            towardTarget <= 0
-                ? 0.0
-                : math.min(
-                    physics.maxCommitVelocity,
-                    towardTarget / _pinchDistance0,
-                  ),
-        } *
-        restingProgress;
+    final rate = switch (gesture) {
+      ZoomGesture.pan =>
+        commit
+            ? 0.0
+            : physics.scaleGain * towardTarget / restingFrame.rect.height,
+      ZoomGesture.edgeSwipe =>
+        physics.scaleGain * towardTarget / restingFrame.rect.width,
+      ZoomGesture.pinch => towardTarget / _pinchDistance0,
+    };
     onRelease(departure);
     if (commit) {
-      onCommit(seed);
+      onCommit(rate);
     } else {
+      // Progress scales with the card, so a resting size per second is
+      // restingProgress per second.
+      final seed =
+          physics.commitVelocityFor(rate: rate, remainingScale: 1) *
+          restingProgress;
       controller.animateWith(
         SpringSimulation(physics.returnSpring, controller.value, 1, seed),
       );

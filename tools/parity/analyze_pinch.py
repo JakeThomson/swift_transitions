@@ -117,11 +117,10 @@ def main():
                 continue
             print(f"                 {float(r['t']) - t_lift:5.3f}  {s1:5.3f}  {turn1:5.1f}   {(1 - s1) / (1 - s0):5.3f}  {turn1 / turn0:5.3f}")
     if landed:
-        l0, t0 = card(last)[0], card(last)[1]
-        if abs(t0 - SOURCE[1]) >= abs(l0 - SOURCE[0]):
-            w, w0, target = boxes[:, 1], t0, SOURCE[1]
-        else:
-            w, w0, target = boxes[:, 0], l0, SOURCE[0]
+        # A landing's art is confounded by the cross-fade, and so is its top
+        # edge, where the copy fades in first; fit the left edge.
+        l0 = card(last)[0]
+        w, w0, target = boxes[:, 0], l0, SOURCE[0]
     else:
         w, w0, target = h, card(last)[3] - card(last)[1], art_h
     if abs(w0 - target) < 5 or len(t) < 5:
@@ -142,7 +141,7 @@ def main():
     best = min(
         (np.sqrt(np.mean((remaining(t + dt, om, z, v) - rem) ** 2)), om, z, v, dt)
         for om in np.arange(8, 40, 0.5) for z in [1.0] + list(np.arange(0.6, 2.0, 0.1))
-        for v in np.arange(-2, 8, 0.5) for dt in np.arange(0, 0.05, 0.008))
+        for v in np.arange(-24, 6, 0.5) for dt in np.arange(0, 0.05, 0.008))
     print(f"  best spring: omega {best[1]:.1f}, zeta {best[2]:.2f}, v0 {best[3]:.1f}, lag {best[4] * 1000:.0f} ms, rms {best[0] * abs(w0 - target):.1f} pt")
 
 

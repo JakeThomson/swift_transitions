@@ -420,7 +420,7 @@ void main() {
     await tester.pumpWidget(testApp(disableAnimations: true));
     await tester.tap(find.text('push'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(const Duration(milliseconds: 70));
 
     expect(find.byType(ZoomTransitionLayer), findsNothing);
     final fade = tester.widget<FadeTransition>(
@@ -429,8 +429,11 @@ void main() {
         matching: find.byType(FadeTransition),
       ),
     );
-    expect(fade.opacity.value, inExclusiveRange(0, 1));
+    // Half way through the native 140 ms.
+    expect(fade.opacity.value, closeTo(0.5, 0.01));
     expect(sourceHidden(tester, 'poster'), isFalse);
+    await tester.pump(const Duration(milliseconds: 70));
+    expect(fade.opacity.value, 1);
   });
 
   testWidgets('a SwiftPageRoute pushed on top slides the zoomed page', (

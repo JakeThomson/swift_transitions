@@ -679,6 +679,80 @@ against `fallbackInset`), the tap on a covered page during a flight
 during flights, and rotation of the device while a card is held (iOS
 lets go; confirm we do something sane).
 
+*Measured 2026-09-09, flat palette, from the stage 3–7 native runs plus
+eight new ones.* The landing first: the stage 4–6 analyzers fitted a
+landing on the art's top edge, which the copy fading in pulls up
+mid-flight, so native's landings from 0.55–0.81 of the screen read as a
+stiff, overdamped spring settling in 340 ms while the short ones read
+ω 15–16, ζ 0.8. Refitted on the left edge (`analyze_landing.py`, whose
+seed is signed toward the target), every native pan landing, released at
+rest or flung at 150–800 pt/s from 0.55–0.90 of the screen, is one
+spring: ω 13.5–17.5, ζ 0.65–0.85, no seed, 0.4–2.9 pt RMS over twenty
+runs, 98 % of the way in 200–270 ms, and it overshoots the source by 3 %
+of the way (6.6 pt on two runs, ζ 0.73) and eases back over the next
+300 ms before the source itself shows. Edge swipes released at rest fit
+ω 10–12, ζ 0.6–0.65 (0.4–1.5 pt) and one spring for all three gestures,
+ω 15 ζ 0.75, holds every rest release to 2.4 pt. Released moving, a
+pinch lands sooner — 117 ms at 800 pt/s a finger, 170 at 400, 165–215 at
+rest — as the fingers' closing rate over the scale still to go, and an
+edge fling at 800 pt/s landed in 100 ms; a flung pan lands in the rest
+ones' time. The package now lands on `landingSpring` (ω 15, ζ 0.75)
+seeded with the release rate over what the landing has left for pinches
+and edge swipes, nothing for pans, capped at 8 in progress per second
+(a seeded linear spring bounces where native's fast landings do not: 8
+trades the last 60 ms for a 3.6 % overshoot). Verified on the rebuilt
+example: pans ω 15.5 ζ 0.75 to 0.4–0.8 pt, 98 % in 202–245 ms (native
+233–270); an edge swipe at rest 213 ms (213); pinches at rest 178–182 ms
+(165–215), at 400 pt/s 168 (170), at 800 pt/s 167 (117, the cap); an edge
+fling 198 ms (100) — the two fast residuals stand.
+
+The corner radius, read by fitting a circle to the card's top-left corner
+(the orange copy early, the white page top late; iOS's continuous corners
+read 13–14 for the poster's 12): native 13 at the source, 16.5 at 0.13 of
+the way, 21.5 at 0.25, 27 at 0.37, 33 at 0.48, 36 at 0.47 on the pop, 44
+at 0.72 and 55 at 0.78 — a straight line from the poster's radius to the
+display's in the flight's progress, which is what `zoomFlightFrame`
+already draws: ours read 17, 19, 21, 24, 28 and 30 at 0.08–0.36, within
+3 pt. No change but the frame's doc.
+
+The bar: natively the bar's items stay pinned above the card, which
+passes under them with its own white top strip showing through, and
+cross-fade in place — on a push the back button fades in over the first
+140 ms and the title swaps in a 50 ms cross-fade 90 ms in; a dismissal
+swaps the bar to the home items 150 ms into the drag and back on a
+cancel; a landing fades the back button out over its 235 ms. With a
+`CupertinoNavigationBar` on each page the Cupertino hero flight runs
+instead, sliding the new title in over the whole flight and switching on
+the pop, a known deviation without an idiomatic hook (the hero's shuttle
+is the bar's own); the status bar zone follows the same split, dimming
+with the covered page natively and white from the first frame under the
+hero. The example's poster bar read blue (221, 239, 252) at rest against
+native's white: `CupertinoNavigationBar` hides its background at the top
+of the scroll, which SwiftUI's does not here, so the example turns
+`automaticBackgroundVisibility` off. The once-over: a tap beside the
+flying card at 0.95 of the screen (as soon as the daemon allows) reached
+the covered page in neither app; the home indicator dims with the page
+in both; neither app blurs the dim by default, and the UIKit
+`dimmingVisualEffect` sample was not built. A pop to a poster four
+swipes along — Quartz, two and a half widths past the row's edge and
+built by neither app's lazy row — flew toward the poster's off-screen
+position natively, the card shrinking off the right edge while the
+Dunes poster faded back in, where ours takes the centred fallback; to
+Nimbus, one width past the edge and inside the example's cache extent,
+both apps fly the card off the right edge toward it, native's gone in
+130 ms and ours in 80. Reduce Motion: native cross-fades the page in over
+about 140 ms on the push and out over the same on the pop, the bar
+switching with it; the example still zoomed with the setting on, before
+and after a simulator reboot, so Flutter's process did not report it
+here — the package's own cross-fade is exercised by its test and now
+runs over `kZoomReduceMotionDuration`, 140 ms, to be confirmed on a
+device. The native app is portrait-only and the
+driver cannot turn the device mid-sequence, so rotation while a card is
+held is the package's reading of the plan's premise alone: a change of
+the window's size lets go — a release at rest, landing or returning to
+the window as it is now, the rest of that touch not a new grab — tested
+in the package, not against native.
+
 ## 9. Sign-off
 
 - One side-by-side video per stage, native left and ours right, both

@@ -108,7 +108,7 @@ def main():
     best = min(
         (np.sqrt(np.mean((remaining(t + dt, om, z, v) - rem) ** 2)), om, z, v, dt)
         for om in np.arange(8, 40, 0.5) for z in [1.0] + list(np.arange(0.6, 2.0, 0.1))
-        for v in np.arange(-2, 8, 0.5) for dt in np.arange(0, 0.05, 0.008))
+        for v in np.arange(-24, 6, 0.5) for dt in np.arange(0, 0.05, 0.008))
     print(f"  best spring: omega {best[1]:.1f}, zeta {best[2]:.2f}, v0 {best[3]:.1f}, lag {best[4] * 1000:.0f} ms, rms {best[0] * abs(w0 - target):.1f} pt")
 
 

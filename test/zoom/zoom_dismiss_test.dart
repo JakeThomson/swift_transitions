@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swift_transitions/src/zoom/zoom_transition_layer.dart';
 import 'package:swift_transitions/swift_transitions.dart';
@@ -216,6 +217,144 @@ void main() {
     expect(route.isActive, isFalse);
     expect(navigator.userGestureInProgress, isFalse);
     expect(sourceHidden(tester), isFalse);
+  });
+
+  testWidgets('a committed release lands on the landing spring', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final route =
+        ModalRoute.of(tester.element(find.text('detail')))!
+            as TransitionRoute<void>;
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    // The pop's simulation is the landing spring from where the controller
+    // is, not the push's.
+    final value = route.animation!.value;
+    final simulation = route.createSimulation(forward: false)!;
+    expect(
+      simulation.x(0.1),
+      closeTo(
+        SpringSimulation(physics.landingSpring, value, 0, 0).x(0.1),
+        1e-6,
+      ),
+    );
+    expect(
+      simulation.x(0.1),
+      isNot(
+        closeTo(
+          SpringSimulation(
+            const ZoomTransitionOptions().pushSpring,
+            value,
+            0,
+            0,
+          ).x(0.1),
+          1e-3,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a pinch released still closing lands sooner', (tester) async {
+    await pushAndSettle(tester, staticDetail);
+    // Closes the fingers from 200 apart to 90 slowly enough for the card to
+    // follow, then either holds them still — the release rate is read from
+    // the last hundred milliseconds of moves — or closes them 30 px more
+    // in 12 ms before the lift, and returns how long the landing takes to
+    // reach 98 % of the way to the source.
+    Future<Duration> landingTime({required bool closing}) async {
+      final first = await tester.startGesture(
+        const Offset(300, 300),
+        pointer: 1,
+      );
+      final second = await tester.startGesture(
+        const Offset(500, 300),
+        pointer: 2,
+      );
+      Future<void> fingersAt(double gap, Duration at) async {
+        await first.moveTo(Offset(400 - gap / 2, 300), timeStamp: at);
+        await second.moveTo(Offset(400 + gap / 2, 300), timeStamp: at);
+        await tester.pump();
+      }
+
+      for (var i = 1; i <= 3; i++) {
+        await fingersAt(200 - 110 * i / 3, Duration(milliseconds: 100 * i));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      Duration lift;
+      if (closing) {
+        await fingersAt(75, const Duration(milliseconds: 306));
+        await fingersAt(60, const Duration(milliseconds: 312));
+        lift = const Duration(milliseconds: 314);
+      } else {
+        await fingersAt(90, const Duration(milliseconds: 500));
+        await fingersAt(90, const Duration(milliseconds: 650));
+        lift = const Duration(milliseconds: 700);
+      }
+      await first.up(timeStamp: lift);
+      await second.up(timeStamp: lift);
+      await tester.pump();
+      final from = cardRect(tester).width;
+      var elapsed = Duration.zero;
+      while (cardRect(tester).width >
+          posterRect.width + 0.02 * (from - posterRect.width)) {
+        await tester.pump(const Duration(milliseconds: 16));
+        elapsed += const Duration(milliseconds: 16);
+        expect(elapsed, lessThan(const Duration(seconds: 1)));
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('detail'), findsNothing);
+      return elapsed;
+    }
+
+    final atRest = await landingTime(closing: false);
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final closing = await landingTime(closing: true);
+    expect(closing, lessThan(atRest - const Duration(milliseconds: 30)));
+  });
+
+  testWidgets('a size change while the card is held lets go', (tester) async {
+    await pushAndSettle(tester, staticDetail);
+    final navigator = navigatorOf(tester);
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump();
+    final held = route.animation!.value;
+    expect(held, lessThan(1));
+
+    // The window turns: a release at rest, short of the threshold here, so
+    // the card returns, to the window as it is now; the finger still down
+    // is not a new grab.
+    tester.view.physicalSize = const Size(1800, 2400);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pump();
+    // The release follows the frame the size change built; its ticker
+    // starts on the next.
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 50));
+    final returning = route.animation!.value;
+    expect(returning, greaterThan(held));
+    await gesture.moveBy(const Offset(0, 200));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(route.animation!.value, greaterThan(returning));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(cardRect(tester), const Rect.fromLTWH(0, 0, 600, 800));
+    expect(navigator.userGestureInProgress, isFalse);
   });
 
   testWidgets('a touch during the landing lets it land', (tester) async {

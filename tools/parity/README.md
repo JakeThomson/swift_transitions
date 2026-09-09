@@ -18,6 +18,7 @@ simulator, and the example built for the simulator
     python3 analyze_catch.py run.csv                    # stage 7: a caught card's stop, hold, resumed flight
     python3 compare_catch.py dir native flutter         # stage 7 side by side, one line per script
     python3 analyze_edge.py run.csv                     # stage 5: an edge swipe's gain, follow, release
+    python3 analyze_landing.py run.csv [...]            # stage 8: the landing spring of any dismissal, one line each
     python3 compare_edge.py dir native flutter          # stage 5 side by side, one line per script
 
 The driver's `Finger` (ParityDriver.swift) runs multi-segment drags
