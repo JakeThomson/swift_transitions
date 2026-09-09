@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -223,6 +222,9 @@ class ZoomDismissController {
       return;
     }
     _travelPixels += delta;
+    // The sideways axis anchors on the move that opens it, which the raw
+    // pointer stream has already delivered, rather than on the next one.
+    _trackHorizontal();
     _publish();
   }
 
@@ -303,16 +305,27 @@ class ZoomDismissController {
     final bool commit;
     if (!getIsCurrent()) {
       commit = !getIsActive();
-    } else if (gesture == ZoomGesture.edgeSwipe) {
-      // Where the card would be after coasting on the release velocity.
-      final projected =
-          _travel +
-          velocity * physics.releaseProjection / restingFrame.rect.width;
-      commit = physics.edgeSwipeScaleFor(projected) < physics.dismissThreshold;
-    } else if (velocity.abs() >= physics.flingVelocity) {
-      commit = velocity > 0;
     } else {
-      commit = scale < physics.dismissThreshold;
+      // Where the card would be after coasting on the release velocity.
+      commit = switch (gesture) {
+        ZoomGesture.pan =>
+          physics.scaleFor(
+                _travel +
+                    velocity *
+                        physics.releaseProjection /
+                        restingFrame.rect.height,
+              ) <
+              physics.panDismissThreshold,
+        ZoomGesture.edgeSwipe =>
+          physics.edgeSwipeScaleFor(
+                _travel +
+                    velocity *
+                        physics.releaseProjection /
+                        restingFrame.rect.width,
+              ) <
+              physics.dismissThreshold,
+        ZoomGesture.pinch => scale < physics.dismissThreshold,
+      };
     }
     if (!commit && controller.value > 1 - _kReturnStart) {
       // The return spring on the route's controller is also the clock the
@@ -433,7 +446,10 @@ class ZoomDismissController {
           pivot.dy + (rest.bottom - pivot.dy) * scale,
         );
         rect = scaled.shift(
-          Offset(_horizontalOffset, delta.dy * physics.edgeSwipeVerticalGain),
+          Offset(
+            _horizontalOffset,
+            physics.crossAxisOffsetFor(delta.dy, width: rest.width),
+          ),
         );
     }
     final progress = restingProgress * scale;
@@ -461,13 +477,13 @@ class ZoomDismissController {
     liveFrame.value = _frame();
   }
 
-  /// Opens the sideways axis once the drag is [kTouchSlop] under way and
-  /// chases the finger offset through the tracking spring: damped at the
-  /// screen's edges for a pan, free for an edge swipe, whose card leaves
-  /// the screen on the far side.
+  /// Opens the sideways axis once the drag is under way and chases the
+  /// finger offset through the tracking spring: rubber-banded for a pan,
+  /// 1:1 for an edge swipe, freely for both — the native card leaves the
+  /// screen on either side.
   void _trackHorizontal() {
     final open = switch (gesture) {
-      ZoomGesture.pan => _travelPixels > kTouchSlop,
+      ZoomGesture.pan => _travelPixels > 0,
       ZoomGesture.edgeSwipe => true,
       ZoomGesture.pinch => false,
     };
@@ -483,21 +499,13 @@ class ZoomDismissController {
     // on the way here does not snap in.
     final origin = _pointerAtOpen ??= _pointer;
     _horizontalRaw = _pointer.dx - origin.dx;
-    if (gesture == ZoomGesture.edgeSwipe) {
-      _retargetHorizontal(_horizontalRaw, physics.trackingSpring);
-      return;
-    }
-    final cardRect = physics.dismissedRect(
-      restingRect: restingFrame.rect,
-      travel: _travel,
-      anchor: _anchor,
-    );
     _retargetHorizontal(
-      physics.horizontalOffsetFor(
-        rawOffset: _horizontalRaw,
-        cardRect: cardRect,
-        screenWidth: screen.width,
-      ),
+      gesture == ZoomGesture.pan
+          ? physics.crossAxisOffsetFor(
+              _horizontalRaw,
+              width: restingFrame.rect.width,
+            )
+          : _horizontalRaw,
       physics.trackingSpring,
     );
   }

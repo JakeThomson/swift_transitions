@@ -1,5 +1,22 @@
 ## 0.1.0-dev
 
+* Match the zoom route's pan to iOS, measured against a native
+  `NavigationStack` zoom (parity stage 4): the card holds still for the
+  platform's slop, shrinks at 0.67 per screen height about the touch point
+  to a knee at 0.52 of the height and eases past it toward 0.37, falls
+  behind the finger by the cube of the travel (0.89 of the finger's travel
+  at half the height, 0.73 at 0.8), follows the
+  finger sideways at 0.56 rubber-banded toward 0.9 of its width (26 pt for
+  a 50 pt sweep, 85 for 195) with no pinning at the screen's edges, and
+  lands from a sixth of the height on, read through the same 120 ms
+  projection as the edge swipe (0.914 at rest sprang back, 0.900 landed).
+  A drag that begins on a scrolled list scrolls it to the top and
+  over-scrolls there instead of turning into a dismissal, as the native
+  page does. `ZoomDismissPhysics` gains `fallLag`, `fallFor`,
+  `crossAxisGain`, `crossAxisLimit` and `crossAxisOffsetFor` (which replace
+  `edgeSwipeVerticalGain`: the edge swipe's vertical follow is the same
+  band as the pan's sideways one) and `panDismissThreshold`, and loses
+  `edgeGive`, `horizontalOffsetFor` and `flingVelocity`.
 * Match the zoom route's edge swipe to iOS, measured against a native
   `NavigationStack` zoom (parity stage 5): the card waits out the back
   swipe's 12 pt dead zone, shrinks at 0.67 per screen width with no knee,

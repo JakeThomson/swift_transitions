@@ -118,13 +118,17 @@ void main() {
       await pushAndSettle(tester, staticDetail);
       final navigator = navigatorOf(tester);
 
+      // The first 18px are the dead zone: the card holds still for them.
       final gesture = await tester.startGesture(const Offset(400, 300));
+      await gesture.moveBy(const Offset(0, 18));
+      await tester.pump();
+      expect(cardRect(tester), screen);
       await gesture.moveBy(const Offset(0, 300));
       await tester.pump();
 
       // 300px down a 600px card is half a card height of travel.
       final scale = physics.scaleFor(0.5);
-      expect(scale, lessThan(physics.dismissThreshold));
+      expect(scale, lessThan(physics.panDismissThreshold));
       expect(cardRect(tester).width, closeTo(800 * scale, 0.5));
       expect(cardRect(tester).height, closeTo(600 * scale, 0.5));
       expect(navigator.userGestureInProgress, isTrue);
@@ -139,10 +143,13 @@ void main() {
     },
   );
 
-  testWidgets('the grabbed content stays under the finger', (tester) async {
+  testWidgets('the grabbed content shrinks about the touch and trails it', (
+    tester,
+  ) async {
     await pushAndSettle(tester, staticDetail);
     const grab = Offset(200, 150);
     final gesture = await tester.startGesture(grab);
+    await gesture.moveBy(const Offset(0, 18));
     await gesture.moveBy(const Offset(0, 120));
     await tester.pump();
 
@@ -150,7 +157,11 @@ void main() {
     final fx = grab.dx / 800;
     final fy = grab.dy / 600;
     expect(rect.left + fx * rect.width, closeTo(grab.dx, 0.5));
-    expect(rect.top + fy * rect.height, closeTo(grab.dy + 120, 0.5));
+    expect(
+      rect.top + fy * rect.height,
+      closeTo(grab.dy + physics.fallFor(120 / 600) * 600, 0.5),
+    );
+    expect(rect.top + fy * rect.height, lessThan(grab.dy + 120));
     await gesture.up();
     await tester.pumpAndSettle();
   });
@@ -160,9 +171,13 @@ void main() {
     final navigator = navigatorOf(tester);
 
     final gesture = await tester.startGesture(const Offset(400, 300));
-    await gesture.moveBy(const Offset(0, 100));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 60));
     await tester.pump();
-    expect(physics.scaleFor(100 / 600), greaterThan(physics.dismissThreshold));
+    expect(
+      physics.scaleFor(60 / 600),
+      greaterThan(physics.panDismissThreshold),
+    );
     expect(cardRect(tester).width, lessThan(800));
 
     await gesture.up();
@@ -181,6 +196,7 @@ void main() {
     final route = ModalRoute.of(tester.element(find.text('detail')))!;
 
     final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
     await gesture.moveBy(const Offset(0, 300));
     await tester.pump();
     await gesture.up();
@@ -206,6 +222,7 @@ void main() {
     final route = ModalRoute.of(tester.element(find.text('detail')))!;
 
     final first = await tester.startGesture(const Offset(400, 300));
+    await first.moveBy(const Offset(0, 18));
     await first.moveBy(const Offset(0, 300));
     await tester.pump();
     await first.up();
@@ -240,6 +257,7 @@ void main() {
     (route as ZoomPageRoute<void>).sourceTag = 'other';
 
     final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
     await gesture.moveBy(const Offset(0, 300));
     await tester.pump();
     await gesture.up();
@@ -259,14 +277,69 @@ void main() {
     tester,
   ) async {
     await pushAndSettle(tester, staticDetail);
+    // 120 ms at 1500 px/s is another 180px on top of the 60, which the
+    // projection reads as past the boundary.
+    expect(
+      physics.scaleFor(60 / 600),
+      greaterThan(physics.panDismissThreshold),
+    );
+    expect(
+      physics.scaleFor((60 + 180) / 600),
+      lessThan(physics.panDismissThreshold),
+    );
     await tester.fling(find.text('detail'), const Offset(0, 60), 1500);
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsNothing);
   });
 
+  testWidgets('a pan follows the finger sideways at a fraction', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 100));
+    await tester.pump();
+    final before = cardRect(tester);
+
+    await gesture.moveBy(const Offset(150, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final after = cardRect(tester);
+    expect(after.size, before.size);
+    expect(
+      after.left - before.left,
+      closeTo(physics.crossAxisOffsetFor(150, width: 800), 0.5),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a pan released moving back up springs back', (tester) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 100));
+    await tester.pump();
+    expect(physics.scaleFor(100 / 600), lessThan(physics.panDismissThreshold));
+    // Three samples for the velocity tracker: 40px up in 20 ms is
+    // 2000 px/s, which projects the card back above the boundary.
+    for (var i = 1; i <= 3; i++) {
+      await gesture.moveBy(
+        const Offset(0, -13),
+        timeStamp: Duration(milliseconds: 6 * i),
+      );
+      await tester.pump();
+    }
+    await gesture.up(timeStamp: const Duration(milliseconds: 20));
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
+
   testWidgets('the release flies from where the card was', (tester) async {
     await pushAndSettle(tester, staticDetail);
     final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
     await gesture.moveBy(const Offset(0, 300));
     await tester.pump();
     final released = cardRect(tester);
@@ -283,34 +356,60 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('a scrolled list scrolls until its top, then hands off', (
+  testWidgets('a drag that begins on a scrolled list never hands off', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, listDetail());
+    final list = tester.state<ScrollableState>(find.byType(Scrollable));
+    await tester.drag(find.text('detail'), const Offset(0, -220));
+    await tester.pumpAndSettle();
+    expect(list.position.pixels, closeTo(200, 1));
+
+    // Down past the top: the list over-scrolls, as the native page does,
+    // and the card stays put.
+    final gesture = await tester.startGesture(const Offset(400, 400));
+    await gesture.moveBy(const Offset(0, 20));
+    await gesture.moveBy(const Offset(0, 200));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    expect(list.position.pixels, lessThan(0));
+    expect(cardRect(tester), screen);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(list.position.pixels, 0);
+    expect(find.text('detail'), findsOneWidget);
+  });
+
+  testWidgets('a drag that begins at the top of a list hands off', (
     tester,
   ) async {
     await pushAndSettle(tester, listDetail());
     final list = tester.state<ScrollableState>(find.byType(Scrollable));
 
     // The list's own recognizer wins the arena and, like any SDK drag, takes
-    // the first move as slop; the moves after it scroll exactly.
+    // the first move as slop; the dismissal counts its dead zone from the
+    // touch all the same.
     final gesture = await tester.startGesture(const Offset(400, 400));
-    await gesture.moveBy(const Offset(0, -20));
-    await gesture.moveBy(const Offset(0, -200));
-    await tester.pump();
-    expect(list.position.pixels, closeTo(200, 1));
-    expect(cardRect(tester), screen);
-
-    await gesture.moveBy(const Offset(0, 200));
-    await tester.pump();
-    expect(list.position.pixels, closeTo(0, 1));
-    expect(cardRect(tester), screen);
-
+    await gesture.moveBy(const Offset(0, 20));
     await gesture.moveBy(const Offset(0, 300));
     await tester.pump();
     expect(list.position.pixels, 0);
-    expect(cardRect(tester).width, closeTo(800 * physics.scaleFor(0.5), 0.5));
+    expect(
+      cardRect(tester).width,
+      closeTo(800 * physics.scaleFor((320 - 18) / 600), 0.5),
+    );
+
+    // Back up above where it was grabbed: the card grows back, the list
+    // does not scroll.
+    await gesture.moveBy(const Offset(0, -350));
+    await tester.pump();
+    expect(list.position.pixels, 0);
+    expect(cardRect(tester), screen);
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(find.text('detail'), findsNothing);
+    expect(find.text('detail'), findsOneWidget);
   });
 
   testWidgets('a pan from the top of a list shrinks the card at once', (
@@ -319,9 +418,12 @@ void main() {
     await pushAndSettle(tester, listDetail());
     final gesture = await tester.startGesture(const Offset(400, 400));
     await gesture.moveBy(const Offset(0, 20));
-    await gesture.moveBy(const Offset(0, 120));
+    await gesture.moveBy(const Offset(0, 60));
     await tester.pump();
-    expect(cardRect(tester).width, closeTo(800 * physics.scaleFor(0.2), 0.5));
+    expect(
+      cardRect(tester).width,
+      closeTo(800 * physics.scaleFor((80 - 18) / 600), 0.5),
+    );
     await gesture.up();
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsOneWidget);
@@ -369,8 +471,9 @@ void main() {
     expect(after.width, closeTo(before.width, 0.001));
     expect(
       after.top - before.top,
-      closeTo(200 * physics.edgeSwipeVerticalGain, 0.5),
+      closeTo(physics.crossAxisOffsetFor(200, width: 800), 0.5),
     );
+    expect(after.top - before.top, lessThan(200 * physics.crossAxisGain));
     await gesture.up();
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsOneWidget);
@@ -471,7 +574,8 @@ void main() {
     final route = ModalRoute.of(tester.element(find.text('detail')))!;
 
     final first = await tester.startGesture(const Offset(400, 300));
-    await first.moveBy(const Offset(0, 100));
+    await first.moveBy(const Offset(0, 18));
+    await first.moveBy(const Offset(0, 50));
     await tester.pump();
     await first.up();
     await tester.pump();
@@ -588,13 +692,13 @@ void main() {
       const Offset(400, 480),
       pointer: 2,
     );
-    await second.moveTo(const Offset(400, 330));
+    await second.moveTo(const Offset(400, 380));
     await first.moveTo(const Offset(400, 230));
     await tester.pump();
 
-    // The fingers closed from 300 to 100 apart; the list did not scroll
+    // The fingers closed from 300 to 150 apart; the list did not scroll
     // with either of them.
-    expect(cardRect(tester).width, closeTo(800 / 3, 0.5));
+    expect(cardRect(tester).width, closeTo(400, 0.5));
     expect(list.position.pixels, closeTo(200, 1));
 
     await first.up();
@@ -606,16 +710,17 @@ void main() {
   testWidgets('a second finger turns a pan into a pinch', (tester) async {
     await pushAndSettle(tester, staticDetail);
     final first = await tester.startGesture(const Offset(400, 200), pointer: 1);
+    await first.moveBy(const Offset(0, 18));
     await first.moveBy(const Offset(0, 100));
     await tester.pump();
     final panned = cardRect(tester);
     expect(panned.width, closeTo(800 * physics.scaleFor(100 / 600), 0.5));
 
     final second = await tester.startGesture(
-      const Offset(400, 550),
+      const Offset(400, 568),
       pointer: 2,
     );
-    await second.moveTo(const Offset(400, 425));
+    await second.moveTo(const Offset(400, 443));
     await tester.pump();
 
     // 250 apart to 125 apart: half the size the pan left the card at.
@@ -640,6 +745,7 @@ void main() {
       ),
     );
     final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
     await gesture.moveBy(const Offset(0, 300));
     await tester.pump();
     expect(asked?.gesture, ZoomGesture.pan);

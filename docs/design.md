@@ -111,20 +111,27 @@ scaled card that follows the finger, the page underneath is visible at full
 scale with a light dim, and the navigation bar items stay pinned at the top of
 the screen at full size.
 
-**Pan down anywhere** (`drag.mov`). A downward drag anywhere on the page
-content starts the dismissal immediately: the page scales down about its
-touch point and translates with the finger. Scale is a function of drag
-distance and keeps decreasing as the finger moves; near the bottom of the
-screen the card is about 45 % of its width. The page in the recording was
-scrolled to the top; on a scrolled page iOS lets the scroll view consume the
-drag until it reaches its top edge.
+**Pan down anywhere** (`drag.mov`; parity stage 4). A downward drag on the
+page content starts the dismissal after the platform's slop (the card holds
+still for the first 16–20 pt): the page scales down about its touch point,
+linearly at 0.67 per screen height to a knee at half the height and eased
+past it (0.545 at 0.8 of the height; a floor near 0.37 is implied), and
+falls with the finger — behind it by the cube of the travel: 0.89 of the
+finger's travel at half the height, 0.73 at 0.8. Sideways it follows
+at 0.56 of the finger at first and less as it goes (26 pt for 50, 85 for
+195), freely, off either side of the screen. A release
+lands from a sixth of the height on (0.914 at rest sprang back, 0.900
+landed). A drag that begins on a scrolled page scrolls it to its top and
+over-scrolls there; it never becomes a dismissal, and a drag 12 pt under
+the bar does nothing.
 
 **Edge back swipe** (`back.mov`; parity stage 5). Dragging from the leading
 edge does not slide the page. It shrinks it about the grabbed point, with
 scale driven by horizontal distance past a 12 pt dead zone (0.67 per screen
 width, no knee to at least 0.56 of the width), and the card follows the
 finger sideways 1:1 — off the far side of the screen if the finger goes
-that far — and vertically at 0.43 of the finger's movement. A cancelled
+that far — and vertically through the pan's cross-axis band (86 pt for a
+200 pt drop). A cancelled
 release returns on the back swipe's spring (ω 22, ζ 0.9).
 
 **Pinch** (`pinch.mp4`). Two fingers scale the page with the pinch, rotate it
@@ -157,7 +164,7 @@ grab the card at any time during any animation.
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale during dismissal | 1.0 | no scale-down of the page underneath |
 | Landing from near the target | ~0.2 s | `drag_land` strip |
-| Fitted sheet model applied to a screen-sized card | 0.60 at 0.7 screen heights, 0.55 at the most a finger can travel | `ZoomDismissPhysics.ios26`, section 3.4; cannot reach the 0.42 observed, see the calibration note there |
+| Pan scale on a screen-sized card | 0.812 at 0.3 screen heights, 0.678 at 0.5, 0.545 at 0.8 | `ZoomDismissPhysics.ios26`, section 3.4; parity stage 4 (the 0.42 of `drag.mov` was a long, wandering drag) |
 
 ### 1.5 Apple's API surface
 
@@ -297,20 +304,22 @@ class ZoomTransitionOptions {
 /// The fitted response of the interactive dismissal. One value object so the
 /// numbers that were measured together stay together.
 ///
-/// The defaults are the iOS 26 fit from liquid_glass_widgets' swipe-dismiss
-/// morph (`SheetMorphGeometry`), measured against native captures to an RMS
-/// scale error of 0.006. Section 3.4 explains each term.
+/// The shape is the iOS 26 fit from liquid_glass_widgets' swipe-dismiss
+/// morph (`SheetMorphGeometry`); the numbers are the parity rig's, stages 4
+/// and 5. Section 3.4 explains each term.
 class ZoomDismissPhysics {
   const ZoomDismissPhysics({
     this.scaleGain = 0.67,        // scale lost per card height (width, for the edge swipe) of travel
-    this.travelKnee = 0.48,       // card heights of 1:1 travel before easing (pan only)
-    this.minimumScale = 0.33,     // the floor the eased travel asymptotes to
-    this.edgeGive = 0.04,         // fraction of screen width of give at an edge (pan only)
-    this.edgeSwipeVerticalGain = 0.43, // card movement per point of finger movement up or down
+    this.travelKnee = 0.52,       // card heights of linear shrink before easing (pan only)
+    this.minimumScale = 0.37,     // the floor the eased travel asymptotes to
+    this.fallLag = 0.45,          // card heights the fall trails by per cubed card height of travel (pan only)
+    this.crossAxisGain = 0.56,    // card movement per point of finger movement across the gesture's axis, at first
+    this.crossAxisLimit = 0.9,    // card widths the cross-axis follow is rubber-banded toward
     this.trackingSpring = const SpringDescription(mass: 1, stiffness: 2000, damping: 89),
     this.returnSpring = const SpringDescription(mass: 1, stiffness: 484, damping: 39.6), // ω 22, ζ 0.9
-    this.dismissThreshold = 0.70, // card scale below which a release dismisses (0.715 sprang back, 0.678 landed)
-    this.flingVelocity = 700.0,   // logical px/s
+    this.panDismissThreshold = 0.905, // card scale below which a pan's release dismisses (0.914 sprang back, 0.900 landed)
+    this.dismissThreshold = 0.70, // the same for an edge swipe or pinch (0.715 sprang back, 0.678 landed)
+    this.releaseProjection = 0.12, // seconds of release velocity a release is projected by
     this.maxCommitVelocity = 10.0, // progress units/s the commit spring may be seeded with
   });
   static const ios26 = ZoomDismissPhysics();
@@ -563,57 +572,57 @@ progress. The route's `controller.value` is set to the scale-derived
 progress each frame so that everything else in the framework (secondary
 animations, shells, Hero) sees a consistent scalar.
 
-**The pan response is already fitted.** liquid_glass_widgets' swipe-dismiss
-morph (PR #223, `SheetMorphGeometry`) reproduces the iOS 26 zoom dismissal
-from a cursor-tracked native capture, to an RMS scale error of 0.006, and
-its author is this package's author, so it is ported rather than
-re-derived. The model, in `ZoomDismissPhysics` terms:
+**The pan response.** The shape is liquid_glass_widgets' swipe-dismiss
+morph (PR #223, `SheetMorphGeometry`), which reproduced the iOS 26 zoom
+dismissal of a sheet from a cursor-tracked capture; its author is this
+package's author, so it was ported rather than re-derived, and the parity
+rig (parity-plan.md stage 4) then measured its constants for a full-screen
+page and found one term the sheet fit did not have. The model, in
+`ZoomDismissPhysics` terms:
 
-- Travel is measured in *card heights* (the card here is the whole page, so
-  one card height is the screen height). It is direct manipulation up to
-  `travelKnee` (0.48), then rubber-banded with iOS's over-scroll curve
+- The pan waits out the platform's slop (`kTouchSlop`, 18 px; natively the
+  card holds still for the first 16–20 pt), counted from the touch in the
+  gesture layer because a recognizer alone in its arena wins at the touch.
+- Travel past it is measured in *card heights* (the card here is the whole
+  page, so one card height is the screen height). The shrink is linear up
+  to `travelKnee` (0.52), then rubber-banded with iOS's over-scroll curve
   `f(x) = (1 − 1/(x/limit + 1)) · limit` toward the travel at which the scale
-  would reach `minimumScale` (0.33). A long drag parks the card instead of
-  sliding it off screen; it never quite stops shrinking.
+  would reach `minimumScale` (0.37). A long drag parks the card instead of
+  sliding it off screen; it never quite stops shrinking. Natively: 0.812 at
+  0.3 of the height, 0.678 at 0.5, 0.545 at 0.8; the fit is 0.002 RMS.
 - Scale is linear in the *damped* travel: `1 − scaleGain · travel`, with
-  `scaleGain` 0.67. All easing lives in the travel, so shrink and fall settle
-  as one object.
-- The shrink pivots on the grabbed point carried down with the fall, so the
-  content under the finger stays under the finger. With the gain below 1.0
+  `scaleGain` 0.67.
+- The shrink pivots on the grabbed point, carried down by the *fall*: the
+  travel less `fallLag` (0.45) times its cube, so the content under the
+  finger rides with it for the first third of the height and then trails —
+  0.89 of the finger's travel at half the height, 0.73 at 0.8. The native
+  page's top sat within 4 pt of this at every held position from a grab
+  just under the bar to one low on the page; a rubber band on the travel
+  was 8 pt out at 30 % and 20 at 80 %. With the gain below 1.0
   per card height the fall always outruns the shrink, so the card's bottom
   edge cannot lift into view.
-- The sideways axis opens once the drag is `kTouchSlop` under way. The card
-  does not copy the finger's x; it chases the *damped* finger offset through
-  a stiff, critically damped tracking spring (ω ≈ 45, sized from a 12–24 pt
-  trail at a 535 pt/s sweep), so fast sweeps visibly trail and slow drags
-  read 1:1. The offset is free while the card has room and pinned at the
-  screen edge with `edgeGive` (4 % of the width, the largest native
-  overshoot measured). Sideways movement only translates; a 143 pt sweep
-  changed the native card's scale by 0.029, all attributable to vertical
-  drift. On release the same chase is retargeted home on `returnSpring`,
-  carrying its momentum. The chase is integrated by hand on one `Ticker`,
-  because `animateWith` restarts its clock on every retarget.
+- The sideways axis opens with the drag, anchored on the move that opens
+  it. The card does not copy the finger's x; it chases the finger's offset
+  rubber-banded at `crossAxisGain` (0.56) toward `crossAxisLimit` (0.9 of
+  the card's width) through a stiff, critically damped tracking spring
+  (ω ≈ 45), so fast sweeps visibly trail — natively a held card moved 26 pt
+  for a 50 pt sweep, 49 for 100, 69 for 150 and 85 for 195, either way, off
+  the screen's edge with no give; the same band gives the edge swipe's
+  vertical follow (86 for 200, 99 for 240). Sideways movement only
+  translates; the native scale and height did not change by a point.
+  On release the same chase is retargeted home on `returnSpring`, carrying
+  its momentum. The chase is integrated by hand on one `Ticker`, because
+  `animateWith` restarts its clock on every retarget.
 - The rendered transform is *derived from* the geometry function that also
   hands the release frame to the commit flight, and a render-versus-geometry
   equivalence test locks them together.
 
-Cross-check against this package's own recording, with the page as the
-card: the model gives about 0.60 at 0.7 screen heights of travel and about
-0.55 at the most a finger can travel, while `drag.mov` measures about 0.54
-mid-drag and about 0.42 at the end of a long, wandering drag. The shape
-matches; the normaliser does not. The sheet fit found one *card-relative*
-gain explained panels of different heights, so the open question for the
-full-page case is what iOS treats as the card height (the page, the page
-minus its bar, or something else), or whether the gain itself differs. That
-fit is an M3 task using the same method as the sheet's: `drag.mov` was
-captured through iPhone Mirroring and shows the cursor, so the finger can be
-tracked frame by frame. `scaleGain`, `travelKnee` and `minimumScale` are
-parameters for exactly this reason. The edge swipe was calibrated on the
-parity rig (parity-plan.md stage 5): it has no knee — the card shrinks at
-`scaleGain` per screen width all the way, and a finger cannot travel far
-enough to reach the floor — measured past the same 12 pt dead zone as the
-back swipe. The pinch uses the recognizer's scale and rotation directly,
-clamped to `minimumScale`.
+The edge swipe was calibrated on the same rig (stage 5): it has no knee —
+the card shrinks at `scaleGain` per screen width all the way, and a finger
+cannot travel far enough to reach the floor — measured past the same 12 pt
+dead zone as the back swipe, and it does not fall; it follows the finger
+up or down at `crossAxisGain` instead. The pinch uses the recognizer's
+scale and rotation directly, clamped to `minimumScale`.
 
 **Rendering** of a `ZoomFrame`:
 
@@ -718,7 +727,10 @@ Details that matter:
   drag to the dismissal when the list is at its top edge and otherwise
   scrolls, and `goBallistic` hands the release velocity across. This is the
   SDK's `CupertinoSheetRoute` mechanism, so pages that already use the sheet
-  pattern need no changes. Pages with their own controllers can read
+  pattern need no changes — with one departure from the sheet: only a drag
+  that *began* at the top hands across. A drag that begins on a scrolled
+  list scrolls it to the top and over-scrolls there, which is what the
+  native page does (parity stage 4). Pages with their own controllers can read
   `ZoomPageRoute.of(context).scrollController` or gate dismissal in
   `interactiveDismissShouldBegin` using the scroll metrics in the context.
 - **Pinch arena.** Scrollables accept a pointer as soon as it moves past the
@@ -728,11 +740,15 @@ Details that matter:
   drag to cancel through the same `_dragCancelCallback` hook the sheet keeps.
   This is the riskiest part of the package and gets a spike before
   implementation (section 6, M4).
-- **Release rules.** Dismiss if the card's scale is below
-  `dismissThreshold`, or if the release velocity points away from the
-  identity state (downwards for a pan, trailing for a swipe, contracting for
-  a pinch) faster than `flingVelocity`. Otherwise cancel. Both outcomes use
-  springs seeded with the release velocity so there is no visible kink. The
+- **Release rules.** A pan or edge swipe is projected `releaseProjection`
+  (120 ms) ahead on its release velocity, and dismisses if the card's scale
+  there is below its threshold: `panDismissThreshold` (0.905, a sixth of the
+  height) for the pan, `dismissThreshold` (0.70) for the edge swipe and, for
+  now, the pinch, which is read at rest. So a short flick lands, a pull
+  back up past the boundary springs back, and a card released moving up
+  from well past it still lands, as natively. Otherwise cancel. Both
+  outcomes use springs seeded with the release velocity so there is no
+  visible kink. The
   commit seed is the rate the shrink was running at, converted to progress
   units (`scaleGain · v / cardHeight`), capped at `maxCommitVelocity` and
   never slower than the resting spring's own start, so a flick hurries the
@@ -774,9 +790,8 @@ As implemented (M3), with the departures from the sketch above:
 - The edge swipe waits out a 12 pt dead zone, then shrinks by horizontal
   travel over the card's width about the grabbed point and follows the
   finger: sideways 1:1 through the tracking spring with no pinning (the
-  native card runs off the far side of the screen), up or down at
-  `edgeSwipeVerticalGain` of the finger's movement (natively a 200 pt drop
-  moved the card 86 pt). Its controller is fed from the edge recognizer
+  native card runs off the far side of the screen), up or down through
+  the pan's cross-axis band (natively a 200 pt drop moved the card 86 pt). Its controller is fed from the edge recognizer
   rather than the raw pointer stream, which runs a move ahead of the
   recognizer and would see the dead zone late. Radii under the finger
   interpolate in the card's own space and scale with the card, which lands
@@ -912,8 +927,8 @@ on implementation details.
   centre scale-and-fade.
 - **Interaction.** Pan down from the top of a scrolled-to-top list shrinks
   the card and pops on release past the threshold; the same pan on a list
-  scrolled down scrolls instead until the top is reached, then hands off; a
-  short pan cancels and restores identity; edge swipe drives scale; pinch
+  scrolled down scrolls instead and over-scrolls at the top, never handing
+  off; a short pan cancels and restores identity; edge swipe drives scale; pinch
   with `TestGesture` on two pointers scales and rotates; every path calls
   `didStartUserGesture` and `didStopUserGesture` exactly once.
 - **Interrupt.** A pointer down during a push stops the controller and a
@@ -1107,8 +1122,7 @@ the route.
   from `UIScreen._displayCornerRadius`, reproduced in section 3.2.
 - sdegenaar/liquid_glass_widgets: PR #223 "morph swipe-dismissals back into
   the trigger" (`SheetMorphGeometry.dismissedRect`, `dampedDismissTravel`,
-  `dismissScale`, `rubberBand`, `horizontalOffsetFor`, and the presenter's
-  tracking chase), its follow-up commit `ee2b97f` (`closeVelocityFor`, RTL
+  `dismissScale`, `rubberBand`, and the presenter's tracking chase), its follow-up commit `ee2b97f` (`closeVelocityFor`, RTL
   symmetry) on the `feat/modal-sheet-swipe-follow-ups` branch, and PR #256's
   scroll handover. Same author as this package; ported with attribution.
 - exeshka/swiftuikit 0.2.1: `zoom_route.dart` and `page_transitions.dart`,

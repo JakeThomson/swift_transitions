@@ -11,6 +11,8 @@ simulator, and the example built for the simulator
     python3 extract.py out.mov frames/                  # timestamped PNG frames
     python3 track.py frames/ out.csv                    # colour-class boxes per frame
     python3 compare.py native.csv ours.csv card_w       # RMS / timing / plot
+    python3 analyze_pan.py run.csv                      # stage 4: a pan's scale, pivot, follow, release
+    python3 compare_pan.py dir native flutter           # stage 4 side by side, one line per script
     python3 analyze_edge.py run.csv                     # stage 5: an edge swipe's gain, follow, release
     python3 compare_edge.py dir native flutter          # stage 5 side by side, one line per script
 

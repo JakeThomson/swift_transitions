@@ -19,9 +19,14 @@ void main() {
 
     test('the measured linear region is untouched by the easing', () {
       expect(
-        physics.scaleFor(0.48),
-        closeTo(1 - physics.scaleGain * 0.48, 1e-9),
+        physics.scaleFor(0.49),
+        closeTo(1 - physics.scaleGain * 0.49, 1e-9),
       );
+    });
+
+    test('the native page held at 0.8 of its height', () {
+      // 0.545 natively; the knee and floor were fitted to this point.
+      expect(physics.scaleFor(0.78), closeTo(0.545, 0.01));
     });
 
     test('eases toward the floor without reaching it', () {
@@ -31,13 +36,22 @@ void main() {
       expect(physics.scaleFor(1), greaterThan(far));
     });
 
-    test('the fall eases instead of sliding off under the finger', () {
+    test('the shrink eases instead of sliding off under the finger', () {
       expect(physics.dampedTravel(0.1), closeTo(0.1, 1e-9));
-      expect(physics.dampedTravel(0.48), closeTo(0.48, 1e-9));
+      expect(physics.dampedTravel(0.52), closeTo(0.52, 1e-9));
       final long = physics.dampedTravel(2);
-      expect(long, greaterThan(0.48));
+      expect(long, greaterThan(0.52));
       expect(long, lessThan(physics.maximumTravel));
-      expect(long, lessThan(0.48 * 2));
+      expect(long, lessThan(0.52 * 2));
+    });
+
+    test('the fall trails the finger hardly at all, then more and more', () {
+      // The native page's top sat 0.99 of the finger's travel past the
+      // dead zone down at a tenth of the height, 0.89 at half, 0.73 at 0.8.
+      expect(physics.fallFor(0.1) / 0.1, closeTo(1.0, 0.01));
+      expect(physics.fallFor(0.5) / 0.5, closeTo(0.89, 0.01));
+      expect(physics.fallFor(0.8) / 0.8, closeTo(0.73, 0.02));
+      expect(physics.fallFor(3), greaterThanOrEqualTo(physics.fallFor(1)));
     });
   });
 
@@ -61,64 +75,17 @@ void main() {
     });
   });
 
-  group('horizontalOffsetFor', () {
-    // A card against the left edge of a 400-wide screen: room to its right,
-    // none to its left.
-    const card = Rect.fromLTRB(0, 500, 200, 800);
-
-    test('free travel until the card reaches the edge it is heading for', () {
+  group('crossAxisOffsetFor', () {
+    test('follows at the gain at first and trails more as it goes', () {
+      // The native card on a 402 pt page: 26 pt for a 50 pt sweep, 85 for
+      // 195; 86 for a 200 pt drop during an edge swipe.
+      expect(physics.crossAxisOffsetFor(50, width: 402), closeTo(26, 1.5));
+      expect(physics.crossAxisOffsetFor(195, width: 402), closeTo(85, 1.5));
+      expect(physics.crossAxisOffsetFor(200, width: 402), closeTo(86, 1.5));
       expect(
-        physics.horizontalOffsetFor(
-          rawOffset: 150,
-          cardRect: card,
-          screenWidth: 400,
-        ),
-        150,
+        physics.crossAxisOffsetFor(-100, width: 402),
+        -physics.crossAxisOffsetFor(100, width: 402),
       );
-    });
-
-    test('resists immediately when there is nowhere to go', () {
-      final damped = physics.horizontalOffsetFor(
-        rawOffset: -150,
-        cardRect: card,
-        screenWidth: 400,
-      );
-      expect(damped, greaterThan(-150));
-      expect(damped, lessThan(0));
-    });
-
-    test('past the edge it rubber-bands rather than stopping', () {
-      final justPast = physics.horizontalOffsetFor(
-        rawOffset: 260,
-        cardRect: card,
-        screenWidth: 400,
-      );
-      final wellPast = physics.horizontalOffsetFor(
-        rawOffset: 600,
-        cardRect: card,
-        screenWidth: 400,
-      );
-      expect(justPast, greaterThan(200));
-      expect(wellPast, greaterThan(justPast));
-      expect(wellPast - justPast, lessThan(340));
-    });
-
-    test('mirrors exactly, so RTL needs no flip', () {
-      const mirrored = Rect.fromLTRB(200, 500, 400, 800);
-      for (final offset in <double>[40, 150, 260, 600]) {
-        expect(
-          physics.horizontalOffsetFor(
-            rawOffset: -offset,
-            cardRect: mirrored,
-            screenWidth: 400,
-          ),
-          -physics.horizontalOffsetFor(
-            rawOffset: offset,
-            cardRect: card,
-            screenWidth: 400,
-          ),
-        );
-      }
     });
   });
 
@@ -142,7 +109,7 @@ void main() {
       expect(swept.center.dy, closeTo(straight.center.dy, 1e-9));
     });
 
-    test('the grabbed point stays exactly under the finger', () {
+    test('the grabbed point rides just behind the finger', () {
       const grab = Offset(100, 300);
       const travel = 0.15;
       final swiped = physics.dismissedRect(
@@ -155,7 +122,7 @@ void main() {
       expect(swiped.left + fx * swiped.width, closeTo(grab.dx, 1e-9));
       expect(
         swiped.top + fy * swiped.height,
-        closeTo(grab.dy + travel * resting.height, 1e-9),
+        closeTo(grab.dy + physics.fallFor(travel) * resting.height, 1e-9),
       );
       expect(
         swiped.width,
@@ -169,7 +136,6 @@ void main() {
         const Offset(200, 800),
         const Offset(200, -300),
       ]) {
-        var previousBottom = -double.infinity;
         for (final travel in <double>[0, 0.05, 0.1, 0.2, 0.4, 1]) {
           final swiped = physics.dismissedRect(
             restingRect: resting,
@@ -177,8 +143,6 @@ void main() {
             anchor: grab,
           );
           expect(swiped.bottom, greaterThanOrEqualTo(resting.bottom - 1e-9));
-          expect(swiped.bottom, greaterThanOrEqualTo(previousBottom));
-          previousBottom = swiped.bottom;
         }
       }
     });

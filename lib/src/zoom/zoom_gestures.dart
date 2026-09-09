@@ -20,6 +20,13 @@ const double _kEdgeSwipeWidth = 20.0;
 /// the gesture.
 const double _kEdgeDeadZone = 12.0;
 
+/// How far a pan travels before the card moves: the native card holds
+/// still for the first 16–20 pt of a drag (parity stage 4), the platform's
+/// slop. Waited out here rather than through the recognizer's own slop,
+/// because a recognizer alone in its arena wins at the touch and sees
+/// every move from the first pixel.
+const double _kPanDeadZone = kTouchSlop;
+
 /// Installs the dismissal gestures over a zoom route's page.
 ///
 /// Three inputs feed one [ZoomDismissController]: a vertical drag
@@ -89,12 +96,18 @@ class _ZoomDismissGestureDetectorState
   /// which is how an interrupted push is grabbed before any recognizer has
   /// resolved.
   bool _pointerDriven = false;
-  Offset? _lastPointer;
 
   /// How far the live edge swipe has travelled, for the dead zone, and
   /// where it went down.
   double _edgeDragged = 0;
   Offset _edgeDown = Offset.zero;
+
+  /// Where the finger a pan may start from went down and where it is now,
+  /// and how far the live pan has travelled, for its dead zone. The card
+  /// shrinks about the touch point, not about where the dead zone ends.
+  Offset _panDown = Offset.zero;
+  Offset _lastPointer = Offset.zero;
+  double _panDragged = 0;
 
   /// Every finger on the page, by pointer id, in navigator coordinates.
   final Map<int, Offset> _pointers = <int, Offset>{};
@@ -105,9 +118,8 @@ class _ZoomDismissGestureDetectorState
   @override
   void initState() {
     super.initState();
-    // Started from the pointer-down position, so the card takes up the
-    // slop distance rather than losing it: direct manipulation from the
-    // first pixel.
+    // Started from the pointer-down position: the dead zone is counted
+    // from the touch, and the scroll handoff's slop is its own.
     _panRecognizer = VerticalDragGestureRecognizer(debugOwner: this)
       ..dragStartBehavior = DragStartBehavior.down
       ..onStart = _handlePanStart
@@ -137,8 +149,18 @@ class _ZoomDismissGestureDetectorState
       ..isCardDragged = () => false;
   }
 
+  /// Feeds the pan past its dead zone. Travel back up through the dead
+  /// zone counts against it again, so a card dragged down and back up
+  /// returns to rest where the finger started.
   void _handlePanUpdate(DragUpdateDetails details) {
-    _controller?.dragUpdate(details.primaryDelta!);
+    final before = _panDragged;
+    _panDragged += details.primaryDelta!;
+    if (_panDragged <= _kPanDeadZone && before <= _kPanDeadZone) {
+      return;
+    }
+    _controller?.dragUpdate(
+      math.max(_panDragged, _kPanDeadZone) - math.max(before, _kPanDeadZone),
+    );
   }
 
   void _handlePanEnd(DragEndDetails details) {
@@ -185,10 +207,14 @@ class _ZoomDismissGestureDetectorState
   /// so an ordinary scroll never counts as a navigator gesture.
   void _handleScrollDragUpdate(double delta) {
     if (_controller == null && !_pointerDriven) {
-      final pointer = _lastPointer;
-      if (pointer == null || !_begin(ZoomGesture.pan, pointer)) {
+      if (!_begin(ZoomGesture.pan, _panDown)) {
         return;
       }
+      // The scroll view kept its slop, and its physics' motion threshold
+      // the first few pixels after it; the card counts its dead zone from
+      // the touch, as the pan does, so the first delta catches up.
+      final travelled = _lastPointer.dy - _panDown.dy;
+      _controller?.dragUpdate(math.max(0, travelled - _kPanDeadZone - delta));
     }
     _controller?.dragUpdate(delta);
   }
@@ -254,7 +280,8 @@ class _ZoomDismissGestureDetectorState
     if (_pointerDriven) {
       return;
     }
-    _begin(ZoomGesture.pan, details.globalPosition);
+    _panDragged = 0;
+    _begin(ZoomGesture.pan, _panDown);
   }
 
   void _handleEdgeStart(DragStartDetails details) {
@@ -280,6 +307,7 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    _panDown = event.position;
     _lastPointer = event.position;
     _pointers[event.pointer] = _toNavigator(event.position);
     if (widget.pinch && _pointers.length == 2 && _pinchPointers == null) {
@@ -300,7 +328,6 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handleEdgePointerDown(PointerDownEvent event) {
-    _lastPointer = event.position;
     if (widget.edgeSwipe) {
       _edgeRecognizer.addPointer(event);
     }
@@ -416,7 +443,10 @@ class _ZoomDismissGestureDetectorState
 ///
 /// The mechanism is the SDK's `CupertinoSheetRoute` one: the position
 /// diverts `applyUserOffset` to the dismissal while the list is at its top
-/// (or the card is already dragged) and scrolls otherwise.
+/// (or the card is already dragged) and scrolls otherwise — but only for a
+/// drag that began at the top. A drag that begins on a scrolled list
+/// scrolls it to the top and over-scrolls there, as the native page does
+/// (parity stage 4); it never becomes a dismissal.
 class ZoomScrollController extends ScrollController {
   /// Creates the scroll controller for a zoom route's page.
   ZoomScrollController({super.initialScrollOffset, super.debugLabel});
@@ -475,6 +505,10 @@ class _ZoomScrollPosition extends ScrollPositionWithSingleContext {
   final ZoomScrollController controller;
   VoidCallback? _dragCancelCallback;
 
+  /// Whether the live drag began with the list at its top, the only kind
+  /// that can hand across.
+  bool _dragFromTop = false;
+
   bool get _listShouldScroll => pixels > 0.0;
 
   @override
@@ -489,7 +523,9 @@ class _ZoomScrollPosition extends ScrollPositionWithSingleContext {
 
   @override
   void applyUserOffset(double delta) {
-    if (!_listShouldScroll && (delta > 0 || controller.isCardDragged())) {
+    if (_dragFromTop &&
+        !_listShouldScroll &&
+        (delta > 0 || controller.isCardDragged())) {
       controller.onDragUpdate?.call(delta);
     } else {
       super.applyUserOffset(delta);
@@ -519,6 +555,7 @@ class _ZoomScrollPosition extends ScrollPositionWithSingleContext {
   @override
   Drag drag(DragStartDetails details, VoidCallback dragCancelCallback) {
     _dragCancelCallback = dragCancelCallback;
+    _dragFromTop = !_listShouldScroll;
     return super.drag(details, dragCancelCallback);
   }
 

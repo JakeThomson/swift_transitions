@@ -414,6 +414,47 @@ cancels; `dismissThreshold` and `flingVelocity` from the table.
 horizontal lag and edge give match, landing and return curves match for
 rest and fling releases, and the outcome table agrees.
 
+*Measured 2026-09-09, flat palette, twenty-six native runs.* Scripted
+with the stage 5 synthesizer: straight drags from (201, 160) to 15–80 %
+of the height at 150–800 pt/s, the first 20 pt at 300; sideways sweeps
+of 50–195 pt after a 30 % drop; grabs 12 pt under the bar (nothing
+happens natively) and 30 pt under it, and one low on the page; a drag on
+the scrolled page. The native card: still for the first 16–20 pt (the
+platform's slop), then scaled about the touch point at 1 − 0.67 ×
+travel/height, linear to 0.49 of the height (0.693) and eased past a
+knee — 0.545 at 0.8 — which the sheet model's knee-and-floor fits at
+0.52 and 0.37 to 0.002 RMS; the 0.42 in `drag.mov` was a long, wandering
+drag. The touch point falls behind the finger by the cube of the travel
+past the slop (0 pt at 0.13 of the height, 9 at 0.28, 39 at 0.48, 185 at
+0.78; a rubber band on the travel is 8 pt out at 30 % and 20 at 80 %).
+Sideways the card moves 26 pt for a 50 pt sweep, 49 for 100, 69 for 150
+and 85 for 195, either way, off the screen with no give, without
+touching the scale: a 0.56 gain rubber-banded toward 364 pt (0.9 of the
+width), and the same band reproduces the edge swipe's vertical follow
+(86 for 200, 99 for 240). A drag that begins on the scrolled page
+scrolls it to the top and over-scrolls there; it never hands across.
+Releases: at rest 0.914 sprang back and 0.900, 0.883, 0.881 landed —
+a sixth of the height — and every slow, medium and fast release from
+20 % on landed, a 120 pt pull back up at 800 pt/s from 50 % (0.766)
+included: the stage 5 projection against a 0.905 boundary. Cancels
+return on the stage 5 spring (ω 22.5, ζ 0.9, 0.3 pt RMS); landings on
+the flight spring (98 % in 310–350 ms). The package now waits out
+`kTouchSlop` from the touch (the scroll handoff catches up the slop the
+scroll view kept), has `travelKnee` 0.52, `minimumScale` 0.37, the
+cubic `fallLag` 0.45, `crossAxisGain` 0.56 with `crossAxisLimit` 0.9 on
+both gestures (`edgeGive` and the edge pinning are gone),
+`panDismissThreshold` 0.905 read through `releaseProjection`
+(`flingVelocity` is gone), and the scroll position hands across only a
+drag that began at the top. Verified on the rebuilt example: held scale
+within 0.006 of native at 15–80 % (ours reads about 6 pt more dead zone
+than the native 16–20), the page's top within 7 pt at rest,
+sideways offsets within 1.5 pt at 50–195 pt, cancel curves within a
+frame, and the outcome table agrees on all seventeen cases. Not
+measured: the tracking spring's lag while sweeping (the sweeps were
+held before release) and `maxCommitVelocity` (native fast landings
+settled in the same 300–340 ms as rest ones, so the seed barely
+matters).
+
 ## 5. The edge-swipe dismissal
 
 **Owns**: the horizontal gain (travel normalised by width, pending
