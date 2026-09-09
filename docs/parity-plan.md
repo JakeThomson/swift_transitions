@@ -769,6 +769,36 @@ in the package, not against native.
   tuning one stage can shift the feel of another (the landing spring is
   shared by stages 4–7).
 
+Carried in from stages 3–8, to settle before the sign-off:
+
+- **Fast landings.** An edge swipe flung at 800 pt/s lands natively in
+  100 ms and a pinch released still closing in 117, where ours take 198
+  and 167 (stage 8): a linear spring seeded that hard overshoots, native
+  does not, so the landing is probably a duration-driven completion.
+  Record the flings at 400, 800 and 1200 pt/s in both gestures, fit the
+  settle time against the release rate, and either seed differently or
+  give the landing a duration from the rate.
+- **The pop lead.** Stage 3 measured the pop's bottom edge leading by
+  0.03 of the travel and applied it, then never re-verified it; one
+  `native_zoom` against the current build settles it.
+- **A second finger during a pan.** Stage 6 measured a pinch from rest
+  and from a scroll, not one begun on a card already held by a pan;
+  one native run each of a pan at 30 % joined by a second finger that
+  closes, and one where it merely lands and lifts.
+- **The bar.** Native cross-fades the title and back button in place
+  within 140 ms of a push and swaps them to the covered page's 150 ms
+  into a drag; the Cupertino hero slides the title over the flight and
+  switches on the pop (stage 8). No idiomatic hook exists, so this goes
+  on the known deviations list with those numbers, and the host app
+  notes say a bar above the navigator is the native shape.
+- **On a device, by hand.** Reduce Motion for the example (the Flutter
+  process never reported the simulator's setting); the 67 ms edge
+  flick and the 14 pt zoom flick, whose outcomes turn on a real
+  finger's velocity (stages 2 and 5); the first frame after a tap,
+  30–80 ms late in the simulator's debug build (stage 1); the pinch
+  un-rotate at 45° (stage 6); rotation while a card is held, which the
+  package answers by letting go (stage 8).
+
 ---
 
 ## Order and estimates
