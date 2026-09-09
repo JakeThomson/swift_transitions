@@ -463,6 +463,80 @@ final class ParityDriver: XCTestCase {
     }
 
     /// Smoke test for the synthesizer: an edge swipe on a pushed page pops it.
+    // MARK: Stage 7: interruptions. A second finger lands on a point the
+    // card covers all the way — (208, 400): inside the poster at home and
+    // the page's art when open — after the tap that starts a push or the
+    // lift that starts a landing. It is its own touch sequence, and the
+    // daemon reports a sequence played about 240 ms after its last event,
+    // so the finger lands about 250 ms after the tap's lift or the pan's:
+    // fingers in one sequence must land together (the daemon plays a path
+    // that starts later as a move of the finger before it, which never
+    // lifts) and it refuses a sequence while another plays. The recording's
+    // rings say when the finger landed.
+
+    static let catchPoint = CGPoint(x: 208, y: 400)
+
+    /// Taps the Dunes poster (down 50 ms), then lands a finger on the
+    /// flying card, holds it `hold` seconds, drags it down `drag` points at
+    /// `speed` and lifts at rest, or while moving if `rest` is false.
+    func catchPush(hold: Double, drag: CGFloat = 0, speed: CGFloat = 300, rest: Bool = true) {
+        var tap = Finger(at: CGPoint(x: 208, y: 340))
+        tap.hold(0.042)
+        tap.lift()
+        var catcher = Finger(at: Self.catchPoint)
+        if hold > 0 { catcher.hold(hold) }
+        if drag > 0 {
+            catcher.line(to: CGPoint(x: Self.catchPoint.x, y: Self.catchPoint.y + drag), speed: speed)
+        }
+        if rest { catcher.hold(0.6) }
+        catcher.lift()
+        self.hold(1.5)
+    }
+
+    func testCatchPushHold() { catchPush(hold: 0.5) }
+    func testCatchPushDrag() { catchPush(hold: 0.3, drag: 200) }
+    func testCatchPushDragNow() { catchPush(hold: 0, drag: 200) }
+    func testCatchPushFlick() { catchPush(hold: 0, drag: 100, speed: 800, rest: false) }
+
+    /// Taps the poster, then pinches the flying card to 0.6 at 300 pt/s a
+    /// finger and releases at rest.
+    func testCatchPushPinch() {
+        var tap = Finger(at: CGPoint(x: 208, y: 340))
+        tap.hold(0.042)
+        tap.lift()
+        var (a, b) = Self.pinchFingers()
+        let half = Self.span * 0.6 / 2
+        a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: 300)
+        b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: 300)
+        a.hold(0.6); b.hold(0.6)
+        Finger.lift([a, b])
+        hold(1.5)
+    }
+
+    /// Pans to `fraction` of the height and releases at rest — 30 % lands,
+    /// 15 % springs back — then lands a finger on the card, holds it half
+    /// a second, drags it up by `back` at 300 pt/s and releases at rest.
+    func catchRelease(of fraction: CGFloat, back: CGFloat) {
+        openDunes()
+        var finger = Finger(at: Self.grab)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + 20), speed: 300)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + Self.height * fraction), speed: 300)
+        finger.hold(0.6)
+        finger.lift()
+        var catcher = Finger(at: Self.catchPoint)
+        catcher.hold(0.5)
+        if back > 0 {
+            catcher.line(to: CGPoint(x: Self.catchPoint.x, y: Self.catchPoint.y - back), speed: 300)
+            catcher.hold(0.6)
+        }
+        catcher.lift()
+        hold(1.5)
+    }
+
+    func testCatchLanding() { catchRelease(of: 0.3, back: 150) }
+    func testCatchLandingHold() { catchRelease(of: 0.3, back: 0) }
+    func testCatchReturn() { catchRelease(of: 0.15, back: 0) }
+
     func testFingerPops() {
         pushFirstRow()
         var finger = Finger(at: CGPoint(x: 4, y: 437))
