@@ -88,9 +88,18 @@ final class ParityDriver: XCTestCase {
         /// for a release while moving (a real finger's lift), longer for a
         /// release at rest.
         func lift(after: Double = 0.008) {
-            let path = ParityPath(points: points.map { NSValue(cgPoint: $0) }, times: times.map { NSNumber(value: $0) }, lift: time + after)
+            Finger.lift([self], after: after)
+        }
+
+        /// Runs several fingers' paths as one touch sequence — a pinch — all
+        /// down together at time zero and each lifting `after` its own last
+        /// point.
+        static func lift(_ fingers: [Finger], after: Double = 0.008) {
+            let paths = fingers.map {
+                ParityPath(points: $0.points.map { NSValue(cgPoint: $0) }, times: $0.times.map { NSNumber(value: $0) }, lift: $0.time + after)
+            }
             do {
-                try ParityTouch.run([path])
+                try ParityTouch.run(paths)
             } catch {
                 XCTFail("touch synthesis failed: \(error)")
             }
@@ -327,6 +336,129 @@ final class ParityDriver: XCTestCase {
         again.line(to: CGPoint(x: 201, y: 700), speed: 300)
         again.hold(0.6)
         again.lift()
+        hold(1.5)
+    }
+
+    // MARK: Stage 6: pinches on the zoom page.
+
+    static let centre = CGPoint(x: 201, y: 437)
+    /// The fingers' starting distance, either side of the page's centre on
+    /// the poster art.
+    static let span: CGFloat = 300
+
+    /// The two fingers `span` apart, vertically about `centre`.
+    static func pinchFingers(at centre: CGPoint = ParityDriver.centre) -> (Finger, Finger) {
+        (Finger(at: CGPoint(x: centre.x, y: centre.y - span / 2)),
+         Finger(at: CGPoint(x: centre.x, y: centre.y + span / 2)))
+    }
+
+    /// Closes both fingers toward the centre until their distance is `scale`
+    /// of the start, each at `speed` pt/s, and lifts at rest or while moving.
+    func zoomPinch(to scale: CGFloat, speed: CGFloat, rest: Bool) {
+        openDunes()
+        var (a, b) = Self.pinchFingers()
+        let half = Self.span * scale / 2
+        a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: speed)
+        b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: speed)
+        if rest { a.hold(0.6); b.hold(0.6) }
+        Finger.lift([a, b])
+        hold(1.5)
+    }
+
+    func testZoomPinch90Rest() { zoomPinch(to: 0.9, speed: 300, rest: true) }
+    func testZoomPinch80Rest() { zoomPinch(to: 0.8, speed: 300, rest: true) }
+    func testZoomPinch70Rest() { zoomPinch(to: 0.7, speed: 300, rest: true) }
+    func testZoomPinch60Rest() { zoomPinch(to: 0.6, speed: 300, rest: true) }
+    func testZoomPinch50Rest() { zoomPinch(to: 0.5, speed: 300, rest: true) }
+    func testZoomPinch40Rest() { zoomPinch(to: 0.4, speed: 300, rest: true) }
+    // Either side of the boundary: 0.5 sprang back, 0.4 landed.
+    func testZoomPinch45Rest() { zoomPinch(to: 0.45, speed: 300, rest: true) }
+    func testZoomPinch48Rest() { zoomPinch(to: 0.48, speed: 300, rest: true) }
+    func testZoomPinch80Slow() { zoomPinch(to: 0.8, speed: 150, rest: false) }
+    func testZoomPinch80Fast() { zoomPinch(to: 0.8, speed: 800, rest: false) }
+    func testZoomPinch60Slow() { zoomPinch(to: 0.6, speed: 150, rest: false) }
+    func testZoomPinch60Fast() { zoomPinch(to: 0.6, speed: 800, rest: false) }
+    // Released moving near the boundary: whether the fingers' distance or
+    // the card's lagging scale decides, and whether speed counts.
+    func testZoomPinch55Fast() { zoomPinch(to: 0.55, speed: 800, rest: false) }
+    func testZoomPinch45Fast() { zoomPinch(to: 0.45, speed: 800, rest: false) }
+    func testZoomPinch45Medium() { zoomPinch(to: 0.45, speed: 400, rest: false) }
+    func testZoomPinch40Fast() { zoomPinch(to: 0.4, speed: 800, rest: false) }
+
+    /// Closes to `scale`, then turns both fingers about the centre by
+    /// `degrees` (clockwise on screen) along an arc, holds, and lifts.
+    func zoomRotate(degrees: CGFloat, scale: CGFloat) {
+        openDunes()
+        var (a, b) = Self.pinchFingers()
+        let half = Self.span * scale / 2
+        a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: 300)
+        b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: 300)
+        a.hold(0.3); b.hold(0.3)
+        let steps = Int(max(4, degrees.magnitude / 5))
+        for i in 1...steps {
+            let angle = degrees * CGFloat(i) / CGFloat(steps) * .pi / 180
+            let dx = half * sin(angle), dy = half * cos(angle)
+            a.line(to: CGPoint(x: Self.centre.x + dx, y: Self.centre.y - dy), speed: 200)
+            b.line(to: CGPoint(x: Self.centre.x - dx, y: Self.centre.y + dy), speed: 200)
+        }
+        a.hold(0.6); b.hold(0.6)
+        Finger.lift([a, b])
+        hold(1.5)
+    }
+
+    func testZoomRotate15() { zoomRotate(degrees: 15, scale: 0.7) }
+    func testZoomRotate45() { zoomRotate(degrees: 45, scale: 0.5) }
+    /// Only a turn, the fingers never closing.
+    func testZoomRotateOnly() { zoomRotate(degrees: 30, scale: 1.0) }
+
+    /// Closes to 0.7, then carries both fingers 100 pt right and 60 down.
+    func testZoomPinchMove() {
+        openDunes()
+        var (a, b) = Self.pinchFingers()
+        let half = Self.span * 0.7 / 2
+        a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: 300)
+        b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: 300)
+        a.hold(0.3); b.hold(0.3)
+        a.line(to: CGPoint(x: Self.centre.x + 100, y: Self.centre.y - half + 60), speed: 300)
+        b.line(to: CGPoint(x: Self.centre.x + 100, y: Self.centre.y + half + 60), speed: 300)
+        a.hold(0.6); b.hold(0.6)
+        Finger.lift([a, b])
+        hold(1.5)
+    }
+
+    /// Spreads the fingers to 1.3 of their distance: a pinch out.
+    func testZoomPinchOpen() { zoomPinch(to: 1.3, speed: 300, rest: true) }
+
+    /// Closes to 0.6, then opens back to 0.9 and lifts at rest.
+    func testZoomPinchReopen() {
+        openDunes()
+        var (a, b) = Self.pinchFingers()
+        for scale in [0.6, 0.9] as [CGFloat] {
+            let half = Self.span * scale / 2
+            a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: 300)
+            b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: 300)
+            a.hold(0.3); b.hold(0.3)
+        }
+        a.hold(0.3); b.hold(0.3)
+        Finger.lift([a, b])
+        hold(1.5)
+    }
+
+    /// Scrolls the page up 200 pt and lifts, then pinches to 0.6 over the
+    /// scrolled page.
+    func testZoomPinchScrolled() {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 201, y: 500))
+        finger.line(to: CGPoint(x: 201, y: 300), speed: 300)
+        finger.hold(0.8)
+        finger.lift()
+        hold(1.0)
+        var (a, b) = Self.pinchFingers()
+        let half = Self.span * 0.6 / 2
+        a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: 300)
+        b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: 300)
+        a.hold(0.6); b.hold(0.6)
+        Finger.lift([a, b])
         hold(1.5)
     }
 
