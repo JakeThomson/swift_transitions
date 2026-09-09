@@ -130,12 +130,14 @@ class _ZoomDismissGestureDetectorState
     // from the touch, and the scroll handoff's slop is its own.
     _panRecognizer = VerticalDragGestureRecognizer(debugOwner: this)
       ..dragStartBehavior = DragStartBehavior.down
+      ..velocityTrackerBuilder = _iosVelocityTracker
       ..onStart = _handlePanStart
       ..onUpdate = _handlePanUpdate
       ..onEnd = _handlePanEnd
       ..onCancel = _handleCancel;
     _edgeRecognizer = HorizontalDragGestureRecognizer(debugOwner: this)
       ..dragStartBehavior = DragStartBehavior.down
+      ..velocityTrackerBuilder = _iosVelocityTracker
       ..onStart = _handleEdgeStart
       ..onUpdate = _handleEdgeUpdate
       ..onEnd = _handleEdgeEnd
@@ -324,6 +326,13 @@ class _ZoomDismissGestureDetectorState
   /// Nothing begins here: a lone recognizer wins the arena on the pointer
   /// down, and a finger that has not dragged is no gesture to the navigator
   /// or to a card in flight. The pan begins as it leaves its dead zone.
+  /// iOS's own estimate of the speed a finger left at, which the back
+  /// swipe and a `Scrollable` on iOS use for the same reason: the default
+  /// least-squares tracker reads a flick at a third to a half of the speed
+  /// the finger was really moving (parity stage 2).
+  static VelocityTracker _iosVelocityTracker(PointerEvent event) =>
+      IOSScrollViewFlingVelocityTracker(event.kind);
+
   void _handlePanStart(DragStartDetails details) {
     _panDragged = 0;
   }

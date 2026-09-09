@@ -867,6 +867,16 @@ first as native's does — 6 pt against native's 5.4. The release curve is
 unchanged (the fling settles in 212 ms against native's 193, τ 38 against
 43; the slow pop 217 against 232).
 
+The same tracker goes on the dismissal's pan and edge swipe, which read
+the 800 pt/s edge fling of `testZoomEdge40Fling` as 301. Fifteen scripted
+pans and edge swipes were re-recorded across stages 4 and 5, at every
+speed each has: every outcome still matches native, held scales within
+0.01, and the edge swipe flung at 800 now lands in 147 ms against
+native's 100 where it took 168, at 1200 in 132 against 108. The residual
+stands and its cause is unchanged — the same finger speed buys a pinch
+three times the shrink it buys an edge swipe — but a third of it was our
+own reading of the finger.
+
 *Measured 2026-09-09, from every native landing already recorded, read
 past the frame `analyze_landing.py` stops at.* A landing does not stop on
 the source: it carries the card past it and eases back. Native goes 1.9 %

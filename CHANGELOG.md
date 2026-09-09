@@ -14,6 +14,9 @@
   `IOSScrollViewFlingVelocityTracker` (parity stage 2). Flutter's default
   tracker read a 1200 pt/s fling as 497, so a flick that natively pops
   sprang back instead; all nine scripted swipes now agree with native.
+  The zoom dismissal's pan and edge swipe read the same way, which also
+  takes an edge swipe flung at 800 pt/s from a 168 ms landing to 147
+  against native's 100.
 * Fade the zoom card's shadow out as it reaches its source (parity
   stage 9). A native card lands with no shadow at all — the page 12 and
   20 pt beside it reads its own colour from a twentieth of the flight in

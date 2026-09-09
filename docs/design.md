@@ -162,7 +162,7 @@ grab the card at any time during any animation.
 | Card scale mid-pinch | ~0.6 | `pinch.mp4` 1.3 s |
 | Pinch scale vs fingers' distance | 1:1 from 8.7 pt of closing; turn 1:1; 0.515 sprang back, 0.494 landed | parity stage 6, `native_ZoomPinch*` |
 | On-screen corner radius during a flight | 13 pt at the source, 22 a quarter of the way, 33 at half, 44 at three quarters | a straight line from the source's radius to the display's in the flight's progress (parity stage 8, `native_zoom_f`) |
-| Release velocity of a flick | the default tracker reads 497 and 121 pt/s where the finger moved at 1200 and 400; `IOSScrollViewFlingVelocityTracker` reads 1312 and 288 | parity stage 2, `testSwipe20Fling`, `testSwipe35Medium` |
+| Release velocity of a flick | the default tracker reads 497 and 121 pt/s where the finger moved at 1200 and 400, and a zoom edge swipe's 800 as 301; `IOSScrollViewFlingVelocityTracker` reads the first two at 1312 and 288 | parity stage 2, `testSwipe20Fling`, `testSwipe35Medium`, `testZoomEdge40Fling` |
 | Card shadow during a zoom flight | 10 % darker 4 pt out, 3 % at 20, gone by 40; none at all within a twentieth of the source | parity stages 3 and 9, the page beside a landing card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale under a zoom | 0.914 or smaller | a sibling poster in the grid, 116.6 pt wide mid-flight against 119.3 at rest, back at rest about 200 ms after the card lands; the package holds the covered page at 1.0 (section 1.7) |
@@ -250,7 +250,8 @@ size of the difference.
   out, still inside the row's cache extent, flies off the right edge in
   both (parity stage 8).
 - **An edge swipe flung away.** A native edge swipe released at 800 pt/s
-  lands in 100 ms where ours takes 168. The landing is quickened by the
+  lands in 100 ms where ours takes 147, and at 1200 in 108 against our
+  132. The landing is quickened by the
   fingers' speed (`landingQuickening`), and the same speed buys a pinch
   three times the shrink it buys an edge swipe, so one line through both
   gestures cannot hit both ends (parity stage 9). Pinches land within a
@@ -996,6 +997,13 @@ Flutter terms:
 - The SDK's Cupertino spring (stiffness 522.35, critically damped, 0.404 s)
   is available as `SwiftSprings.standard` for apps that want the exact SDK
   feel on the push transition.
+- The dismissal's pan and edge swipe estimate their release velocity with
+  `IOSScrollViewFlingVelocityTracker`, as the back swipe does and for the
+  same reason (section 3.2); a pinch measures its fingers directly, over
+  the last 100 ms. The commit outcome of every scripted pan and edge swipe
+  matches native either way, but the landing a fling is quickened by does
+  not: reading the fingers truthfully takes an edge swipe flung at 800 pt/s
+  from 168 ms to 147 (parity stage 2).
 - The interactive dismissal's sideways chase uses the fitted tracking spring
   (stiffness 2000, damping 89) while the finger drives it and the return
   spring (stiffness 484, damping 39.6: ω 22, ζ 0.9, measured in parity
