@@ -577,6 +577,15 @@ final class ParityDriver: XCTestCase {
         hold(1.5)
     }
 
+    // MARK: Stage 9: how fast a landing is, against how fast the card was
+    // moving when the finger left it. The same release point in each
+    // gesture at three rates — the 800 pt/s cases are stage 5's and 6's
+    // (`testZoomEdge40Fling`, `testZoomPinch45Fast`, `testZoomPinch45Medium`).
+
+    func testZoomEdge40Fling400() { zoomEdgeSwipe(to: 0.4, speed: 400, rest: false) }
+    func testZoomEdge40Fling1200() { zoomEdgeSwipe(to: 0.4, speed: 1200, rest: false) }
+    func testZoomPinch45Fling1200() { zoomPinch(to: 0.45, speed: 1200, rest: false) }
+
     func testFingerPops() {
         pushFirstRow()
         var finger = Finger(at: CGPoint(x: 4, y: 437))
