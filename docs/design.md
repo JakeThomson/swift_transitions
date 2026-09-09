@@ -163,8 +163,9 @@ grab the card at any time during any animation.
 | Pinch scale vs fingers' distance | 1:1 from 8.7 pt of closing; turn 1:1; 0.515 sprang back, 0.494 landed | parity stage 6, `native_ZoomPinch*` |
 | On-screen corner radius during a flight | 13 pt at the source, 22 a quarter of the way, 33 at half, 44 at three quarters | a straight line from the source's radius to the display's in the flight's progress (parity stage 8, `native_zoom_f`) |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
-| Covered page scale during dismissal | 1.0 | no scale-down of the page underneath |
+| Covered page scale under a zoom | 0.914 or smaller | a sibling poster in the grid, 116.6 pt wide mid-flight against 119.3 at rest, back at rest about 200 ms after the card lands; the package holds the covered page at 1.0 (section 1.7) |
 | Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 170–217 ms at 400 pt/s a finger, 100–133 at 800, 103–108 at 1200 | parity stages 8 and 9, `native_ZoomPan*`, `native_ZoomPinch*`, `native_ZoomEdge*Fling*` |
+| Landing overshoot | 2 % of the flight past the source, 8 % released on a fast pinch; back within a point of it over 170–250 ms | parity stage 9, the same runs read past the frame the landing settles on (`tools/parity/analyze_overshoot.py`) |
 | Pan scale on a screen-sized card | 0.812 at 0.3 screen heights, 0.678 at 0.5, 0.545 at 0.8 | `ZoomDismissPhysics.ios26`, section 3.4; parity stage 4 (the 0.42 of `drag.mov` was a long, wandering drag) |
 
 ### 1.5 Apple's API surface
@@ -216,7 +217,7 @@ reasoning behind each is on the constant itself.
 | `returnSpring` | ω 22, ζ 0.9 | stages 4 and 5, the cancelled releases |
 | `landingSpring` | ω 15, ζ 0.75 | stage 8, twenty landings refitted on the card's left edge |
 | `landingQuickening` | 0.3 of the frequency per card width per second | stage 9, `native_ZoomPinch45Medium/Fast`, `native_ZoomEdge40Fling*` |
-| `maxCommitVelocity` | 8 progress per second | stage 8, `native_ZoomPinch45Fast` |
+| `maxCommitVelocity` | 20 progress per second | stages 8 and 9, `native_ZoomPinch45Fast` |
 | `panDismissThreshold` | 0.905 | stage 4, `native_ZoomPan17Rest`, `native_ZoomPan19Rest` |
 | `dismissThreshold` | 0.70 | stage 5, `native_ZoomEdge44/48/52Rest` |
 | `pinchDismissThreshold` | 0.5 | stage 6, `native_ZoomPinch45Rest`, `native_ZoomPinch48Rest` |
@@ -251,6 +252,18 @@ size of the difference.
   three times the shrink it buys an edge swipe, so one line through both
   gestures cannot hit both ends (parity stage 9). Pinches land within a
   frame of native at 800 pt/s, and every release from rest matches.
+- **A fast pinch's overshoot.** A landing carries the card past the source
+  and eases back, 2 % of the flight released at rest and 2.1 % on a pinch
+  released at 800 pt/s a finger where native goes 8 %. Native puts a
+  release's speed into the landing's seed and ours into the spring's
+  frequency (`landingQuickening`), and a quicker spring travels less past
+  the target for the same seed; the settle times both fit, so telling the
+  two apart needs the whole trace refitting (parity stage 9). Pans, edge
+  swipes and releases from rest are within 0.3 % of native.
+- **The covered page's scale.** Natively the page underneath is scaled to
+  0.914 or smaller while the zoom is open and comes back about 200 ms after
+  the card lands; the package holds it at full scale, so the grid behind the
+  card does not breathe (parity stage 9).
 - **The first frame after a tap.** In the simulator's debug build — the
   only build it runs — the example's first flight frame lands 30–80 ms
   after the tap where native's lands at once (parity stage 0).
@@ -951,17 +964,20 @@ Flutter terms:
 - Dismissal landing: `ZoomDismissPhysics.landingSpring`, ω = 15 rad/s,
   ζ = 0.75 (stiffness 225, damping 22.5), fitted to the card's edge on
   native pans released at rest from 0.55–0.90 of the screen to 0.4–2.9 pt,
-  98 % of the way in 230–270 ms with a 3 % overshoot the card eases back
-  from over the next 300 ms (parity stage 8); edge swipes and pinches land
-  on it too. It is seeded with the release rate over what the landing has
-  left — a pinch's fingers or an edge swipe's speed, never a pan's, which
-  natively lands from rest however it was flung — capped at
-  `maxCommitVelocity` 8 so the landing does not bounce, and quickened by
-  `landingSpringFor`: a native landing shortens with the fingers' own
-  speed rather than the shrink they were driving, to 170 ms at 400 pt/s a
-  finger and 100–133 at 800 in either gesture, which
-  `landingQuickening` 0.3 puts on the spring's frequency and not its
-  damping, so a quick landing overshoots by the same 3 % (parity stage 9).
+  98 % of the way in 230–270 ms (parity stage 8); edge swipes and pinches
+  land on it too. Its overshoot is drawn: `AnimationController` clamps a
+  simulation to its bounds, so the route reads the spring's own value while
+  the controller is pinned at zero, and the card carries 2 % of the flight
+  past the source and eases back into it over 200 ms, as native landings do
+  (parity stage 9). It is seeded with the release rate over what the
+  landing has left — a pinch's fingers or an edge swipe's speed, never a
+  pan's, which natively lands from rest however it was flung — capped at
+  `maxCommitVelocity` 20, and quickened by `landingSpringFor`: a native
+  landing shortens with the fingers' own speed rather than the shrink they
+  were driving, to 170 ms at 400 pt/s a finger and 100–133 at 800 in either
+  gesture, which `landingQuickening` 0.3 puts on the spring's frequency and
+  not its damping — which is also why a fast pinch travels less past the
+  source than native's does (section 1.7).
   Rotation and translation share the spring's normalised progress so the
   card lands as one object.
 - Back swipe release: `BackGestureController.releaseSpring`, ω = 22 rad/s,

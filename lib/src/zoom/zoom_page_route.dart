@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
@@ -58,9 +59,14 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   /// How fast the fingers were moving at that release, in resting card
   /// widths per second: what the landing spring is quickened by.
   double _landingSpeed = 0;
+
+  /// The landing spring while it runs, read by [_flightProgress] for the
+  /// part of it the controller cannot report.
+  Simulation? _landingSimulation;
   bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
   final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
+  late final Animation<double> _flightProgress = _ZoomFlightProgress(this);
 
   /// The scroll controller that hands a top-edge downward drag to the
   /// dismissal, installed as the page's [PrimaryScrollController] so that
@@ -118,7 +124,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     _releaseSeed = 0;
     _landingSpeed = 0;
     final landing = !forward && (_departure?.toSource ?? false);
-    return SpringSimulation(
+    final simulation = SpringSimulation(
       landing
           ? options.dismissPhysics.landingSpringFor(speed)
           : options.pushSpring,
@@ -126,6 +132,23 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       forward ? 1 : 0,
       // The seed is per unit of the landing, which runs from here to zero.
       -seed * controller!.value,
+    );
+    _landingSimulation = landing ? simulation : null;
+    return simulation;
+  }
+
+  /// Where the flight is: the animation's own value, except while a
+  /// landing spring is past the source, which the controller reports as
+  /// zero.
+  double get _flightValue {
+    final landing = _landingSimulation;
+    final elapsed = controller!.lastElapsedDuration;
+    if (landing == null || elapsed == null || !controller!.isAnimating) {
+      return animation!.value;
+    }
+    return math.min(
+      landing.x(elapsed.inMicroseconds / Duration.microsecondsPerSecond),
+      animation!.value,
     );
   }
 
@@ -179,6 +202,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     if (status == AnimationStatus.dismissed ||
         status == AnimationStatus.completed) {
       _departure = null;
+      _landingSimulation = null;
     }
   }
 
@@ -510,7 +534,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     final transition = MediaQuery.disableAnimationsOf(context)
         ? FadeTransition(opacity: animation, child: page)
         : ZoomPageTransition(
-            animation: animation,
+            animation: _flightProgress,
             source: _flightSource,
             liveFrame: _liveFrame,
             departure: _departure,
@@ -528,6 +552,27 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       child: transition,
     );
   }
+}
+
+/// The route's animation with a landing's overshoot restored.
+///
+/// [AnimationController] clamps every simulation value to its bounds, so
+/// the controller stops reporting a committed landing the moment it reaches
+/// the source; the spring itself carries on a little past it and eases back,
+/// as native landings do — 2 % of the flight released at rest, 8 % released
+/// on a fast pinch (parity stage 9) — and the route is still the card's to
+/// draw until that spring settles and the pop finishes.
+class _ZoomFlightProgress extends Animation<double>
+    with AnimationWithParentMixin<double> {
+  _ZoomFlightProgress(this._route);
+
+  final ZoomRouteTransitionMixin<Object?> _route;
+
+  @override
+  Animation<double> get parent => _route.animation!;
+
+  @override
+  double get value => _route._flightValue;
 }
 
 /// A page that zooms out of the [ZoomTransitionSource] tagged [sourceTag]

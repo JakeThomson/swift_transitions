@@ -385,6 +385,41 @@ void main() {
     expect(find.text('detail'), findsNothing);
   });
 
+  testWidgets('a landing carries the card past the source and back', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    var narrowest = cardRect(tester).width;
+    var pastTheSource = false;
+    while (find.text('detail').evaluate().isNotEmpty) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.text('detail').evaluate().isEmpty) {
+        break;
+      }
+      final width = cardRect(tester).width;
+      narrowest = math.min(narrowest, width);
+      // The source stays hidden behind the card for all of it.
+      pastTheSource |= width < posterRect.width;
+      expect(sourceHidden(tester), isTrue);
+    }
+    expect(pastTheSource, isTrue);
+    // Native landings go 2 % of the flight past the source released at rest
+    // and 8 % released on a fast pinch (parity stage 9).
+    final overshoot =
+        (posterRect.width - narrowest) / (screen.width - posterRect.width);
+    expect(overshoot, greaterThan(0.005));
+    expect(overshoot, lessThan(0.1));
+    // And it is back on the source when the route goes.
+    expect(sourceHidden(tester), isFalse);
+  });
+
   testWidgets('a dismissal from rest lands on the current sourceTag', (
     tester,
   ) async {

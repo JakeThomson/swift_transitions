@@ -852,6 +852,43 @@ from where the fingers are, the finger that only rests leaves the pan
 alone. What native does with either is still unmeasured, and joins the
 device list.
 
+*Measured 2026-09-09, from every native landing already recorded, read
+past the frame `analyze_landing.py` stops at.* A landing does not stop on
+the source: it carries the card past it and eases back. Native goes 1.9 %
+of the flight past on a pinch released at rest, 2.2 % on a pan, 2.3 % on
+an edge swipe and 8.0 % on a pinch released at 800 pt/s a finger, back
+within a point of the source over 172–250 ms. Ours went nowhere past it,
+because `AnimationController` clamps every simulation value to the
+controller's bounds (`_tick`): the ζ = 0.75 stage 8 fitted always implied
+an overshoot, and the half of it below zero never reached the screen.
+The route now reads the landing spring's own value while the controller
+is pinned at zero — the pop still finishes when the spring settles, so
+nothing about its timing moves — and `zoomDepartureFrame` carries the card
+on past the source, where it is the source and its corners shrink with it.
+The programmatic pop does not overshoot in either app, and does not here.
+
+Verified on the rebuilt example: 2.1 % past the source on the pan against
+native's 2.2, 2.0 % on the edge swipe against 2.3, 1.0 % on the pinch at
+rest against 1.9, and 2.1 % on the pinch at 800 pt/s against 8.0 with the
+landing still settling in native's own 117 ms. The fast pinch is the
+residual, and its cause is the model: native puts a release's speed into
+the seed, `landingQuickening` puts it into the frequency, and a quicker
+spring travels less past the target for the same seed — the whole native
+traces refit to ω 11.5–13 with the seed carrying the speed instead
+(−6.5 at rest to −26 fast), which is a re-fit of the landing law rather
+than a constant to move. `maxCommitVelocity` rises from 8 to 20: the 8
+was there so the landing would not bounce, which is no longer something
+to avoid. The tool is `analyze_overshoot.py`.
+
+The covered page is a second thing the same runs show. Natively it is
+scaled while the zoom is open — a sibling poster in the grid reads 116.6
+pt wide mid-flight against 119.3 at rest, its left edge 32.0 against
+16.7, so the page is at 0.914 or smaller — and it comes back to rest
+about 200 ms after the card lands. Ours holds it at full scale
+throughout. Section 1.4's measurement said 1.0 and was wrong; both it and
+1.7 now carry the number. Matching it touches the push as much as the
+landing and is not part of this stage.
+
 The sign-off itself: eight clips in `docs/parity/`, one per stage that
 has a gesture or a flight of its own, cut by `sidebyside.py`; the
 calibrated parameters and the known deviations in `design.md` 1.6 and

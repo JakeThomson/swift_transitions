@@ -10,6 +10,13 @@
   What is knowingly different, with the size of each difference, is
   listed in `docs/design.md` section 1.7, and every calibrated constant
   is in section 1.6 with the recording it came from.
+* Draw the landing's overshoot, which iOS has and the SDK clipped
+  (parity stage 9): `AnimationController` clamps a simulation to the
+  controller's bounds, so the part of the landing spring that carries the
+  card past the source never reached the screen. The route reads the
+  spring's own value while the controller is pinned at zero, and the card
+  goes 2 % of the flight past the source and eases back into it over
+  200 ms, against native's 1.9–2.3 % from rest.
 * Match the zoom route's landing speed to iOS, measured against a native
   `NavigationStack` zoom (parity stage 9): a landing shortens with the
   speed the fingers themselves were moving when they let go — 170–217 ms
@@ -29,7 +36,7 @@
   seeded with the release rate over what the landing has left for a
   pinch or an edge swipe and not at all for a pan, which natively lands
   from rest however it was flung; `commitVelocityFor` takes the rate and
-  the remaining scale, and `maxCommitVelocity` is 8. The card's corners,
+  the remaining scale, and `maxCommitVelocity` is 20. The card's corners,
   measured through the flight, already run straight from the source's
   radius to the display's. A held card is let go of when the window's
   size changes, as iOS lets go when the device turns. Under Reduce

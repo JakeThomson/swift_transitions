@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -54,7 +56,9 @@ class ZoomPageTransition extends StatelessWidget {
   });
 
   /// Runs from 0.0 (the card rests on the source) to 1.0 (the page is at
-  /// rest, full screen).
+  /// rest, full screen), and a little below zero at the end of a committed
+  /// landing, where the card carries past the source and eases back into it
+  /// (`ZoomRouteTransitionMixin.createSimulation`).
   final Animation<double> animation;
 
   /// What the flight grows out of, or null for the centred fallback.
@@ -107,7 +111,7 @@ class ZoomPageTransition extends StatelessWidget {
       return zoomDepartureFrame(
         t: departure.progress <= 0
             ? 1
-            : (1 - t / departure.progress).clamp(0.0, 1.0),
+            : math.max(0.0, 1 - t / departure.progress),
         from: departure.frame,
         to: source?.rect ?? fallbackRectFor(screen),
         toRadii: source?.radii ?? screenRadii,
@@ -160,16 +164,19 @@ class ZoomPageTransition extends StatelessWidget {
               : Listenable.merge(<Listenable>[animation, liveFrame]),
           child: child,
           builder: (context, child) {
+            final held = liveFrame?.value;
+            final departure = this.departure;
             // A spring settles within a tolerance of its end, so read the
-            // ends from the status rather than the value.
+            // ends from the status rather than the value. A landing is let
+            // past zero, where its overshoot is.
             final t = switch (animation.status) {
               AnimationStatus.completed => 1.0,
               AnimationStatus.dismissed => 0.0,
-              AnimationStatus.forward ||
-              AnimationStatus.reverse => animation.value.clamp(0.0, 1.0),
+              AnimationStatus.forward || AnimationStatus.reverse =>
+                (departure?.toSource ?? false)
+                    ? math.min(animation.value, 1.0)
+                    : animation.value.clamp(0.0, 1.0),
             };
-            final held = liveFrame?.value;
-            final departure = this.departure;
             final ZoomFrame frame;
             if (held != null) {
               frame = held;

@@ -68,4 +68,25 @@ void main() {
     expect(frame.rect.right, lerpDouble(source.right, screen.right, 0.5));
     expect(frame.radii, BorderRadius.lerp(sourceRadii, screenRadii, 0.5));
   });
+
+  test('a landing past the source keeps going, corners and all', () {
+    final from = ZoomFrame(
+      rect: screen,
+      rotation: 0.1,
+      radii: screenRadii,
+      sourceOpacity: 0,
+    );
+    final frame = zoomDepartureFrame(
+      t: 1.1,
+      from: from,
+      to: source,
+      toRadii: sourceRadii,
+      toSource: true,
+    );
+    expect(frame.rect, Rect.lerp(screen, source, 1.1));
+    expect(frame.rect.width, lessThan(source.width));
+    expect(frame.radii.topLeft.x, closeTo(12 * frame.rect.width / 80, 1e-9));
+    expect(frame.rotation, 0);
+    expect(frame.sourceOpacity, 1);
+  });
 }

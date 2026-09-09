@@ -118,7 +118,9 @@ ZoomFrame zoomFlightFrame({
 /// When the destination is the source, [sourceOpacity] runs the cross-fade
 /// over the last [kZoomCrossFadeWindow] of the flight as [zoomFlightFrame]
 /// does; when it is the full screen (a cancelled dismissal) there is
-/// nothing to fade to.
+/// nothing to fade to. A landing whose spring overshoots the source carries
+/// on past it, [t] above 1: the card is the source by then, so its corners
+/// shrink with it rather than carrying on past the source's own.
 ZoomFrame zoomDepartureFrame({
   required double t,
   required ZoomFrame from,
@@ -126,11 +128,17 @@ ZoomFrame zoomDepartureFrame({
   required BorderRadius toRadii,
   required bool toSource,
 }) {
-  assert(t >= 0 && t <= 1, 'flight progress must be normalised, got $t');
+  assert(
+    t >= 0 && (t <= 1 || toSource),
+    'flight progress must be normalised, got $t',
+  );
+  final rect = Rect.lerp(from.rect, to, t)!;
   return ZoomFrame(
-    rect: Rect.lerp(from.rect, to, t)!,
-    rotation: from.rotation * (1 - t),
-    radii: BorderRadius.lerp(from.radii, toRadii, t)!,
+    rect: rect,
+    rotation: from.rotation * (1 - math.min(t, 1)),
+    radii: t <= 1
+        ? BorderRadius.lerp(from.radii, toRadii, t)!
+        : toRadii * (rect.width / to.width),
     sourceOpacity: toSource
         ? ((t - (1 - kZoomCrossFadeWindow)) / kZoomCrossFadeWindow).clamp(0, 1)
         : 0,

@@ -47,7 +47,7 @@ class ZoomDismissPhysics {
     this.dismissThreshold = 0.70,
     this.pinchDismissThreshold = 0.5,
     this.releaseProjection = 0.12,
-    this.maxCommitVelocity = 8,
+    this.maxCommitVelocity = 20,
   });
 
   /// The iOS 26 fit.
@@ -161,9 +161,10 @@ class ZoomDismissPhysics {
 
   /// The most a release may seed the landing with, in units of what the
   /// landing has left per second: enough for the card to carry on at the
-  /// rate the fingers left it at, not enough to bounce. At 8 the seeded
-  /// landing overshoots by 3.6 % against 2.8 % from rest; the quickening
-  /// is what makes a fast release land sooner ([landingSpringFor]).
+  /// rate the fingers left it at. It was 8 while the landing's overshoot
+  /// was clipped, where any more read as the card stopping dead early;
+  /// with the overshoot drawn a fast pinch lands in native's own 117 ms
+  /// (parity stage 9) and the cap binds only on the fastest releases.
   final double maxCommitVelocity;
 
   /// The damped travel the scale floor implies, in card heights.
