@@ -1,5 +1,27 @@
 ## 0.1.0-dev
 
+* Tune every transition and gesture in this release against a native
+  SwiftUI reference app, recorded and measured the same way on the same
+  device (iPhone 17 simulator, iOS 27.0 build 24A5408d), in the nine
+  stages of `docs/parity-plan.md`. The push, the back swipe and the zoom
+  flight follow native's curves to 1–6 pt RMS; a held card's scale is
+  within 0.006 of native's in every gesture, the release outcomes agree
+  on the commit tables, and landings from rest agree within a frame.
+  What is knowingly different, with the size of each difference, is
+  listed in `docs/design.md` section 1.7, and every calibrated constant
+  is in section 1.6 with the recording it came from.
+* Match the zoom route's landing speed to iOS, measured against a native
+  `NavigationStack` zoom (parity stage 9): a landing shortens with the
+  speed the fingers themselves were moving when they let go — 170–217 ms
+  at 400 pt/s a finger against 200–245 from rest, 100–133 at 800 — and
+  not with the shrink that speed was driving, so `ZoomDismissPhysics`
+  gains `landingQuickening` and `landingSpringFor`, which raise the
+  landing spring's frequency with the release speed and leave its damping
+  alone. A pan still lands in a rest release's time however hard it was
+  flung. A second finger landing on a card already held by a pan no
+  longer moves the point the pan measures its travel from, which jerked
+  the card back to full screen when that finger left without a pinch
+  beginning.
 * Match the zoom route's landing to iOS, measured against a native
   `NavigationStack` zoom (parity stage 8): a committed release lands on
   its own spring, `ZoomDismissPhysics.landingSpring` (ω 15, ζ 0.75 —

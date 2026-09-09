@@ -245,6 +245,12 @@ size of the difference.
   out and takes `fallbackInset`'s centred rect instead. A source one width
   out, still inside the row's cache extent, flies off the right edge in
   both (parity stage 8).
+- **An edge swipe flung away.** A native edge swipe released at 800 pt/s
+  lands in 100 ms where ours takes 168. The landing is quickened by the
+  fingers' speed (`landingQuickening`), and the same speed buys a pinch
+  three times the shrink it buys an edge swipe, so one line through both
+  gestures cannot hit both ends (parity stage 9). Pinches land within a
+  frame of native at 800 pt/s, and every release from rest matches.
 - **The first frame after a tap.** In the simulator's debug build — the
   only build it runs — the example's first flight frame lands 30–80 ms
   after the tap where native's lands at once (parity stage 0).

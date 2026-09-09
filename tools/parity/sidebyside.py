@@ -1,7 +1,7 @@
 """Stage 9: one clip of a native run beside ours, cut to the same frame.
 
     python3 sidebyside.py native.csv ours.csv out.mp4 [--seconds=2.5] [--width=360]
-                            [--which=push|pop] [--at=16.4,18.1]
+                            [--which=push|pop|touch] [--at=16.4,18.1]
 
 Each recording is cut to start a fifth of a second before its own trigger
 — the first frame of the last transition it recorded — so the two runs
@@ -31,12 +31,35 @@ def rows_of(path):
     return [r for r in csv.DictReader(open(path)) if r["app"] == "1"]
 
 
+def touched(rows, by):
+    """The time the touch that drove the last transition landed: the first
+    frame of the last run of touch rings that starts before [by]. A
+    gesture's clip starts there, since the card only moves once the finger
+    has."""
+    rings = [float(r["t"]) for r in rows if r["ring_l"] and float(r["t"]) <= by]
+    if not rings:
+        raise SystemExit("no touch rings before the transition")
+    start = rings[-1]
+    for t in reversed(rings):
+        if start - t > GAP:
+            break
+        start = t
+    return start
+
+
 def trigger(rows, which):
     """The time of a transition's first frame. Motion is grouped into
     transitions on the stills longer than a gesture's hold; the last group
     is taken, or the last one the card grew over (`--which=push`) or shrank
-    over (`pop`), and the run's own last group is skipped when the
+    over (`pop`); `touch` anchors on the last touch instead. The run's own
+    last group is skipped when the
     recording stops on it, as it does when the app quits."""
+    if which == "touch":
+        # Bounded by the last frame the app is still on screen: a run ends
+        # with the app quitting, and the taps of its teardown come after.
+        showing = [float(r["t"]) for r in rows
+                   if any(r[f"{key}_l"] for key in BOXES)]
+        return touched(rows, showing[-1])
     moved = []
     for a, b in zip(rows, rows[1:]):
         step = 0.0
@@ -63,12 +86,18 @@ def trigger(rows, which):
 
 
 def grew(rows, group):
-    """Whether the card is wider at the end of a group than at its start."""
-    seen = [r for r in rows if group[0] <= float(r["t"]) <= group[-1] and r["card_l"]]
-    if not seen:
-        return False
-    width = [float(r["card_r"]) - float(r["card_l"]) for r in (seen[0], seen[-1])]
-    return width[1] > width[0]
+    """Whether what the run moves — the card, or the page a push slides in
+    — is wider at the end of a group than at its start."""
+    change = 0.0
+    for key in BOXES:
+        seen = [r for r in rows
+                if group[0] <= float(r["t"]) <= group[-1] and r[f"{key}_l"] and r[f"{key}_r"]]
+        if len(seen) < 2:
+            continue
+        width = [float(r[f"{key}_r"]) - float(r[f"{key}_l"]) for r in (seen[0], seen[-1])]
+        if abs(width[1] - width[0]) > abs(change):
+            change = width[1] - width[0]
+    return change > 0
 
 
 def side(csv_path, start, seconds, width, out, work):
@@ -79,7 +108,8 @@ def side(csv_path, start, seconds, width, out, work):
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-i", os.path.splitext(csv_path)[0] + ".mov",
          "-vf", f"select='between(n,{first},{last})',scale={width}:-2",
-         "-fps_mode", "passthrough", os.path.join(work, "%04d.png")], check=True)
+         "-fps_mode", "passthrough", os.path.join(work, "%04d.png")],
+        check=True, capture_output=True)
     times = [float(r["t"]) for r in cut] + [start + seconds]
     with open(os.path.join(work, "list.txt"), "w") as f:
         for i in range(len(cut)):
@@ -88,7 +118,7 @@ def side(csv_path, start, seconds, width, out, work):
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-i", os.path.join(work, "list.txt"),
          "-r", str(FPS), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", out],
-        check=True)
+        check=True, capture_output=True)
 
 
 def main():
@@ -116,7 +146,7 @@ def main():
                "-filter_complex", chain, "-map", "[o]" if out.endswith(".gif") else "[v]"]
         if not out.endswith(".gif"):
             cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26"]
-        subprocess.run(cmd + [out], check=True)
+        subprocess.run(cmd + [out], check=True, capture_output=True)
     print(f"{out} ({os.path.getsize(out) // 1024} KB), from {starts[0]:.2f} s and {starts[1]:.2f} s")
 
 

@@ -799,6 +799,66 @@ Carried in from stages 3–8, to settle before the sign-off:
   un-rotate at 45° (stage 6); rotation while a card is held, which the
   package answers by letting go (stage 8).
 
+*Measured 2026-09-09, flat palette, from six new native runs at three
+release rates in each gesture plus the stage 4–6 landings refitted.* The
+landing is not seeded harder for a fast release; it is a quicker spring.
+Native settle times go with the speed a *finger* was moving at the
+release, not with the shrink that speed was driving and not with the
+distance the card has left: 165–245 ms released at rest, 170–217 at
+400 pt/s a finger, 100 (edge swipe) to 117–133 (pinch) at 800, and
+103–108 at 1200, where the edge swipe's card is shrinking at a third of
+the rate the pinch's is and lands from half as far. A pan is the
+exception it always was, landing in 233–272 ms however hard it was
+flung. So `ZoomDismissPhysics` gains `landingQuickening` and
+`landingSpringFor`, which put the release speed on the landing spring's
+frequency and leave its damping alone — a quick landing overshoots the
+source by the same 3 % a slow one does — and the seed stays what it was,
+the card carrying on at the rate the fingers left it at. At 0.3 of the
+frequency per resting card width per second the modelled landing sits
+inside native's spread everywhere but the edge swipe flung at 800 pt/s,
+which lands 36 ms sooner than any one line through the rest allows.
+Two of the six runs do not land at all in either app: an edge swipe to
+0.4 of the width released at 400 and 800 pt/s springs back, natively and
+here, which is the boundary stage 5 measured working as it should.
+
+Verified on the rebuilt example: a pinch released at 800 pt/s a finger
+lands in 118 ms against native's 117–133, where it took 167 before, and
+at 1200 in 117; at 400 it takes 137 against native's 170–217, a landing
+that is now a little quick rather than a lot slow. The edge swipe flung
+at 800 lands in 168 ms against native's 100 — 34 ms better than before
+and the residual that stands, since the same release speed buys the
+pinch three times the shrink. Pans are untouched by the quickening and
+stage 8's verification stands; this batch's pan run dropped a fifth of a
+second of frames on a host at a load average of 50 and cannot time a
+landing at all.
+
+The pop's lead is not resolvable on this rig. The tracker's card box
+during a pop is the source's copy fading in, not the card, and the card
+itself cannot be differenced out of the covered page — its white page
+over the gallery's white leaves nothing to see, so a dim-compensated
+difference (`analyze_outline.py`) reads the card's edges to about 0.05
+of the travel, where the lead is 0.03. Stage 3's measurement stands and
+the package applies it; the check moves to the device list.
+
+A second finger during a pan was scriptable after all, in the package
+rather than on the rig: the synthesizer cannot land a finger while
+another is down, but the widget test can, and it found a bug. A finger
+landing on a held card moved the point the pan counts its travel from,
+so a pinch that never began — the second finger inside its dead zone,
+then gone — jerked the card back to full screen as soon as the first
+finger moved on. The pan now keeps the pointer it started with, and both
+cases are tested: the finger that closes takes the gesture as a pinch
+from where the fingers are, the finger that only rests leaves the pan
+alone. What native does with either is still unmeasured, and joins the
+device list.
+
+The sign-off itself: eight clips in `docs/parity/`, one per stage that
+has a gesture or a flight of its own, cut by `sidebyside.py`; the
+calibrated parameters and the known deviations in `design.md` 1.6 and
+1.7; and the release's CHANGELOG entry. Two things are left, and both
+need a phone rather than the rig: the by-hand list above, and the blind
+A/B across all gestures.
+
 ---
 
 ## Order and estimates
