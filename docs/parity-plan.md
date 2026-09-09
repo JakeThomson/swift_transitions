@@ -613,6 +613,61 @@ and the hero flight's placeholder timing.
 **Done when** no catch jumps more than 1 pt in either app and the resumed
 curves match.
 
+*Measured 2026-09-09, flat palette, nineteen native runs.* The rig cannot
+land a finger a set number of milliseconds into a flight: fingers in one
+touch sequence must land together (the daemon plays a path that starts
+later as a move of the finger before it, which never lifts — the first
+batch's rings show one finger sliding from the tap to the catch point),
+it refuses a sequence while another plays (`XCTDaemonErrorDomain` 21),
+and it reports a sequence played about 240 ms after its last event, so
+the earliest a second sequence's finger lands is ~250 ms after a tap's
+lift or a pan's. That reaches a push (the native card is at 0.7–0.95 of
+its width) but not a 220 ms landing or return, which were over by the
+time the finger arrived; those need a device and a hand. What the push
+showed: **a touch does not stop the native card.** Held from before the
+push began to after it ended, the finger changed nothing, and moved 0.3 s
+later it panned the open page from its own touch point. Landed at
+0.78–0.82 of the width and dragged at once (300 pt/s), the card kept
+growing for three or four frames after the drag began — to 0.99 at 40 pt
+of travel — and then read as the pan's scale of the *full* screen, 0.848
+at 200 pt in both runs, not of the card as grabbed, which would have been
+a fifth smaller for the rest of the pan; released at rest it landed. A
+flick at 0.70 and 0.83 of the push (100 pt at 800 pt/s, lifted moving)
+landed both times, from a card that had grown to 0.955 under it. A pinch
+begun at 0.95 took the card from where it was and read as a pinch on the
+open page (0.618 at 0.6 of the fingers' distance, the stage 6 rule). A
+touch during the landing reached the page underneath: the poster took it
+as a tap and, lifted half a second later, pushed again. The package no
+longer grabs on a pointer down — the pan begins as it leaves its dead
+zone, the pinch as it leaves its own — and a pan or edge swipe begun
+during a flight to full screen (the push, or the return of a cancelled
+dismissal) carries the card on with the flight's own spring from the
+controller's value and velocity while the gesture applies on top
+(`ZoomFlight`), so the route's progress has one writer; a pinch scales a
+snapshot and stops the flight where it begins. A landing card is not
+grabbed, and the touch reaches the page underneath: a committed release
+now pops at once, the landing being the pop's own transition seeded with
+the release velocity (popping once landed, with the finger down, made
+the navigator cancel it), the user gesture ends at the commit (every
+route's modal scope ignores pointers while one is reported), the popping
+route ignores pointers above its gesture layer, and the hidden source
+stays hit-testable. Two rig findings fell out: the pan's and edge
+swipe's travel came from the recognizer's local delta, which a card in
+flight scales (30 pt of finger read as 40 of travel at 0.5), and a lone
+drag recognizer wins the arena on the pointer down, so the old
+grab-on-down reported a user gesture for a mere touch. Verified on the
+rebuilt example, eight runs: a held finger and the push flies on to full
+screen; a drag begun in flight reads 0.844–0.851 at 200 pt to native's
+0.848–0.859 and lands; a flick lands from 0.937–0.950 to native's
+0.952–0.955;
+a pinch in flight takes the card; a touch during the landing lets it
+land and, lifted, pushes again (the tile's tap handler fires, checked
+from the app's log); a touch during the return lets it return. The rig
+lands the finger later in our push than in native's (0.94 of the width
+against 0.7–0.83, our push starting sooner after the tap), so the
+in-flight growth under a drag is native's to see, not ours; on the way,
+the flight completing under the pan is the model the tests hold.
+
 ## 8. Everything else, once
 
 Not tuned, just confirmed side by side with a screenshot or short clip

@@ -7,7 +7,9 @@ import 'package:flutter/widgets.dart';
 /// [flightChild] inside the card as it grows, and hides this widget for as
 /// long as the route is on the stack. The slot keeps its size while hidden,
 /// so the row or grid around it does not reflow — the same placeholder
-/// [Hero] leaves behind during a flight.
+/// [Hero] leaves behind during a flight — and still takes touches: a tap on
+/// the spot while the card is landing reaches the source, as it does on iOS
+/// (parity stage 7), and pushes again.
 ///
 /// Like [Hero], the tag must be unique among the sources in one route's
 /// subtree, and a source inside a nested [Navigator] only takes part when
@@ -120,7 +122,8 @@ class ZoomTransitionSourceState extends State<ZoomTransitionSource> {
   }
 
   /// Replaces the source with a placeholder of its current size, keeping the
-  /// child mounted (with its tickers muted) so it resumes where it left off.
+  /// child mounted (with its tickers muted) and hit-testable so it resumes
+  /// where it left off.
   ///
   /// Has no effect if the source is already hidden or not yet laid out.
   void hide() {
@@ -152,8 +155,12 @@ class ZoomTransitionSourceState extends State<ZoomTransitionSource> {
     return SizedBox(
       width: _placeholderSize?.width,
       height: _placeholderSize?.height,
-      child: Offstage(
-        offstage: hidden,
+      child: Visibility(
+        visible: !hidden,
+        maintainState: true,
+        maintainAnimation: true,
+        maintainSize: true,
+        maintainInteractivity: true,
         child: TickerMode(
           enabled: !hidden,
           child: KeyedSubtree(key: _key, child: widget.child),

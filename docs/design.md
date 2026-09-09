@@ -825,26 +825,44 @@ As implemented (M3), with the departures from the sketch above:
   the release speed is the fingers' closing rate over the last 100 ms, and
   the departure frame un-rotates over the landing. Trackpad pinches are not
   handled yet.
-- A committed release lands the card on the route's own controller before
-  popping the route (`TransitionRoute` anticipates exactly this: the SDK's
-  back gesture also drives its animation to dismissed before the route is
-  removed), so the route stays current until it has landed and a card on
-  its way down, or springing back, can be caught: the gesture layer grabs
-  on pointer down whenever the animation is running, and the route's own
-  gesture does not block a second grab. The navigator sees one user gesture
-  from the first grab to the final settle. Not yet: trackpad pinches.
+- A committed release pops the route at once, and the landing is the pop's
+  own transition (`createSimulation`) seeded with the release velocity and
+  flown from the departure frame; the user gesture ends at the commit.
+  Popping once landed, as the SDK's back gesture does, would cancel a
+  finger that landed on the way down (the navigator cancels active
+  pointers on every navigation), and iOS gives that finger to the page
+  underneath (section 3.8). A card springing back from a cancelled release
+  can be grabbed again, as the same gesture to the navigator. Not yet:
+  trackpad pinches.
 
 ### 3.8 Interruptible push
 
-Apple: a push is never cancelled; grabbing during it completes the push and
-begins a pop. In Flutter terms:
+Apple: a push is never cancelled, and a touch never stops it. Measured
+(parity stage 7): the native card flies on under a finger; a pan begun on
+the way applies its scale to the card *as it completes* — the card kept
+growing for three frames after the drag began and then read as the pan's
+scale of the full screen, not of the card as grabbed — and a pinch begun
+on the way takes the card from where it is. A touch during the landing
+reaches the page underneath (the poster took the tap and pushed again). In
+Flutter terms:
 
-- A pointer down on the zooming page while `controller.status == forward`
-  stops the controller, captures the current `ZoomFrame` as the interaction's
-  starting state, and calls `didStartUserGesture()`.
-- On release, "commit" pops the route (it is the current route, so this is a
-  normal pop from a partial state), and "cancel" animates the controller
-  forward again. Both are springs seeded with the release velocity.
+- A pointer down on a zooming page is nothing to the card: the pan begins
+  as it leaves its dead zone, the pinch as it leaves its own, and either
+  captures the current `ZoomFrame` and calls `didStartUserGesture()`.
+- Grabbed during a flight to full screen — the push, or the return of a
+  cancelled dismissal — the controller carries `restingFrame` on with the
+  flight's own spring from the controller's value and velocity
+  (`ZoomFlight`), and the gesture applies on top; the route's progress is
+  the flight's times the gesture's scale, so it has one writer and never
+  jumps. A pinch scales a snapshot, so a flight stops where a pinch begins.
+- On release, "commit" pops the route from the composed frame, and "cancel"
+  animates the controller forward again. Both are springs seeded with the
+  release velocity.
+- A landing card is not grabbed: the popping route ignores pointers — the
+  SDK's modal scope does so for the page, and the card and its gesture
+  layer sit outside it — so the touch reaches the page underneath, where
+  the hidden source still hit-tests (`Visibility` with
+  `maintainInteractivity`) and a tap on it pushes again, as on iOS.
 - While the gesture is live the route's page is fully built and laid out, so
   taps that the gesture recognizers reject reach the page as on iOS.
 

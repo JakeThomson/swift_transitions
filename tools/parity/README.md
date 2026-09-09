@@ -15,6 +15,8 @@ simulator, and the example built for the simulator
     python3 compare_pan.py dir native flutter           # stage 4 side by side, one line per script
     python3 analyze_pinch.py run.csv                    # stage 6: a pinch's scale, turn, focal, release
     python3 compare_pinch.py dir native flutter         # stage 6 side by side, one line per script
+    python3 analyze_catch.py run.csv                    # stage 7: a caught card's stop, hold, resumed flight
+    python3 compare_catch.py dir native flutter         # stage 7 side by side, one line per script
     python3 analyze_edge.py run.csv                     # stage 5: an edge swipe's gain, follow, release
     python3 compare_edge.py dir native flutter          # stage 5 side by side, one line per script
 

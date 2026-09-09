@@ -1,5 +1,18 @@
 ## 0.1.0-dev
 
+* Match the zoom route's response to a touch in flight to iOS, measured
+  against a native `NavigationStack` zoom (parity stage 7): a finger on a
+  flying card no longer stops it — the pan begins as it leaves its dead
+  zone, the pinch as it leaves its own — and a pan begun during the push,
+  or during the return of a cancelled dismissal, takes the card as it
+  flies: the flight completes underneath the gesture, as the native card
+  kept growing under a drag and then read as the pan's scale of the full
+  screen. A landing card is not grabbed: a committed release pops the
+  route at once and lands on the pop's own transition, the popping route
+  passes its pointers by, and the hidden `ZoomTransitionSource` still
+  takes them, so a tap on its spot during the landing pushes again. The
+  pan's and edge swipe's travel is read in global coordinates, which a
+  card in flight had scaled.
 * Match the zoom route's pinch to iOS, measured against a native
   `NavigationStack` zoom (parity stage 6): the card holds its size until
   the fingers' distance has changed by half the platform's slop (8.7 pt
@@ -57,12 +70,11 @@
   (`BackGestureController.releaseSpring`, ω 22, ζ 0.85) that covers 98 % of
   its distance in about 210 ms whatever the distance, instead of the SDK's
   350 ms curve.
-* Make the zoom route's interactive dismissal interruptible the whole way:
-  a committed release lands the card before the route pops, so a card on
-  its way down — or springing back — can be caught and dragged again, and
-  the navigator sees one gesture from the first grab to the last landing.
-  A dismissal begun from rest looks the source up again, so a paging page
-  that changes `sourceTag` lands on the poster it is showing.
+* Make the zoom route's cancelled release interruptible: a card springing
+  back can be grabbed and dragged again, and the navigator sees one
+  gesture from the first grab to the settle. A dismissal begun from rest
+  looks the source up again, so a paging page that changes `sourceTag`
+  lands on the poster it is showing.
 * Add `alignmentRect` and `snapshotDuringTransition` to
   `ZoomTransitionOptions`: the part of the page that aligns with the
   source, asked on the push and again on each pop like UIKit's

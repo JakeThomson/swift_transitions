@@ -34,6 +34,11 @@ DIM_PATCH = (2, 520, 20, 40)  # x, y, w, h in points
 # the card's shadow (which reaches the first patch) can be separated from
 # the dim: column dim2_y.
 DIM_PATCH2 = (2, 820, 20, 40)
+# The navigation bar's title and its back button, for the bar's own
+# transition: mean luminance across the title's middle (both apps centre
+# it) and the back chevron, columns title_lum and back_lum. Text is dark
+# on the white bar, so a lower reading is more of it.
+BAR_PATCHES = ((150, 78, 100, 20), (24, 74, 24, 20))
 # Scanlines along which the first matching pixel of a class is reported,
 # as <class>_x<y>: the leading edge of a sliding page along one row is
 # immune to whatever else in the frame shares its colour.
@@ -121,7 +126,7 @@ def track_frame(args):
             hit = np.nonzero(row)[0]
             edges.append(f"{hit[0] / scale:.1f}" if len(hit) else "")
     lums = []
-    for px, py, pw, ph in (DIM_PATCH, DIM_PATCH2):
+    for px, py, pw, ph in (DIM_PATCH, DIM_PATCH2) + BAR_PATCHES:
         x, y, w, h = (int(c * scale) for c in (px, py, pw, ph))
         patch = rgb[y:y + h, x:x + w].astype(np.float32)
         lums.append((0.2126 * patch[..., 0] + 0.7152 * patch[..., 1] + 0.0722 * patch[..., 2]).mean())
@@ -163,7 +168,7 @@ def main(frames, out, scale=3.0):
             cols += [f"{name}_l", f"{name}_t", f"{name}_r", f"{name}_b"]
         for name, ys in SCANLINES.items():
             cols += [f"{name}_x{y}" for y in ys]
-        cols += ["dim_y", "dim2_y", "cardfull_l", "cardfull_t", "cardfull_r", "cardfull_b", "app"]
+        cols += ["dim_y", "dim2_y", "title_lum", "back_lum", "cardfull_l", "cardfull_t", "cardfull_r", "cardfull_b", "app"]
         w.writerow(cols)
         app_up = False
         for i, white, boxes, edges, lums, full in results:
@@ -172,7 +177,7 @@ def main(frames, out, scale=3.0):
             for b in boxes:
                 row += b if app_up else [""] * 4
             row += edges if app_up else [""] * len(edges)
-            row += [f"{lums[0]:.1f}", f"{lums[1]:.1f}"]
+            row += [f"{lum:.1f}" for lum in lums]
             row += full if app_up else [""] * 4
             row.append(int(app_up))
             w.writerow(row)

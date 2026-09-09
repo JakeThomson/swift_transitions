@@ -87,16 +87,16 @@ Rect cardRect(WidgetTester tester) => tester.getRect(
 NavigatorState navigatorOf(WidgetTester tester) =>
     tester.state<NavigatorState>(find.byType(Navigator));
 
-bool sourceHidden(WidgetTester tester) => tester
-    .widget<Offstage>(
+bool sourceHidden(WidgetTester tester) => !tester
+    .widget<Visibility>(
       find.descendant(
         of: find.byWidgetPredicate(
           (widget) => widget is ZoomTransitionSource && widget.tag == 'poster',
         ),
-        matching: find.byType(Offstage),
+        matching: find.byType(Visibility),
       ),
     )
-    .offstage;
+    .visible;
 
 Future<void> pushAndSettle(
   WidgetTester tester,
@@ -188,7 +188,7 @@ void main() {
     expect(sourceHidden(tester), isTrue);
   });
 
-  testWidgets('a committed release lands before the route pops', (
+  testWidgets('a committed release pops and lands from where it was', (
     tester,
   ) async {
     await pushAndSettle(tester, staticDetail);
@@ -203,10 +203,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
 
-    // Landing: the route is still current, so the card can be caught.
-    expect(route.isCurrent, isTrue);
+    // Landing: the pop's own transition, from the departure frame.
+    expect(route.isCurrent, isFalse);
     expect(route.animation!.status, AnimationStatus.reverse);
-    expect(navigator.userGestureInProgress, isTrue);
+    // The gesture is over at the commit: a landing card is not grabbed
+    // again, and a touch on it must reach the page underneath.
+    expect(navigator.userGestureInProgress, isFalse);
     expect(cardRect(tester).width, lessThan(800 * physics.scaleFor(0.5)));
 
     await tester.pumpAndSettle();
@@ -216,10 +218,8 @@ void main() {
     expect(sourceHidden(tester), isFalse);
   });
 
-  testWidgets('a landing card can be caught and brought back', (tester) async {
+  testWidgets('a touch during the landing lets it land', (tester) async {
     await pushAndSettle(tester, staticDetail);
-    final navigator = navigatorOf(tester);
-    final route = ModalRoute.of(tester.element(find.text('detail')))!;
 
     final first = await tester.startGesture(const Offset(400, 300));
     await first.moveBy(const Offset(0, 18));
@@ -228,25 +228,22 @@ void main() {
     await first.up();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    final caughtAt = cardRect(tester);
+    final touchedAt = cardRect(tester);
 
-    final second = await tester.startGesture(caughtAt.center);
+    // Neither a finger nor a drag catches a landing card: the route is
+    // popping, as on iOS, where the touch reaches the page underneath.
+    final second = await tester.startGesture(touchedAt.center);
+    await second.moveBy(const Offset(0, -40));
     await tester.pump(const Duration(milliseconds: 60));
-    expect(cardRect(tester), caughtAt, reason: 'the landing stops');
-    expect(navigator.userGestureInProgress, isTrue);
+    expect(
+      cardRect(tester).width,
+      lessThan(touchedAt.width),
+      reason: 'the landing flies on',
+    );
 
-    // Lift it back up; a card above where it was grabbed is at full size
-    // for its grab, which is well over the threshold.
-    await second.moveBy(const Offset(0, -40));
-    await tester.pump(const Duration(milliseconds: 50));
-    await second.moveBy(const Offset(0, -40));
-    await tester.pump(const Duration(milliseconds: 50));
     await second.up();
     await tester.pumpAndSettle();
-    expect(find.text('detail'), findsOneWidget);
-    expect(cardRect(tester), screen);
-    expect(route.animation!.isCompleted, isTrue);
-    expect(navigator.userGestureInProgress, isFalse);
+    expect(find.text('detail'), findsNothing);
   });
 
   testWidgets('a dismissal from rest lands on the current sourceTag', (
@@ -515,26 +512,64 @@ void main() {
     expect(find.text('detail'), findsNothing);
   });
 
-  testWidgets('a pointer down during the push grabs the card', (tester) async {
+  testWidgets('a touch during the push does not stop it', (tester) async {
     await tester.pumpWidget(testApp(detail: staticDetail));
     await tester.tap(find.text('push'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     final route = ModalRoute.of(tester.element(find.text('detail')))!;
-    final grabbed = route.animation!.value;
-    expect(grabbed, inExclusiveRange(0, 1));
+    final touched = route.animation!.value;
+    expect(touched, inExclusiveRange(0, 1));
 
     // Inside the card at every point of the flight: the poster's centre.
     final gesture = await tester.startGesture(posterRect.center);
     await tester.pump(const Duration(milliseconds: 100));
-    expect(route.animation!.value, grabbed, reason: 'the push stops');
-    expect(navigatorOf(tester).userGestureInProgress, isTrue);
+    expect(
+      route.animation!.value,
+      greaterThan(touched),
+      reason: 'the push flies on',
+    );
+    expect(navigatorOf(tester).userGestureInProgress, isFalse);
 
     await gesture.up();
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsOneWidget);
     expect(route.animation!.isCompleted, isTrue);
-    expect(navigatorOf(tester).userGestureInProgress, isFalse);
+  });
+
+  testWidgets('a pan begun during the push takes the card as it flies', (
+    tester,
+  ) async {
+    await tester.pumpWidget(testApp(detail: staticDetail));
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+    final navigator = navigatorOf(tester);
+
+    final gesture = await tester.startGesture(posterRect.center);
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 12));
+    await tester.pump();
+    expect(navigator.userGestureInProgress, isTrue);
+    expect(route.animation!.status, AnimationStatus.reverse);
+    final grabbed = cardRect(tester).width;
+    expect(grabbed, lessThan(800));
+
+    // The push completes underneath: the card grows past where the pan
+    // took it, to the pan's scale of the full screen.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(cardRect(tester).width, greaterThan(grabbed));
+    await tester.pump(const Duration(seconds: 1));
+    final scale = physics.scaleFor(12 / 600);
+    expect(cardRect(tester).width, closeTo(800 * scale, 0.5));
+    expect(route.animation!.value, closeTo(scale, 0.001));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(route.animation!.isCompleted, isTrue);
+    expect(navigator.userGestureInProgress, isFalse);
   });
 
   testWidgets('grabbing during the push diverts a hero flight', (tester) async {
@@ -548,6 +583,7 @@ void main() {
     )!;
 
     final gesture = await tester.startGesture(posterRect.center);
+    await gesture.moveBy(const Offset(0, 20));
     await tester.pump();
     expect(route.animation!.status, AnimationStatus.reverse);
     // A little, and slowly: the card is small this early in the push, so a
@@ -564,7 +600,7 @@ void main() {
     expect(navigatorOf(tester).userGestureInProgress, isFalse);
   });
 
-  testWidgets('grabbing again while the card returns is one gesture', (
+  testWidgets('a drag while the card returns is the same gesture', (
     tester,
   ) async {
     await tester.pumpWidget(testApp(detail: staticDetail, hero: true));
@@ -584,11 +620,17 @@ void main() {
     expect(route.animation!.value, inExclusiveRange(0, 1));
 
     final second = await tester.startGesture(const Offset(400, 300));
+    await second.moveBy(const Offset(0, 18));
+    await second.moveBy(const Offset(0, 6));
     await tester.pump();
     final caughtAt = route.animation!.value;
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(route.animation!.value, caughtAt, reason: 'the return stops');
     expect(navigator.userGestureInProgress, isTrue);
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(
+      route.animation!.value,
+      greaterThan(caughtAt),
+      reason: 'the return flies on under the drag',
+    );
     expect(tester.takeException(), isNull);
 
     await second.up();

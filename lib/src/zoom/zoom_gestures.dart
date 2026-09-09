@@ -58,7 +58,6 @@ class ZoomDismissGestureDetector extends StatefulWidget {
     required this.pan,
     required this.edgeSwipe,
     required this.pinch,
-    required this.isInFlight,
     required this.onStart,
     required this.scrollController,
     required this.child,
@@ -72,10 +71,6 @@ class ZoomDismissGestureDetector extends StatefulWidget {
 
   /// Whether a two-finger pinch may dismiss.
   final bool pinch;
-
-  /// Whether the card is moving on its own — pushing, landing or returning
-  /// — so that a pointer down grabs it at once rather than after a drag.
-  final ValueGetter<bool> isInFlight;
 
   /// Starts a dismissal, or refuses it.
   final ZoomDismissStartCallback onStart;
@@ -96,11 +91,6 @@ class _ZoomDismissGestureDetectorState
   ZoomDismissController? _controller;
   late final VerticalDragGestureRecognizer _panRecognizer;
   late final HorizontalDragGestureRecognizer _edgeRecognizer;
-
-  /// Whether the live gesture is being driven by raw pointer movement,
-  /// which is how an interrupted push is grabbed before any recognizer has
-  /// resolved.
-  bool _pointerDriven = false;
 
   /// How far the live edge swipe has travelled, for the dead zone, and
   /// where it went down.
@@ -162,8 +152,13 @@ class _ZoomDismissGestureDetectorState
   /// returns to rest where the finger started.
   void _handlePanUpdate(DragUpdateDetails details) {
     final before = _panDragged;
-    _panDragged += details.primaryDelta!;
+    // From the global positions: the recognizer's delta is in the page's
+    // own coordinates, which a card in flight scales.
+    _panDragged = details.globalPosition.dy - _panDown.dy;
     if (_panDragged <= _kPanDeadZone && before <= _kPanDeadZone) {
+      return;
+    }
+    if (_controller == null && !_begin(ZoomGesture.pan, _panDown)) {
       return;
     }
     _controller?.dragUpdate(
@@ -179,9 +174,8 @@ class _ZoomDismissGestureDetectorState
   /// pointer stream, which runs ahead of the recognizer and would see the
   /// dead zone a move late.
   void _handleEdgeUpdate(DragUpdateDetails details) {
-    final delta = _toLogical(details.primaryDelta!);
     final before = _edgeDragged;
-    _edgeDragged += delta;
+    _edgeDragged = _toLogical(details.globalPosition.dx - _edgeDown.dx);
     if (_edgeDragged <= _kEdgeDeadZone) {
       return;
     }
@@ -224,7 +218,7 @@ class _ZoomDismissGestureDetectorState
   /// dismissal begins on the first such delta, not when the drag started,
   /// so an ordinary scroll never counts as a navigator gesture.
   void _handleScrollDragUpdate(double delta) {
-    if (_controller == null && !_pointerDriven) {
+    if (_controller == null) {
       if (!_begin(ZoomGesture.pan, _panDown)) {
         return;
       }
@@ -294,18 +288,14 @@ class _ZoomDismissGestureDetectorState
     return true;
   }
 
+  /// Nothing begins here: a lone recognizer wins the arena on the pointer
+  /// down, and a finger that has not dragged is no gesture to the navigator
+  /// or to a card in flight. The pan begins as it leaves its dead zone.
   void _handlePanStart(DragStartDetails details) {
-    if (_pointerDriven) {
-      return;
-    }
     _panDragged = 0;
-    _begin(ZoomGesture.pan, _panDown);
   }
 
   void _handleEdgeStart(DragStartDetails details) {
-    if (_pointerDriven) {
-      return;
-    }
     _edgeDragged = 0;
     _edgeDown = details.globalPosition;
     _begin(ZoomGesture.edgeSwipe, details.globalPosition);
@@ -314,7 +304,6 @@ class _ZoomDismissGestureDetectorState
   void _end(double velocity) {
     final controller = _controller;
     _controller = null;
-    _pointerDriven = false;
     _pinchPointers = null;
     _pinchBegun = false;
     controller?.dragEnd(velocity);
@@ -335,16 +324,11 @@ class _ZoomDismissGestureDetectorState
       _pinchDistanceAtDown = _pinchDistance;
       return;
     }
+    // A finger on a flying card is nothing until a recognizer resolves: the
+    // native card flies on under a touch, and a drag begun on the way takes
+    // it as it flies.
     if (widget.pan) {
       _panRecognizer.addPointer(event);
-    }
-    if (widget.isInFlight() && widget.pan && _controller == null) {
-      // Grab the card in flight: a push completes into a gesture rather
-      // than being cancelled, and a landing or return is caught. Driven from
-      // raw pointer movement, since no recognizer has resolved yet.
-      if (_begin(ZoomGesture.pan, event.position)) {
-        _pointerDriven = true;
-      }
     }
   }
 
@@ -379,9 +363,6 @@ class _ZoomDismissGestureDetectorState
     if (controller == null) {
       return;
     }
-    if (_pointerDriven) {
-      controller.dragUpdate(event.delta.dy);
-    }
     if (controller.gesture == ZoomGesture.edgeSwipe) {
       return;
     }
@@ -401,9 +382,6 @@ class _ZoomDismissGestureDetectorState
         }
       }
       return;
-    }
-    if (_pointerDriven) {
-      _end(0);
     }
   }
 
@@ -432,7 +410,6 @@ class _ZoomDismissGestureDetectorState
       _controller = controller;
     }
     _pinchBegun = true;
-    _pointerDriven = false;
     widget.scrollController.cancelDrag();
     // Anchored where the dead zone ends, not at the first move seen past
     // it, so the card scales from there.

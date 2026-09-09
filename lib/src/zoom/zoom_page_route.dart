@@ -48,6 +48,10 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   ZoomFlightSource? _flightSource;
   Rect? _alignmentRect;
   ZoomDismissController? _dismiss;
+
+  /// What the next pop's simulation is seeded with, in progress units per
+  /// second toward the source: a committed dismissal's release velocity.
+  double _releaseSeed = 0;
   bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
   final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
@@ -89,16 +93,18 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       ZoomPageTransition.delegatedTransition;
 
   /// A spring from wherever the controller is: the flight's far end after
-  /// a push or a programmatic pop, or mid-flight when a push is popped
-  /// before it lands. An interactive dismissal lands the card itself and
-  /// pops from the start, where this spring is already at rest.
+  /// a push or a programmatic pop, mid-flight when a push is popped before
+  /// it lands, or the departure frame of a committed dismissal, seeded
+  /// with its release velocity.
   @override
   Simulation? createSimulation({required bool forward}) {
+    final seed = forward ? 0.0 : _releaseSeed;
+    _releaseSeed = 0;
     return SpringSimulation(
       options.pushSpring,
       controller!.value,
       forward ? 1 : 0,
-      0,
+      -seed,
     );
   }
 
@@ -125,9 +131,9 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   @override
   bool didPop(T? result) {
-    if (!controller!.isDismissed) {
-      // Popped from the start — an interactive dismissal that has already
-      // landed — there is no flight to prepare.
+    if (_departure == null) {
+      // A committed dismissal has its flight: the departure it was released
+      // from, looked up when it was grabbed.
       _scheduleFlight(ZoomFlightDirection.pop);
     }
     return super.didPop(result);
@@ -157,14 +163,18 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   /// Whether an interactive dismissal may begin now: the route is current
   /// and can pop, no other route's gesture holds the navigator, and the
-  /// options' predicate agrees. Unlike [popGestureEnabled], a card in
-  /// motion does not block it: a push is grabbed instead (design.md section
-  /// 3.8), and a landing or returning card is caught.
+  /// options' predicate agrees. Unlike [popGestureEnabled], a card flying
+  /// to full screen does not block it: a gesture begun during the push, or
+  /// the return of a cancelled dismissal, takes the card as it flies
+  /// (design.md section 3.8). A landing card is not grabbed: the route is
+  /// popping and passes its pointers by ([buildTransitions]), as iOS lets a
+  /// touch through to the page underneath.
   bool _canBeginDismiss(ZoomGesture gesture, Offset grabPoint) {
     final navigator = this.navigator;
     if (navigator == null ||
         !isCurrent ||
         isFirst ||
+        controller!.status == AnimationStatus.reverse ||
         (navigator.userGestureInProgress && !_userGestureInProgress) ||
         popDisposition == RoutePopDisposition.doNotPop ||
         _dismiss != null) {
@@ -189,7 +199,6 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   /// line, or on the way from the last departure. The same frames
   /// [ZoomPageTransition] draws.
   ZoomFrame _currentFrame(Rect screen, BorderRadius screenRadii) {
-    final source = _flightSource;
     // A spring settles within a tolerance of its end; read the ends from
     // the status, as ZoomPageTransition does.
     final t = controller!.isCompleted
@@ -197,7 +206,25 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         : controller!.isDismissed
         ? 0.0
         : controller!.value.clamp(0.0, 1.0);
-    final departure = _departure;
+    return _frameAt(
+      t,
+      screen,
+      screenRadii,
+      departure: _departure,
+      pushing: controller!.status == AnimationStatus.forward,
+    );
+  }
+
+  /// The card's frame at progress [t] of the flight [departure] describes,
+  /// or of the flight line.
+  ZoomFrame _frameAt(
+    double t,
+    Rect screen,
+    BorderRadius screenRadii, {
+    required ZoomDeparture? departure,
+    required bool pushing,
+  }) {
+    final source = _flightSource;
     if (departure == null) {
       return zoomFlightFrame(
         t: t,
@@ -205,7 +232,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         screen: screen,
         sourceRadii: source?.radii ?? screenRadii,
         screenRadii: screenRadii,
-        pushing: controller!.status == AnimationStatus.forward,
+        pushing: pushing,
       );
     }
     return ZoomPageTransition.departureFrameAt(
@@ -236,6 +263,25 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       _prepareFlight(ZoomFlightDirection.pop);
     }
     final resting = _currentFrame(screen, screenRadii);
+    // A flight to full screen completes underneath the gesture; a settled
+    // page or a landed one has nothing to fly.
+    final animation = controller!;
+    final departure = _departure;
+    final flight = animation.status == AnimationStatus.forward
+        ? ZoomFlight(
+            spring: departure == null
+                ? options.pushSpring
+                : options.dismissPhysics.returnSpring,
+            velocity: animation.velocity,
+            frameAt: (t) => _frameAt(
+              t,
+              screen,
+              screenRadii,
+              departure: departure,
+              pushing: departure == null,
+            ),
+          )
+        : null;
     _departure = null;
     _dismiss = ZoomDismissController(
       navigator: navigator,
@@ -253,7 +299,18 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       onRelease: (departure) {
         _dismiss = null;
         _departure = departure;
+        if (departure.toSource) {
+          // A landing cannot be grabbed again, so the gesture is over now:
+          // every route's modal scope ignores pointers while the navigator
+          // reports one, and a touch on the landing card must reach the
+          // page underneath.
+          _stopUserGesture();
+        }
         changedInternalState();
+      },
+      onCommit: (seed) {
+        _releaseSeed = seed;
+        navigator.pop();
       },
       onSettled: () {
         if (_dismiss != null) {
@@ -268,6 +325,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       },
       settleSpring: options.pushSpring,
       vsync: navigator,
+      flight: flight,
     );
     if (!_userGestureInProgress) {
       final controller = this.controller!;
@@ -417,23 +475,29 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       pan: gestures.pan,
       edgeSwipe: gestures.edgeSwipe,
       pinch: gestures.pinch,
-      isInFlight: () => animation.isAnimating,
       onStart: _beginDismiss,
       scrollController: _scrollController,
       child: child,
     );
-    if (MediaQuery.disableAnimationsOf(context)) {
-      return FadeTransition(opacity: animation, child: page);
-    }
-    return ZoomPageTransition(
-      animation: animation,
-      source: _flightSource,
-      liveFrame: _liveFrame,
-      departure: _departure,
-      cornerRadii: cornerRadii,
-      alignmentRect: _alignmentRect,
-      snapshot: options.snapshotDuringTransition,
-      child: page,
+    final transition = MediaQuery.disableAnimationsOf(context)
+        ? FadeTransition(opacity: animation, child: page)
+        : ZoomPageTransition(
+            animation: animation,
+            source: _flightSource,
+            liveFrame: _liveFrame,
+            departure: _departure,
+            cornerRadii: cornerRadii,
+            alignmentRect: _alignmentRect,
+            snapshot: options.snapshotDuringTransition,
+            child: page,
+          );
+    // A popping route passes its pointers by — the SDK's modal scope does
+    // for the page, and the card and its gesture layer sit outside that —
+    // so a touch on a landing card reaches the page underneath, as on iOS,
+    // where the source takes the tap and pushes again (parity stage 7).
+    return IgnorePointer(
+      ignoring: animation.status == AnimationStatus.reverse,
+      child: transition,
     );
   }
 }

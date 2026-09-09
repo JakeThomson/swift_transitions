@@ -72,6 +72,30 @@ class ZoomDeparture {
   final bool toSource;
 }
 
+/// A flight to full screen — the push, or the return of a cancelled
+/// dismissal — that a gesture began during. The card keeps flying under the
+/// gesture, as the native card does: a touch never stops it, a pan begun on
+/// the way scales the card as it grows, and the release departs from the
+/// composed frame (parity stage 7).
+@immutable
+class ZoomFlight {
+  /// Creates a flight from where the route's controller is.
+  const ZoomFlight({
+    required this.spring,
+    required this.velocity,
+    required this.frameAt,
+  });
+
+  /// The spring the flight is on.
+  final SpringDescription spring;
+
+  /// The controller's velocity when grabbed, in progress per second.
+  final double velocity;
+
+  /// The card's frame at a route progress.
+  final ZoomFrame Function(double progress) frameAt;
+}
+
 /// Drives one interactive dismissal from grab to settle: turns drag deltas
 /// and pointer positions into a [ZoomFrame] and a route progress each frame,
 /// and on release decides between committing and cancelling, seeding the
@@ -80,18 +104,21 @@ class ZoomDeparture {
 /// The counterpart of the push route's `BackGestureController`: it is
 /// created when a gesture begins, scrubs the route's own animation
 /// controller, and reports through [onSettled] only once the settle
-/// animation completes. A committed dismissal lands the card on the route's
-/// controller *before* popping the route, so the route stays current — and
-/// the card can be grabbed again — until it has landed; the pop then
-/// completes at once. The route that creates the controller tells the
-/// navigator when the user gesture starts and stops, since a card grabbed
-/// again while settling is the same gesture to the navigator.
+/// animation completes. A committed dismissal pops the route at once
+/// through [onCommit], and the landing is the pop's own transition seeded
+/// with the release velocity, so the route's hero flights and the covered
+/// route's delegated transition run with it; popping later, once landed,
+/// would cancel a finger that landed on the way down, which the page
+/// underneath is due. The route that creates the controller tells the
+/// navigator when the user gesture starts and stops: at the commit for a
+/// landing, which cannot be grabbed again, and at the settle for a return,
+/// which can, as the same gesture.
 ///
 /// The response is [ZoomDismissPhysics] applied to the card as it was when
-/// grabbed ([restingFrame]), which is the full screen for a settled page and
-/// the mid-flight card for an interrupted push. Progress scales with the
-/// card: a card at 0.75 of its grabbed size reports 0.75 of the grabbed
-/// progress.
+/// grabbed ([restingFrame]): the full screen for a settled page, and for a
+/// gesture begun during a [flight] the card as it flies, since the flight
+/// completes underneath the gesture. Progress scales with the card: a card
+/// at 0.75 of its grabbed size reports 0.75 of the grabbed progress.
 ///
 /// A second finger turns any gesture into a pinch ([beginPinch]): from then
 /// on the card scales with the fingers' distance, rotates with their angle
@@ -114,17 +141,30 @@ class ZoomDismissController {
     required this.getIsActive,
     required this.getIsCurrent,
     required this.onRelease,
+    required this.onCommit,
     required this.onSettled,
     required this.settleSpring,
     required TickerProvider vsync,
+    this.flight,
   }) : restingProgress = controller.isCompleted ? 1 : controller.value,
        _anchor = grabPoint,
        _pointer = grabPoint {
     _ticker = vsync.createTicker(_tick);
+    final flight = this.flight;
+    if (flight != null && !controller.isCompleted) {
+      _flightSimulation = SpringSimulation(
+        flight.spring,
+        controller.value,
+        1,
+        flight.velocity,
+      );
+      _ticker.start();
+    }
     controller.stop();
   }
 
-  /// The navigator to pop from on a committed dismissal.
+  /// The route's navigator, for whoever tears the page down under a live
+  /// gesture to check it is still there.
   final NavigatorState navigator;
 
   /// The route's own animation controller, scrubbed by the gesture.
@@ -167,6 +207,11 @@ class ZoomDismissController {
   /// Called at release with where the card is departing from.
   final ValueSetter<ZoomDeparture> onRelease;
 
+  /// Called at a committed release, after [onRelease], with what the
+  /// landing spring is seeded with in progress units per second: the route
+  /// pops now and lands on the pop's transition.
+  final ValueSetter<double> onCommit;
+
   /// Called once the settle animation completes.
   final VoidCallback onSettled;
 
@@ -174,7 +219,14 @@ class ZoomDismissController {
   /// [ZoomDismissPhysics.returnSpring].
   final SpringDescription settleSpring;
 
+  /// The flight the gesture began during, or null on a settled page. The
+  /// controller flies [restingFrame] on to full screen itself, so the route
+  /// has one writer of its progress.
+  final ZoomFlight? flight;
+
   late final Ticker _ticker;
+  Simulation? _flightSimulation;
+  Duration? _flightStart;
   final Offset _anchor;
   double _travelPixels = 0;
   Offset _pointer;
@@ -246,6 +298,8 @@ class ZoomDismissController {
     if (_released) {
       return;
     }
+    // The pinch scales a snapshot: a flight underneath stops here.
+    _flightSimulation = null;
     restingFrame = _frame();
     restingProgress = controller.value;
     gesture = ZoomGesture.pinch;
@@ -321,6 +375,7 @@ class ZoomDismissController {
       return;
     }
     _released = true;
+    _flightSimulation = null;
     final bool commit;
     if (!getIsCurrent()) {
       commit = !getIsActive();
@@ -385,9 +440,7 @@ class ZoomDismissController {
         restingProgress;
     onRelease(departure);
     if (commit) {
-      controller.animateBackWith(
-        SpringSimulation(settleSpring, controller.value, 0, -seed),
-      );
+      onCommit(seed);
     } else {
       controller.animateWith(
         SpringSimulation(physics.returnSpring, controller.value, 1, seed),
@@ -409,12 +462,6 @@ class ZoomDismissController {
   }
 
   void _settle() {
-    if (controller.isDismissed && getIsCurrent()) {
-      // Landed: the route's transition is already at its start, so the pop
-      // completes without a further flight. Popping only now is what lets
-      // the card be caught on its way down.
-      navigator.pop();
-    }
     onSettled();
   }
 
@@ -533,6 +580,12 @@ class ZoomDismissController {
   }
 
   /// Every value chasing a target through a spring.
+  /// Carries the resting card on with its flight to [progress] of the way.
+  void _flyTo(double progress) {
+    restingProgress = progress;
+    restingFrame = flight!.frameAt(progress);
+  }
+
   List<_Chase> get _chases => [
     _horizontal,
     _pinchScale,
@@ -568,7 +621,19 @@ class ZoomDismissController {
         }
       }
     }
-    if (_chases.every((chase) => chase.atRest)) {
+    final simulation = _flightSimulation;
+    if (simulation != null) {
+      final t =
+          (elapsed - (_flightStart ??= elapsed)).inMicroseconds /
+          Duration.microsecondsPerSecond;
+      if (simulation.isDone(t)) {
+        _flightSimulation = null;
+        _flyTo(1);
+      } else {
+        _flyTo(simulation.x(t).clamp(0.0, 1.0));
+      }
+    }
+    if (_flightSimulation == null && _chases.every((chase) => chase.atRest)) {
       for (final chase in _chases) {
         chase.settle();
       }

@@ -17,6 +17,7 @@ Widget testApp({
   ZoomTransitionOptions options = const ZoomTransitionOptions(),
   bool disableAnimations = false,
   Widget detail = const Center(child: Text('detail')),
+  VoidCallback? onPosterTap,
 }) {
   return DisplayCornerRadii(
     radii: BorderRadius.circular(40),
@@ -32,9 +33,12 @@ Widget testApp({
                 child: ZoomTransitionSource(
                   tag: 'poster',
                   borderRadius: BorderRadius.circular(12),
-                  child: const ColoredBox(
-                    color: Color(0xFF0000FF),
-                    child: Text('poster'),
+                  child: GestureDetector(
+                    onTap: onPosterTap,
+                    child: const ColoredBox(
+                      color: Color(0xFF0000FF),
+                      child: Text('poster'),
+                    ),
                   ),
                 ),
               ),
@@ -93,11 +97,11 @@ bool sourceHidden(WidgetTester tester, String tag) {
   final source = find.byWidgetPredicate(
     (widget) => widget is ZoomTransitionSource && widget.tag == tag,
   );
-  return tester
-      .widget<Offstage>(
-        find.descendant(of: source, matching: find.byType(Offstage)),
+  return !tester
+      .widget<Visibility>(
+        find.descendant(of: source, matching: find.byType(Visibility)),
       )
-      .offstage;
+      .visible;
 }
 
 Rect sourceRect(WidgetTester tester, String tag) => tester.getRect(
@@ -229,6 +233,26 @@ void main() {
     expect(find.text('detail'), findsNothing);
     expect(sourceHidden(tester, 'poster'), isFalse);
     expect(sourceRect(tester, 'poster'), slot);
+  });
+
+  testWidgets('a tap on the hidden source during the landing reaches it', (
+    tester,
+  ) async {
+    var taps = 0;
+    await tester.pumpWidget(testApp(onPosterTap: () => taps++));
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    expect(sourceHidden(tester, 'poster'), isTrue);
+
+    Navigator.of(tester.element(find.text('detail'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    // The popping route passes the touch by, and the placeholder takes it
+    // as the poster would on iOS.
+    await tester.tapAt(posterRect.center);
+    await tester.pumpAndSettle();
+    expect(taps, 1);
+    expect(find.text('detail'), findsNothing);
   });
 
   testWidgets('the pop shrinks the card back onto the source', (tester) async {
