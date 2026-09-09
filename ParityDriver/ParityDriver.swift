@@ -237,6 +237,99 @@ final class ParityDriver: XCTestCase {
         hold(1.5)
     }
 
+    // MARK: Stage 4: the pan on the zoom page. Each test opens the Dunes
+    // poster, waits, then drags down from a point on the art; names give the
+    // finger's travel as a fraction of the screen height and how it is
+    // released. The grab is at y = 160 so an 80 % travel stays on screen.
+
+    static let grab = CGPoint(x: 201, y: 160)
+    static let height: CGFloat = 874
+
+    /// A straight drag down by `fraction` of the height at `speed` pt/s, the
+    /// first 20 pt at 300 whatever the speed, so the scroll view hands the
+    /// drag across before it is going fast.
+    func zoomPan(to fraction: CGFloat, speed: CGFloat, rest: Bool, from: CGPoint = ParityDriver.grab) {
+        openDunes()
+        var finger = Finger(at: from)
+        finger.line(to: CGPoint(x: from.x, y: from.y + 20), speed: 300)
+        finger.line(to: CGPoint(x: from.x, y: from.y + Self.height * fraction), speed: speed)
+        if rest { finger.hold(0.6) }
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testZoomPan15Rest() { zoomPan(to: 0.15, speed: 300, rest: true) }
+    func testZoomPan30Rest() { zoomPan(to: 0.3, speed: 300, rest: true) }
+    func testZoomPan50Rest() { zoomPan(to: 0.5, speed: 300, rest: true) }
+    func testZoomPan80Rest() { zoomPan(to: 0.8, speed: 300, rest: true) }
+    // The commit table: three positions, released slow, medium and fast.
+    func testZoomPan20Slow() { zoomPan(to: 0.2, speed: 150, rest: false) }
+    func testZoomPan20Medium() { zoomPan(to: 0.2, speed: 400, rest: false) }
+    func testZoomPan20Fast() { zoomPan(to: 0.2, speed: 800, rest: false) }
+    func testZoomPan40Slow() { zoomPan(to: 0.4, speed: 150, rest: false) }
+    func testZoomPan40Medium() { zoomPan(to: 0.4, speed: 400, rest: false) }
+    func testZoomPan40Fast() { zoomPan(to: 0.4, speed: 800, rest: false) }
+    func testZoomPan60Slow() { zoomPan(to: 0.6, speed: 150, rest: false) }
+    func testZoomPan60Medium() { zoomPan(to: 0.6, speed: 400, rest: false) }
+    func testZoomPan60Fast() { zoomPan(to: 0.6, speed: 800, rest: false) }
+    // Around the rest boundary: 15 % of the height (0.914) sprang back and a
+    // slow release at 20 % (0.884) landed.
+    func testZoomPan17Rest() { zoomPan(to: 0.17, speed: 300, rest: true) }
+    func testZoomPan19Rest() { zoomPan(to: 0.19, speed: 300, rest: true) }
+    // The pivot: grabbed just under the bar, and low on the page. A grab
+    // 12 pt under the bar (y = 115) does nothing natively.
+    func testZoomPanTop30Rest() { zoomPan(to: 0.3, speed: 300, rest: true, from: CGPoint(x: 201, y: 130)) }
+    func testZoomPanBottom20Rest() { zoomPan(to: 0.2, speed: 300, rest: true, from: CGPoint(x: 201, y: 680)) }
+
+    /// To 50 %, then 120 pt back up at 800 pt/s, released while moving.
+    func testZoomPan50UpFling() {
+        openDunes()
+        var finger = Finger(at: Self.grab)
+        finger.line(to: CGPoint(x: 201, y: 180), speed: 300)
+        finger.line(to: CGPoint(x: 201, y: 160 + Self.height * 0.5), speed: 300)
+        finger.hold(0.3)
+        finger.line(to: CGPoint(x: 201, y: 160 + Self.height * 0.5 - 120), speed: 800)
+        finger.lift()
+        hold(1.5)
+    }
+
+    /// To 30 %, then sideways by `dx` at `speed`, held and released at rest.
+    func zoomPanSideways(dx: CGFloat, speed: CGFloat) {
+        openDunes()
+        var finger = Finger(at: Self.grab)
+        finger.line(to: CGPoint(x: 201, y: 180), speed: 300)
+        finger.line(to: CGPoint(x: 201, y: 160 + Self.height * 0.3), speed: 300)
+        finger.hold(0.3)
+        finger.line(to: CGPoint(x: 201 + dx, y: 160 + Self.height * 0.3), speed: speed)
+        finger.hold(0.6)
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testZoomPan30Right() { zoomPanSideways(dx: 100, speed: 300) }
+    func testZoomPan30Right50() { zoomPanSideways(dx: 50, speed: 300) }
+    func testZoomPan30Right150() { zoomPanSideways(dx: 150, speed: 300) }
+    func testZoomPan30Left150() { zoomPanSideways(dx: -150, speed: 300) }
+    func testZoomPan30Left() { zoomPanSideways(dx: -100, speed: 300) }
+    // As far as the finger can go, fast: the card meets the screen's edge.
+    func testZoomPan30FarRight() { zoomPanSideways(dx: 195, speed: 600) }
+
+    /// Scrolls the page up 200 pt, then drags 400 pt down in one motion: the
+    /// list scrolls back to its top and hands the rest to the dismissal.
+    func testZoomPanScrolled() {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 201, y: 500))
+        finger.line(to: CGPoint(x: 201, y: 300), speed: 300)
+        finger.hold(0.8)
+        finger.lift()
+        hold(1.0)
+        var again = Finger(at: CGPoint(x: 201, y: 300))
+        again.line(to: CGPoint(x: 201, y: 700), speed: 300)
+        again.hold(0.6)
+        again.lift()
+        hold(1.5)
+    }
+
     /// Smoke test for the synthesizer: an edge swipe on a pushed page pops it.
     func testFingerPops() {
         pushFirstRow()
