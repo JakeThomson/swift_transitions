@@ -97,9 +97,12 @@ class _ZoomDismissGestureDetectorState
   double _edgeDragged = 0;
   Offset _edgeDown = Offset.zero;
 
-  /// Where the finger a pan may start from went down and where it is now,
-  /// and how far the live pan has travelled, for its dead zone. The card
-  /// shrinks about the touch point, not about where the dead zone ends.
+  /// The finger a pan may start from: which it is, where it went down and
+  /// where it is now, and how far the live pan has travelled, for its dead
+  /// zone. The card shrinks about the touch point, not about where the
+  /// dead zone ends. A second finger is the pinch's and leaves these
+  /// alone, so a pan whose pinch never begins carries on from where it is.
+  int? _panPointer;
   Offset _panDown = Offset.zero;
   Offset _lastPointer = Offset.zero;
   double _panDragged = 0;
@@ -345,8 +348,11 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    _panDown = event.position;
-    _lastPointer = event.position;
+    if (_pointers.isEmpty) {
+      _panPointer = event.pointer;
+      _panDown = event.position;
+      _lastPointer = event.position;
+    }
     _pointers[event.pointer] = _toNavigator(event.position);
     if (widget.pinch && _pointers.length == 2 && _pinchPointers == null) {
       final ids = _pointers.keys.toList();
@@ -369,7 +375,9 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    _lastPointer = event.position;
+    if (event.pointer == _panPointer) {
+      _lastPointer = event.position;
+    }
     final position = _toNavigator(event.position);
     _pointers[event.pointer] = position;
     final pinch = _pinchPointers;
@@ -402,6 +410,9 @@ class _ZoomDismissGestureDetectorState
 
   void _handlePointerUp(PointerEvent event) {
     _pointers.remove(event.pointer);
+    if (event.pointer == _panPointer) {
+      _panPointer = null;
+    }
     if (_pointers.isEmpty) {
       _letGo = false;
     }

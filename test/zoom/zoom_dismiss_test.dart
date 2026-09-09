@@ -991,6 +991,35 @@ void main() {
     await second.up();
   });
 
+  testWidgets('a second finger that only rests leaves the pan alone', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final first = await tester.startGesture(const Offset(400, 200), pointer: 1);
+    await first.moveBy(const Offset(0, 18));
+    await first.moveBy(const Offset(0, 100));
+    await tester.pump();
+
+    final second = await tester.startGesture(
+      const Offset(400, 568),
+      pointer: 2,
+    );
+    // Inside the pinch's dead zone, and gone again.
+    await second.moveBy(const Offset(0, -4));
+    await tester.pump();
+    await second.up();
+    await first.moveBy(const Offset(0, 100));
+    await tester.pump();
+    expect(
+      cardRect(tester).width,
+      closeTo(800 * physics.scaleFor(200 / 600), 0.5),
+    );
+
+    await first.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
   testWidgets('interactiveDismissShouldBegin can refuse', (tester) async {
     ZoomInteractionContext? asked;
     await pushAndSettle(
