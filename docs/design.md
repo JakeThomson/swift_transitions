@@ -164,7 +164,7 @@ grab the card at any time during any animation.
 | On-screen corner radius during a flight | 13 pt at the source, 22 a quarter of the way, 33 at half, 44 at three quarters | a straight line from the source's radius to the display's in the flight's progress (parity stage 8, `native_zoom_f`) |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale during dismissal | 1.0 | no scale-down of the page underneath |
-| Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 117 ms from a fast pinch | parity stage 8, `native_ZoomPan*`, `native_ZoomPinch*` |
+| Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 170–217 ms at 400 pt/s a finger, 100–133 at 800, 103–108 at 1200 | parity stages 8 and 9, `native_ZoomPan*`, `native_ZoomPinch*`, `native_ZoomEdge*Fling*` |
 | Pan scale on a screen-sized card | 0.812 at 0.3 screen heights, 0.678 at 0.5, 0.545 at 0.8 | `ZoomDismissPhysics.ios26`, section 3.4; parity stage 4 (the 0.42 of `drag.mov` was a long, wandering drag) |
 
 ### 1.5 Apple's API surface
@@ -185,6 +185,69 @@ source, where the configuration supports `background(Color)`,
 The package mirrors both: `ZoomPageRoute.sourceTag` is the zoom's source ID,
 `ZoomTransitionSource` carries the configuration, and `ZoomTransitionOptions`
 carries the UIKit options.
+
+### 1.6 Calibrated parameters
+
+Every constant the parity pass fitted, with the runs it came from
+(`../swift_transitions_parity/stage<n>/`, iOS 27.0, iPhone 17). The
+reasoning behind each is on the constant itself.
+
+| Parameter | Value | Fitted from |
+|---|---|---|
+| `SwiftPageRoute.kTransitionDuration` | 400 ms | stage 1, `native_push_a`–`e` |
+| `SwiftCurves.push` | exponential decay, 61 ms per 1/e | stage 1, the same runs |
+| Covered page travel | 0.30 of the width | stage 1 |
+| Covered page dim | 0.10 × progress | stage 1 |
+| Leading-edge shadow | α 0.03, 6 pt down, 12 pt blur | stage 1 |
+| Back gesture width | 20 pt | the SDK's; stage 2 |
+| Back swipe dead zone | 12 pt | stage 2, `native_testSwipe*` |
+| Back swipe release threshold | 0.53 of the width | stage 2, `native_testSwipe52/54/56/58Rest` |
+| `BackGestureController.releaseSpring` | ω 22, ζ 0.85 | stage 2, seven release positions |
+| `kZoomPushSpring` | ω 19, ζ 1 | stage 3, `native_zoom_a`–`f` |
+| Zoom vertical lead | −0.05 pushing, +0.03 popping | stage 3, the same runs |
+| `kZoomCrossFadeWindow` | 0.55 of the flight | stage 3 |
+| `ZoomTransitionOptions.dimmingColor` | 15 % black, linear in progress | stage 3 |
+| Flight corner radii | straight from the source's to the display's | stage 8, `native_zoom_f` |
+| `scaleGain` | 0.67 per card height | stages 4 and 5, `native_ZoomPan*Rest`, `native_ZoomEdge*Rest` |
+| `travelKnee`, `minimumScale` | 0.52 card heights, 0.37 | stage 4, `native_ZoomPan15/30/50/80Rest` |
+| `fallLag` | 0.45 | stage 4, the same runs |
+| `crossAxisGain`, `crossAxisLimit` | 0.56, 0.9 of the card's width | stage 4, `native_ZoomPan30Right50/150`, `native_ZoomPan30Left150`; stage 5, `native_ZoomEdge40Down` |
+| `trackingSpring` | ω 45, ζ 1 | stage 6, `native_ZoomPinch60/80Slow` |
+| `returnSpring` | ω 22, ζ 0.9 | stages 4 and 5, the cancelled releases |
+| `landingSpring` | ω 15, ζ 0.75 | stage 8, twenty landings refitted on the card's left edge |
+| `landingQuickening` | 0.3 of the frequency per card width per second | stage 9, `native_ZoomPinch45Medium/Fast`, `native_ZoomEdge40Fling*` |
+| `maxCommitVelocity` | 8 progress per second | stage 8, `native_ZoomPinch45Fast` |
+| `panDismissThreshold` | 0.905 | stage 4, `native_ZoomPan17Rest`, `native_ZoomPan19Rest` |
+| `dismissThreshold` | 0.70 | stage 5, `native_ZoomEdge44/48/52Rest` |
+| `pinchDismissThreshold` | 0.5 | stage 6, `native_ZoomPinch45Rest`, `native_ZoomPinch48Rest` |
+| `releaseProjection` | 0.12 s | stages 2, 5 and 6, the commit tables |
+| `kZoomReduceMotionDuration` | 140 ms | stage 8, `native_ReduceMotion` |
+
+### 1.7 Known deviations
+
+Where the package knowingly differs from the native reference, with the
+size of the difference.
+
+- **The navigation bar.** Natively the bar's items stay above the card and
+  cross-fade in place: the back button fades in over the first 140 ms of a
+  push, the title swaps in a 50 ms cross-fade 90 ms in, a dismissal swaps
+  the bar to the covered page's items 150 ms into the drag, and a landing
+  fades the back button out over its 235 ms. With a `CupertinoNavigationBar`
+  on each page the SDK's own bar hero runs instead, sliding the title across
+  for the length of the flight and switching on the pop. Its shuttle is the
+  bar's, with no hook to replace it; a bar above the navigator, which does
+  not fly at all, is the native shape (section 8).
+- **The status bar zone.** It follows the bar: native dims it with the
+  covered page, and under the hero it is white from the first frame.
+- **A source that was never built.** A pop to a poster two and a half
+  widths outside a lazy row flies toward the poster's off-screen position
+  natively; the package has no frame for a source that has never been laid
+  out and takes `fallbackInset`'s centred rect instead. A source one width
+  out, still inside the row's cache extent, flies off the right edge in
+  both (parity stage 8).
+- **The first frame after a tap.** In the simulator's debug build — the
+  only build it runs — the example's first flight frame lands 30–80 ms
+  after the tap where native's lands at once (parity stage 0).
 
 ---
 
@@ -887,9 +950,14 @@ Flutter terms:
   on it too. It is seeded with the release rate over what the landing has
   left — a pinch's fingers or an edge swipe's speed, never a pan's, which
   natively lands from rest however it was flung — capped at
-  `maxCommitVelocity` 8 so the landing does not bounce. Rotation and
-  translation share the spring's normalised progress so the card lands as
-  one object.
+  `maxCommitVelocity` 8 so the landing does not bounce, and quickened by
+  `landingSpringFor`: a native landing shortens with the fingers' own
+  speed rather than the shrink they were driving, to 170 ms at 400 pt/s a
+  finger and 100–133 at 800 in either gesture, which
+  `landingQuickening` 0.3 puts on the spring's frequency and not its
+  damping, so a quick landing overshoots by the same 3 % (parity stage 9).
+  Rotation and translation share the spring's normalised progress so the
+  card lands as one object.
 - Back swipe release: `BackGestureController.releaseSpring`, ω = 22 rad/s,
   ζ = 0.85, fitted to native releases from seven positions, pop and cancel
   alike (parity stage 2). The page follows the finger after a 12 pt dead

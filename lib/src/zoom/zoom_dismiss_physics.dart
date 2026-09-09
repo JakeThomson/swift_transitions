@@ -42,7 +42,7 @@ class ZoomDismissPhysics {
       stiffness: 225,
       damping: 22.5,
     ),
-    this.landingQuickening = 0.4,
+    this.landingQuickening = 0.3,
     this.panDismissThreshold = 0.905,
     this.dismissThreshold = 0.70,
     this.pinchDismissThreshold = 0.5,
@@ -107,11 +107,14 @@ class ZoomDismissPhysics {
   /// resting card width per second a finger was moving when it let go.
   /// Native landings shorten with the fingers' own speed rather than with
   /// the shrink they were driving, and by the same amount in either
-  /// gesture: 200–245 ms released at rest, 170 at 400 pt/s a finger, 100
-  /// (edge swipe) to 117 (pinch) at 800 and 103 at 1200, where those
-  /// speeds mean quite different shrink rates and landing distances
-  /// (parity stages 5, 6 and 9). A pan hands nothing over: flung at
-  /// 150–800 pt/s it lands in the 233–272 ms of a release at rest.
+  /// gesture: 165–245 ms released at rest, 170–217 at 400 pt/s a finger,
+  /// 100 (edge swipe) to 117–133 (pinch) at 800 and 103–108 at 1200,
+  /// where those speeds mean quite different shrink rates and landing
+  /// distances (parity stages 5, 6 and 9). At 0.3 the landing sits inside
+  /// that spread everywhere but the edge swipe flung at 800, which
+  /// natively lands 36 ms sooner than any one line through the rest can
+  /// give. A pan hands nothing over: flung at 150–800 pt/s it lands in
+  /// the 233–272 ms of a release at rest.
   final double landingQuickening;
 
   /// How far the card moves for each point the finger moves across the
