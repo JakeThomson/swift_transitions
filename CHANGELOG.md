@@ -10,6 +10,11 @@
   What is knowingly different, with the size of each difference, is
   listed in `docs/design.md` section 1.7, and every calibrated constant
   is in section 1.6 with the recording it came from.
+* Fade the zoom card's shadow out as it reaches its source (parity
+  stage 9). A native card lands with no shadow at all — the page 12 and
+  20 pt beside it reads its own colour from a twentieth of the flight in
+  — where ours kept a full one to the end and lost it the frame the route
+  popped.
 * Draw the landing's overshoot, which iOS has and the SDK clipped
   (parity stage 9): `AnimationController` clamps a simulation to the
   controller's bounds, so the part of the landing spring that carries the

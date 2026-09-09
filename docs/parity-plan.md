@@ -889,6 +889,21 @@ throughout. Section 1.4's measurement said 1.0 and was wrong; both it and
 1.7 now carry the number. Matching it touches the push as much as the
 landing and is not part of this stage.
 
+*Measured 2026-09-09, from the native and rebuilt runs of the same
+script.* The card sheds its shadow before it lands. The page 12 and 20 pt
+beside a native card reads its own colour from a twentieth of the flight
+in — 0.0 % and 0.0 % against the same page well away from the card — and
+the shadow is still there at a tenth (10.6 % darker 2 pt out, 7.9 at 6,
+4.6 at 12, 2.4 at 20), which is the profile stage 3 fitted at mid-flight.
+Ours carried it all the way in: 5.3 % and 2.8 % darker at 12 and 20 pt
+for the whole landing, and gone the frame the route popped, a snap the
+overshoot only made more visible by keeping the card there longer. The
+shadow now fades out over the last tenth of the flight, and the same
+probe reads 0.0 % at both offsets with no step at the pop. Where between
+a tenth and a twentieth native's own fade sits is not readable on this
+rig: the neighbouring poster is in the band at every offset small enough
+to see it.
+
 The sign-off itself: eight clips in `docs/parity/`, one per stage that
 has a gesture or a flight of its own, cut by `sidebyside.py`; the
 calibrated parameters and the known deviations in `design.md` 1.6 and

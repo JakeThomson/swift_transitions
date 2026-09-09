@@ -162,6 +162,7 @@ grab the card at any time during any animation.
 | Card scale mid-pinch | ~0.6 | `pinch.mp4` 1.3 s |
 | Pinch scale vs fingers' distance | 1:1 from 8.7 pt of closing; turn 1:1; 0.515 sprang back, 0.494 landed | parity stage 6, `native_ZoomPinch*` |
 | On-screen corner radius during a flight | 13 pt at the source, 22 a quarter of the way, 33 at half, 44 at three quarters | a straight line from the source's radius to the display's in the flight's progress (parity stage 8, `native_zoom_f`) |
+| Card shadow during a zoom flight | 10 % darker 4 pt out, 3 % at 20, gone by 40; none at all within a twentieth of the source | parity stages 3 and 9, the page beside a landing card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale under a zoom | 0.914 or smaller | a sibling poster in the grid, 116.6 pt wide mid-flight against 119.3 at rest, back at rest about 200 ms after the card lands; the package holds the covered page at 1.0 (section 1.7) |
 | Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 170–217 ms at 400 pt/s a finger, 100–133 at 800, 103–108 at 1200 | parity stages 8 and 9, `native_ZoomPan*`, `native_ZoomPinch*`, `native_ZoomEdge*Fling*` |
@@ -209,6 +210,7 @@ reasoning behind each is on the constant itself.
 | `kZoomCrossFadeWindow` | 0.55 of the flight | stage 3 |
 | `ZoomTransitionOptions.dimmingColor` | 15 % black, linear in progress | stage 3 |
 | Flight corner radii | straight from the source's to the display's | stage 8, `native_zoom_f` |
+| Zoom card shadow | α 0.24, 4 pt down, 30 pt blur, fading out over the last tenth of the flight | stage 3, `native_zoom_a`–`f`; stage 9, `native_ZoomPinch45Rest` |
 | `scaleGain` | 0.67 per card height | stages 4 and 5, `native_ZoomPan*Rest`, `native_ZoomEdge*Rest` |
 | `travelKnee`, `minimumScale` | 0.52 card heights, 0.37 | stage 4, `native_ZoomPan15/30/50/80Rest` |
 | `fallLag` | 0.45 | stage 4, the same runs |

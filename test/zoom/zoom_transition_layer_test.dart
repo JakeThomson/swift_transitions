@@ -98,8 +98,10 @@ void main() {
     expect(rect.right, lessThan(card.right));
   });
 
-  testWidgets('the card casts a shadow only while in flight', (tester) async {
-    await pumpLayer(tester, rect: source);
+  testWidgets('the card sheds its shadow as it reaches the source', (
+    tester,
+  ) async {
+    await pumpLayer(tester, rect: Offset.zero & pageSize);
     ShapeDecoration decoration() =>
         tester
                 .widget<DecoratedBox>(
@@ -115,5 +117,13 @@ void main() {
     expect(decoration().shadows, hasLength(1));
     expect(decoration().shadows!.single.blurRadius, 30);
     expect(decoration().shadows!.single.color.a, closeTo(0.24, 0.01));
+    // Half of the fade window from the source, half of the shadow is left.
+    await pumpLayer(
+      tester,
+      rect: Rect.fromLTWH(100, 200, 80 + (800 - 80) * 0.05, 120),
+    );
+    expect(decoration().shadows!.single.color.a, closeTo(0.12, 0.01));
+    await pumpLayer(tester, rect: source);
+    expect(decoration().shadows, isEmpty);
   });
 }

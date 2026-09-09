@@ -71,6 +71,11 @@ class ZoomTransitionLayer extends StatelessWidget {
   static const double _shadowAlpha = 0.24;
   static const Offset _shadowOffset = Offset(0, 4);
   static const double _shadowBlurRadius = 30;
+  // The last of the flight over which the shadow fades away. A native card
+  // landing on its source casts none: the page 12 and 20 pt beside it reads
+  // its own colour from a twentieth of the flight in, where ours was 5.3 %
+  // and 2.8 % darker until the pop took the card away (parity stage 9).
+  static const double _shadowFadeWindow = 0.1;
 
   /// How far the card's size is from [sourceSize] toward [pageSize], by
   /// the square root of area so a card halfway along a linear flight reads
@@ -87,6 +92,19 @@ class ZoomTransitionLayer extends StatelessWidget {
     }
     final now = math.sqrt(frame.rect.width * frame.rect.height);
     return ((now - from) / (to - from)).clamp(0.0, 1.0);
+  }
+
+  /// How much of the shadow the card carries this frame: all of it for
+  /// most of the flight, fading out over [_shadowFadeWindow]. 1.0 without
+  /// a source, whose fallback card never reaches one.
+  double get _shadowFade {
+    final source = sourceSize;
+    if (source == null || pageSize.width - source.width <= 0) {
+      return 1;
+    }
+    final along =
+        (frame.rect.width - source.width) / (pageSize.width - source.width);
+    return (along / _shadowFadeWindow).clamp(0.0, 1.0);
   }
 
   /// The part of the page the card shows this frame.
@@ -126,11 +144,11 @@ class ZoomTransitionLayer extends StatelessWidget {
                   borderRadius: atRest ? BorderRadius.zero : frame.radii,
                 ),
                 shadows: <BoxShadow>[
-                  if (!atRest)
+                  if (!atRest && _shadowFade > 0)
                     BoxShadow(
                       color: const Color(
                         0xFF000000,
-                      ).withValues(alpha: _shadowAlpha),
+                      ).withValues(alpha: _shadowAlpha * _shadowFade),
                       offset: _shadowOffset,
                       blurRadius: _shadowBlurRadius,
                     ),
