@@ -537,6 +537,46 @@ final class ParityDriver: XCTestCase {
     func testCatchLandingHold() { catchRelease(of: 0.3, back: 0) }
     func testCatchReturn() { catchRelease(of: 0.15, back: 0) }
 
+    // MARK: Stage 8: the once-over. A pop whose source has left the
+    // hierarchy, and a tap on the covered page while the card flies.
+
+    /// Opens Dunes, swipes the pager on `pages` posters — Nimbus, three
+    /// along, sits a poster's width past the row's right edge; Quartz, four
+    /// along, two and a half — and taps back, for the flight to a source off
+    /// the screen or not built at all.
+    func zoomPopFarPoster(pages: Int) {
+        openDunes()
+        for _ in 0..<pages {
+            var finger = Finger(at: CGPoint(x: 380, y: 600))
+            finger.line(to: CGPoint(x: 60, y: 600), speed: 800)
+            finger.lift()
+            hold(0.8)
+        }
+        hold(0.5)
+        backButton.tap()
+        hold(1.5)
+    }
+
+    func testZoomPopFarPoster() { zoomPopFarPoster(pages: 3) }
+    func testZoomPopFarthestPoster() { zoomPopFarPoster(pages: 4) }
+
+    /// Taps the poster and, as soon as the daemon allows (the card is
+    /// then at 0.9 of the screen), taps the first row's left margin beside
+    /// it, which the card has not reached; holds, then taps back. If the
+    /// tap reached the covered page, the row's page is pushed behind or
+    /// after the poster's.
+    func testTapCoveredDuringPush() {
+        var tap = Finger(at: CGPoint(x: 208, y: 340))
+        tap.hold(0.042)
+        tap.lift()
+        var beside = Finger(at: CGPoint(x: 5, y: 129))
+        beside.hold(0.042)
+        beside.lift()
+        hold(1.2)
+        backButton.tap()
+        hold(1.5)
+    }
+
     func testFingerPops() {
         pushFirstRow()
         var finger = Finger(at: CGPoint(x: 4, y: 437))
