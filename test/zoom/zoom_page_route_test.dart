@@ -223,6 +223,31 @@ void main() {
     expect(barrierColor().a, closeTo(0x26 / 0xFF, 0.01));
   });
 
+  testWidgets('the strip the covered page uncovers is painted', (tester) async {
+    await tester.pumpWidget(testApp());
+    final backdrop = find.ancestor(
+      of: find.text('home'),
+      matching: find.byType(ColoredBox),
+    );
+
+    // Nothing to cover while the page is still full screen.
+    expect(backdrop, findsNothing);
+
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    // The scale leaves a strip at the screen's edges. Natively that strip
+    // is the window behind the page and carries the system background; a
+    // zoom route is not opaque, so the strip is painted here instead of
+    // falling through to the window's black.
+    expect(backdrop, findsOneWidget);
+    expect(tester.getRect(backdrop), const Rect.fromLTWH(0, 0, 800, 600));
+    expect(
+      tester.widget<ColoredBox>(backdrop).color,
+      isSameColorAs(CupertinoColors.systemBackground.color),
+    );
+  });
+
   testWidgets('the source is hidden while the route is up and shown after', (
     tester,
   ) async {

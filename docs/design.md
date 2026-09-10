@@ -1031,6 +1031,16 @@ Flutter terms:
   a committed dismissal seeds so the card lands well before the page has
   finished growing. A source measured while the page is scaled is read
   back to its resting rect, which is where both ends of a flight meet it.
+  The strip the scale uncovers at the screen's edges — 0.086 of the width
+  across at full progress — is painted with the ambient
+  `CupertinoTheme.scaffoldBackgroundColor`, which Material's own `Theme`
+  defers to `ThemeData.scaffoldBackgroundColor`. Natively that strip is
+  the window behind the scaled view controller and carries the system
+  background, so it cannot be seen; a zoom route is not opaque, so without
+  a backdrop the window's black shows through instead. Measured against
+  `native_ZoomPinch45Rest`, where the poster row's edges move 48 -> 96 and
+  1199 -> 1149 of 1206 (a scale of 0.915) while every pixel out to the
+  screen's edge stays the page's own dimmed grey.
 - The dismissal's pan and edge swipe estimate their release velocity with
   `IOSScrollViewFlingVelocityTracker`, as the back swipe does and for the
   same reason (section 3.2); a pinch measures its fingers directly, over

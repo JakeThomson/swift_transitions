@@ -20,8 +20,9 @@ came from, the deviations that remain are in section 1.7, and the method is in
 * The flight is one critically damped spring at ω 19 rad/s for both push and
   pop, the card casts the native soft shadow (σ 18 pt at 24 %, 4 pt down) and
   fades it out as it reaches its source, the covered page dims linearly to
-  15 % black and scales to 0.914, and the landing carries 2 % past the source
-  before easing back in over 200 ms.
+  15 % black and scales to 0.914 over a backdrop of the ambient scaffold
+  background, and the landing carries 2 % past the source before easing back
+  in over 200 ms.
 * `ZoomTransitionOptions`, mirroring `UIZoomTransitionOptions`: `dimmingColor`
   and `dimmingBlurSigma`, `dismissGestures`, `interactiveDismissShouldBegin`,
   `dismissPhysics`, `alignmentRect` (the counterpart of

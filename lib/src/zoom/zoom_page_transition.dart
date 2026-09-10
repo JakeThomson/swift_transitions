@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
-import 'package:flutter/widgets.dart';
 
 import '../corners/display_corner_radii.dart';
 import 'zoom_frame.dart';
@@ -372,16 +372,29 @@ class _CoveredPageState extends State<_CoveredPage>
         final progress = widget.progress.status == AnimationStatus.reverse
             ? _returning.value
             : _progress;
+        final scale = zoomCoveredPageScale(progress);
+        Widget page = Transform.scale(
+          scale: scale,
+          filterQuality: FilterQuality.medium,
+          child: child,
+        );
+        if (scale < 1) {
+          // The scale uncovers a strip at the screen's edges, 0.086 of the
+          // width across at full progress. Natively that strip is the window
+          // behind the page and carries the system background, which is why
+          // it cannot be seen; a zoom route is not opaque, so without a
+          // backdrop of its own the window's black shows through instead.
+          page = ColoredBox(
+            color: CupertinoTheme.of(context).scaffoldBackgroundColor,
+            child: page,
+          );
+        }
         return IgnorePointer(
           // A popping route passes its pointers by so that a landing card
           // does not eat them, which would otherwise leave the page behind
           // live while the card is still flying home.
           ignoring: widget.progress.status != AnimationStatus.dismissed,
-          child: Transform.scale(
-            scale: zoomCoveredPageScale(progress),
-            filterQuality: FilterQuality.medium,
-            child: child,
-          ),
+          child: page,
         );
       },
     );
