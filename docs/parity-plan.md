@@ -867,6 +867,25 @@ first as native's does — 6 pt against native's 5.4. The release curve is
 unchanged (the fling settles in 212 ms against native's 193, τ 38 against
 43; the slow pop 217 against 232).
 
+*Measured 2026-09-10, from the native edge flings against the line each
+takes from its release to the source.* A landing does not run the card
+straight home. Native carries the card the way it was going first: an
+edge swipe flung at 800 pt/s takes it 28–30 pt past that line, peaking 48
+to 63 ms after the lift, and one at 1200 takes it 38 pt at 92 ms — far
+enough that the card sits 23 pt past the poster's own left edge while it
+is still 190 pt wide, which one progress along a line cannot express.
+Ours carried 2 to 3. The departure now carries the release's motion
+(`ZoomDeparture.velocity`) and the route runs it as a decaying offset on
+the landing spring, in points, added to the flight frame; the spring is
+the plain one, since native's carry peaks at 60 to 90 ms whatever the
+release speed where the quickened spring would pull it to 40. Verified:
+21 pt at 63 ms against native's 30 at 63, and 34 at 55 against 38 at 92.
+A release at rest seeds nothing and pans are unchanged. What is left is
+that native's position and size are on separate clocks — its card hardly
+shrinks for the first 100 ms of a fling's landing while the carry plays
+out — where ours shrinks throughout, so an edge swipe released at 60 % of
+the width still nets leftward where native's nets right.
+
 The same tracker goes on the dismissal's pan and edge swipe, which read
 the 800 pt/s edge fling of `testZoomEdge40Fling` as 301. Fifteen scripted
 pans and edge swipes were re-recorded across stages 4 and 5, at every

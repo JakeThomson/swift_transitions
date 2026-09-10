@@ -650,6 +650,35 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
   });
 
+  testWidgets('an edge swipe flung away carries past its flight line', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(10, 0));
+    for (var i = 1; i <= 6; i++) {
+      await gesture.moveBy(
+        const Offset(100, 0),
+        timeStamp: Duration(milliseconds: 50 * i),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await gesture.up(timeStamp: const Duration(milliseconds: 308));
+    await tester.pump();
+
+    // The card is released travelling, and carries on that way before it
+    // turns for the source: natively 28 pt past the line at 800 pt/s.
+    final released = cardRect(tester);
+    var furthest = released.left;
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      furthest = math.max(furthest, cardRect(tester).left);
+    }
+    expect(furthest, greaterThan(posterRect.left + 10));
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
   testWidgets('an edge swipe shrinks the card by horizontal travel', (
     tester,
   ) async {

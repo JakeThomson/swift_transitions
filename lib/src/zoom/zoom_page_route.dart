@@ -63,10 +63,15 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   /// The landing spring while it runs, read by [_flightProgress] for the
   /// part of it the controller cannot report.
   Simulation? _landingSimulation;
+
+  /// The same spring in points on each axis, seeded with the motion the
+  /// card was released with, read by [_flightCarry].
+  (Simulation, Simulation)? _carrySimulation;
   bool _userGestureInProgress = false;
   ZoomDeparture? _departure;
   final ValueNotifier<ZoomFrame?> _liveFrame = ValueNotifier<ZoomFrame?>(null);
   late final Animation<double> _flightProgress = _ZoomFlightProgress(this);
+  late final Animation<Offset> _flightCarry = _ZoomFlightCarry(this);
 
   /// The scroll controller that hands a top-edge downward drag to the
   /// dismissal, installed as the page's [PrimaryScrollController] so that
@@ -124,17 +129,43 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     _releaseSeed = 0;
     _landingSpeed = 0;
     final landing = !forward && (_departure?.toSource ?? false);
+    final spring = landing
+        ? options.dismissPhysics.landingSpringFor(speed)
+        : options.pushSpring;
     final simulation = SpringSimulation(
-      landing
-          ? options.dismissPhysics.landingSpringFor(speed)
-          : options.pushSpring,
+      spring,
       controller!.value,
       forward ? 1 : 0,
       // The seed is per unit of the landing, which runs from here to zero.
       -seed * controller!.value,
     );
     _landingSimulation = landing ? simulation : null;
+    // The landing keeps the motion the card was released with: the landing
+    // spring in points, from the flight line back to it, and the unhurried
+    // one — natively the carry peaks 60 to 90 ms in whatever the release
+    // speed, where the quickening would pull it to 40. An edge swipe flung
+    // at 800 pt/s carries 28 pt past the line and one at 1200 carries 38
+    // (parity stage 9).
+    final released = landing ? _departure!.velocity : Offset.zero;
+    final carry = options.dismissPhysics.landingSpring;
+    _carrySimulation = released == Offset.zero
+        ? null
+        : (
+            SpringSimulation(carry, 0, 0, released.dx),
+            SpringSimulation(carry, 0, 0, released.dy),
+          );
     return simulation;
+  }
+
+  /// How far the landing card is from its flight line, in points.
+  Offset get _carryValue {
+    final carry = _carrySimulation;
+    final elapsed = controller!.lastElapsedDuration;
+    if (carry == null || elapsed == null || !controller!.isAnimating) {
+      return Offset.zero;
+    }
+    final t = elapsed.inMicroseconds / Duration.microsecondsPerSecond;
+    return Offset(carry.$1.x(t), carry.$2.x(t));
   }
 
   /// Where the flight is: the animation's own value, except while a
@@ -203,6 +234,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         status == AnimationStatus.completed) {
       _departure = null;
       _landingSimulation = null;
+      _carrySimulation = null;
     }
   }
 
@@ -538,6 +570,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
             source: _flightSource,
             liveFrame: _liveFrame,
             departure: _departure,
+            carry: _flightCarry,
             cornerRadii: cornerRadii,
             alignmentRect: _alignmentRect,
             snapshot: options.snapshotDuringTransition,
@@ -573,6 +606,21 @@ class _ZoomFlightProgress extends Animation<double>
 
   @override
   double get value => _route._flightValue;
+}
+
+/// How far a landing card is from its flight line, carrying the motion it
+/// was released with.
+class _ZoomFlightCarry extends Animation<Offset>
+    with AnimationWithParentMixin<double> {
+  _ZoomFlightCarry(this._route);
+
+  final ZoomRouteTransitionMixin<Object?> _route;
+
+  @override
+  Animation<double> get parent => _route.animation!;
+
+  @override
+  Offset get value => _route._carryValue;
 }
 
 /// A page that zooms out of the [ZoomTransitionSource] tagged [sourceTag]

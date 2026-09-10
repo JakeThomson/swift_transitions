@@ -59,6 +59,7 @@ class ZoomDeparture {
     required this.frame,
     required this.progress,
     required this.toSource,
+    this.velocity = Offset.zero,
   });
 
   /// The card's frame at release.
@@ -70,6 +71,12 @@ class ZoomDeparture {
   /// Whether the card is flying to the source (a committed dismissal) or
   /// back to full screen (a cancelled one, or an interrupted push resuming).
   final bool toSource;
+
+  /// The motion the card was released with, in points per second along the
+  /// gesture's axis. A landing keeps it: the card carries on the way it was
+  /// going before it turns for the source, 28 pt past the line an edge
+  /// swipe flung at 800 pt/s takes and 38 at 1200 (parity stage 9).
+  final Offset velocity;
 }
 
 /// A flight to full screen — the push, or the return of a cancelled
@@ -410,6 +417,17 @@ class ZoomDismissController {
       frame: _frame(),
       progress: controller.value,
       toSource: commit,
+      // The motion the card leaves with, in navigator coordinates: the
+      // fingers' own, which the sideways chase is tracking, the way it has
+      // gone. A pinch closes on its focal point rather than travelling.
+      velocity: switch (gesture) {
+        ZoomGesture.pan => Offset(0, velocity),
+        ZoomGesture.edgeSwipe => Offset(
+          _horizontal.value < 0 ? -velocity : velocity,
+          0,
+        ),
+        ZoomGesture.pinch => Offset.zero,
+      },
     );
     liveFrame.value = null;
     _retarget(_horizontal, 0, physics.returnSpring);

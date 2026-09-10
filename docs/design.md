@@ -167,6 +167,7 @@ grab the card at any time during any animation.
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
 | Covered page scale under a zoom | 0.914 or smaller | a sibling poster in the grid, 116.6 pt wide mid-flight against 119.3 at rest, back at rest about 200 ms after the card lands; the package holds the covered page at 1.0 (section 1.7) |
 | Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 170–217 ms at 400 pt/s a finger, 100–133 at 800, 103–108 at 1200 | parity stages 8 and 9, `native_ZoomPan*`, `native_ZoomPinch*`, `native_ZoomEdge*Fling*` |
+| Landing carry | an edge swipe flung at 800 pt/s takes the card 28–30 pt past the line from the release to the source, at 800 pt/s peaking 48–63 ms in and at 1200 38 pt at 92 ms | parity stage 9, `native_ZoomEdge40/60Fling`, `native2_ZoomEdge40Fling1200` |
 | Landing overshoot | 2 % of the flight past the source, 8 % released on a fast pinch; back within a point of it over 170–250 ms | parity stage 9, the same runs read past the frame the landing settles on (`tools/parity/analyze_overshoot.py`) |
 | Pan scale on a screen-sized card | 0.812 at 0.3 screen heights, 0.678 at 0.5, 0.545 at 0.8 | `ZoomDismissPhysics.ios26`, section 3.4; parity stage 4 (the 0.42 of `drag.mov` was a long, wandering drag) |
 
@@ -251,7 +252,10 @@ size of the difference.
   both (parity stage 8).
 - **An edge swipe flung away.** A native edge swipe released at 800 pt/s
   lands in 100 ms where ours takes 147, and at 1200 in 108 against our
-  132. The landing is quickened by the
+  132. Its position and its size are also on separate clocks: native's
+  card hardly shrinks for the first 100 ms while the carry plays out,
+  where ours shrinks throughout, so one released at 60 % of the width
+  nets leftward where native's nets right (parity stage 9). The landing is quickened by the
   fingers' speed (`landingQuickening`), and the same speed buys a pinch
   three times the shrink it buys an edge swipe, so one line through both
   gestures cannot hit both ends (parity stage 9). Pinches land within a
@@ -975,7 +979,10 @@ Flutter terms:
   past the source and eases back into it over 200 ms, as native landings do
   (parity stage 9). It is seeded with the release rate over what the
   landing has left — a pinch's fingers or an edge swipe's speed, never a
-  pan's, which natively lands from rest however it was flung — capped at
+  pan's, which natively lands from rest however it was flung — carries the
+  motion the card was released with as a decaying offset on the plain
+  landing spring (`ZoomDeparture.velocity`), so a flung card keeps going
+  its own way before it turns for the source, and is capped at
   `maxCommitVelocity` 20, and quickened by `landingSpringFor`: a native
   landing shortens with the fingers' own speed rather than the shrink they
   were driving, to 170 ms at 400 pt/s a finger and 100–133 at 800 in either

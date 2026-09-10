@@ -49,6 +49,7 @@ class ZoomPageTransition extends StatelessWidget {
     this.source,
     this.liveFrame,
     this.departure,
+    this.carry,
     this.cornerRadii,
     this.alignmentRect,
     this.snapshot = false,
@@ -71,6 +72,10 @@ class ZoomPageTransition extends StatelessWidget {
   /// Where the card departed from at the last release, or null when the
   /// card is on the flight line.
   final ZoomDeparture? departure;
+
+  /// How far the landing card is from its flight line, carrying the motion
+  /// it was released with (`ZoomRouteTransitionMixin.createSimulation`).
+  final Animation<Offset>? carry;
 
   /// Overrides [DisplayCornerRadii.of] for the card's corners at the screen
   /// end of the flight.
@@ -181,13 +186,22 @@ class ZoomPageTransition extends StatelessWidget {
             if (held != null) {
               frame = held;
             } else if (departure != null && !animation.isCompleted) {
-              frame = departureFrameAt(
+              final onLine = departureFrameAt(
                 t: t,
                 departure: departure,
                 source: source,
                 screen: screen,
                 screenRadii: screenRadii,
               );
+              final carried = carry?.value ?? Offset.zero;
+              frame = carried == Offset.zero
+                  ? onLine
+                  : ZoomFrame(
+                      rect: onLine.rect.shift(carried),
+                      rotation: onLine.rotation,
+                      radii: onLine.radii,
+                      sourceOpacity: onLine.sourceOpacity,
+                    );
             } else {
               frame = zoomFlightFrame(
                 t: t,
