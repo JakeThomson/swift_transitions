@@ -220,6 +220,18 @@ final class ParityDriver: XCTestCase {
         hold(1.5)
     }
 
+    /// Out to 65 % and down 200 pt in one move, released still going: the
+    /// landing then carries the card on both axes at once, which is where
+    /// a card that left before it had arrived showed itself.
+    func testZoomEdge65DownFling() {
+        openDunes()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 24, y: 437), speed: 300)
+        finger.line(to: CGPoint(x: 402 * 0.65, y: 637), speed: 900)
+        finger.lift()
+        hold(1.5)
+    }
+
     /// To 20 %, then 300 pt down and 60 pt back up, for the vertical follow
     /// at a second scale and on the way back.
     func testZoomEdge20DownUp() {
