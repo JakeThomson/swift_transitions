@@ -13,8 +13,9 @@ abstract final class SwiftCurves {
   /// residual of 0.06). There is no ease-in at all: the first frame already
   /// moves a fifth of the width.
   ///
-  /// The rate is the time constant over [SwiftPageTransitionMixin.kTransitionDuration];
-  /// at the end of the 400 ms the residual is half a point.
+  /// The rate is the time constant over
+  /// [SwiftPageTransitionMixin.kTransitionDuration]; at the end of the
+  /// 400 ms the residual is half a point.
   static const Curve push = _ExponentialDecay(400 / 61);
 }
 

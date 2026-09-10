@@ -281,7 +281,6 @@ class _FlightSnapshotState extends State<_FlightSnapshot> {
   }
 }
 
-
 /// The page under a zoom route, scaled down with the flight's [progress]
 /// and held where it is while a gesture drags the card.
 class _CoveredPage extends StatefulWidget {

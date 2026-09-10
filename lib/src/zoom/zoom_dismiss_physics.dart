@@ -234,7 +234,7 @@ class ZoomDismissPhysics {
   /// the finger's [offset] from where the axis opened: the slope of
   /// [crossAxisOffsetFor], [crossAxisGain] at the origin and easing off as
   /// the card nears [crossAxisLimit] of its [width]. A release carries the
-  /// card's own motion, not the finger's ([ZoomDeparture.velocity]).
+  /// card's own motion into the landing, not the finger's.
   double crossAxisFollowFor(double offset, {required double width}) {
     final limit = width * crossAxisLimit;
     if (limit <= 0) {
@@ -309,8 +309,7 @@ class ZoomDismissPhysics {
     if (speed <= 0) {
       return landingSpring;
     }
-    final quicker =
-        1 + landingQuickening * math.min(speed, maxLandingSpeed);
+    final quicker = 1 + landingQuickening * math.min(speed, maxLandingSpeed);
     return SpringDescription(
       mass: landingSpring.mass,
       stiffness: landingSpring.stiffness * quicker * quicker,
