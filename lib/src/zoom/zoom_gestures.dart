@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
+import '../gestures/release_velocity.dart';
 import 'zoom_interaction.dart';
 
 /// Called when a gesture wants to begin a dismissal at [grabPoint] (in
@@ -104,9 +105,10 @@ class _ZoomDismissGestureDetectorState
   /// alone, so a pan whose pinch never begins carries on from where it is.
   int? _panPointer;
 
-  /// The finger's own velocity, for the axis the drag recognizer does not
-  /// report ([_acrossVelocity]).
-  VelocityTracker? _across;
+  /// The finger's own motion, which a drag recognizer's estimate cannot be
+  /// relied on for ([ReleaseVelocity]).
+  final ReleaseVelocity _release = ReleaseVelocity();
+  Offset _released = Offset.zero;
   Offset _panDown = Offset.zero;
   Offset _lastPointer = Offset.zero;
   double _panDragged = 0;
@@ -186,7 +188,10 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePanEnd(DragEndDetails details) {
-    _endDrag(details.velocity.pixelsPerSecond.dy, cross: _acrossVelocity.dx);
+    _endDrag(
+      _release.reported(details.velocity.pixelsPerSecond.dy, _released.dy),
+      cross: _released.dx,
+    );
   }
 
   /// An edge swipe's controller is fed from here rather than from the raw
@@ -220,16 +225,12 @@ class _ZoomDismissGestureDetectorState
 
   void _handleEdgeEnd(DragEndDetails details) {
     _endDrag(
-      _toLogical(details.velocity.pixelsPerSecond.dx),
-      cross: _acrossVelocity.dy,
+      _toLogical(
+        _release.reported(details.velocity.pixelsPerSecond.dx, _released.dx),
+      ),
+      cross: _released.dy,
     );
   }
-
-  /// The finger's motion at the release, both axes. A drag recognizer
-  /// reports only its own — a horizontal one zeroes the vertical — and the
-  /// card follows the finger across the axis as well as along it.
-  Offset get _acrossVelocity =>
-      _across?.getVelocity().pixelsPerSecond ?? Offset.zero;
 
   void _handleCancel() {
     _endDrag(0);
@@ -374,8 +375,8 @@ class _ZoomDismissGestureDetectorState
       _panPointer = event.pointer;
       _panDown = event.position;
       _lastPointer = event.position;
-      _across = IOSScrollViewFlingVelocityTracker(event.kind)
-        ..addPosition(event.timeStamp, event.position);
+      _release.reset();
+      _released = Offset.zero;
     }
     _pointers[event.pointer] = _toNavigator(event.position);
     if (widget.pinch && _pointers.length == 2 && _pinchPointers == null) {
@@ -401,7 +402,7 @@ class _ZoomDismissGestureDetectorState
   void _handlePointerMove(PointerMoveEvent event) {
     if (event.pointer == _panPointer) {
       _lastPointer = event.position;
-      _across?.addPosition(event.timeStamp, event.position);
+      _release.add(event.timeStamp, event.position);
     }
     final position = _toNavigator(event.position);
     _pointers[event.pointer] = position;
@@ -434,6 +435,11 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePointerUp(PointerEvent event) {
+    if (event.pointer == _panPointer) {
+      // Before the recognizers' own callbacks, so a release has the
+      // finger's motion by the time the gesture ends.
+      _released = _release.at(event.timeStamp);
+    }
     _pointers.remove(event.pointer);
     if (event.pointer == _panPointer) {
       _panPointer = null;

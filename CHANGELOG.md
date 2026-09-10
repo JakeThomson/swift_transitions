@@ -22,6 +22,17 @@
   20 pt beside it reads its own colour from a twentieth of the flight in
   — where ours kept a full one to the end and lost it the frame the route
   popped.
+* Keep a release's momentum when the recognizer's own tracker throws it
+  away. That tracker calls a finger still once 40 ms of wall clock have
+  passed since the last move it saw, which one dropped frame under a
+  heavy dismissal is enough to do, and the card then landed as if it had
+  been let go at rest. The zoom's pan and edge swipe and the page back
+  swipe fall back to the finger as the pointer stream saw it, which is
+  how the pinch has always read its own.
+* Block the page under a zoom route from taking touches until the pop has
+  finished. Natively a landing card passes them through and the source
+  takes the tap; here a half-finished dismissal cannot open something
+  else (`docs/design.md` section 1.7).
 * Scale the page under a zoom route down as the card grows over it, which
   iOS does and the package did not (parity stage 9): 0.914 at full screen,
   straight with the flight and about the screen's centre, held still while

@@ -270,6 +270,13 @@ size of the difference.
   the target for the same seed; the settle times both fit, so telling the
   two apart needs the whole trace refitting (parity stage 9). Pans, edge
   swipes and releases from rest are within 0.3 % of native.
+- **Touches during a landing.** Natively a touch on a landing card reaches
+  the page underneath: the source takes it and pushes again, and the list
+  behind can be scrolled while the card is still flying (parity stage 7).
+  The package blocks the covered page for as long as the route is on
+  screen, by choice — a half-finished dismissal that opens something else
+  reads as a misfire — so a tap on the source lands only once the pop has
+  finished.
 - **The first frame after a tap.** In the simulator's debug build — the
   only build it runs — the example's first flight frame lands 30–80 ms
   after the tap where native's lands at once (parity stage 0).
@@ -999,14 +1006,20 @@ Flutter terms:
   `Scrollable` on iOS uses for the same reason: the default least-squares
   tracker reads a flick at a third to a half of the speed the finger was
   really moving, and a fling that natively pops sprang back instead
-  (parity stage 2).
+  (parity stage 2). Either tracker gives up on a release once 40 ms of
+  wall clock have passed since the last move it saw — one dropped frame
+  under a heavy transition — and reports a finger that was standing
+  still; a release that comes back empty falls back to the finger as the
+  pointer stream saw it (`ReleaseVelocity`), keyed on when the moves
+  happened rather than on when they were delivered.
 - The SDK's Cupertino spring (stiffness 522.35, critically damped, 0.404 s)
   is available as `SwiftSprings.standard` for apps that want the exact SDK
   feel on the push transition.
 - The covered page is scaled down under a zoom route, straight with the
   flight and about the screen's centre (`kZoomCoveredPageScale`), applied
-  by `ZoomPageTransition.delegatedTransition`. A gesture dragging the card
-  does not move it — the route's animation follows the finger and the page
+  by `ZoomPageTransition.delegatedTransition`, which also holds its
+  pointers off for as long as the route is on screen (section 1.7). A
+  gesture dragging the card does not move it — the route's animation follows the finger and the page
   holds where the flight left it, as native's does — and it comes home on
   `kZoomCoveredPageReturn` rather than on the route's own animation, which
   a committed dismissal seeds so the card lands well before the page has

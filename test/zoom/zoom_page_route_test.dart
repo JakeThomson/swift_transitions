@@ -18,6 +18,7 @@ Widget testApp({
   bool disableAnimations = false,
   Widget detail = const Center(child: Text('detail')),
   VoidCallback? onPosterTap,
+  VoidCallback? onOtherTap,
 }) {
   return DisplayCornerRadii(
     radii: BorderRadius.circular(40),
@@ -44,11 +45,14 @@ Widget testApp({
               ),
               Positioned.fromRect(
                 rect: otherPosterRect,
-                child: const ZoomTransitionSource(
+                child: ZoomTransitionSource(
                   tag: 'other',
-                  child: ColoredBox(
-                    color: Color(0xFFFF0000),
-                    child: Text('other'),
+                  child: GestureDetector(
+                    onTap: onOtherTap,
+                    child: const ColoredBox(
+                      color: Color(0xFFFF0000),
+                      child: Text('other'),
+                    ),
                   ),
                 ),
               ),
@@ -246,7 +250,7 @@ void main() {
     expect(sourceRect(tester, 'poster'), slot);
   });
 
-  testWidgets('a tap on the hidden source during the landing reaches it', (
+  testWidgets('the source takes no tap until the landing is over', (
     tester,
   ) async {
     var taps = 0;
@@ -258,12 +262,37 @@ void main() {
     Navigator.of(tester.element(find.text('detail'))).pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    // The popping route passes the touch by, and the placeholder takes it
-    // as the poster would on iOS.
+    // Natively this tap would reach the poster and push again; the page
+    // behind a flying card takes nothing here (design.md section 1.7).
+    await tester.tapAt(posterRect.center);
+    await tester.pumpAndSettle();
+    expect(taps, 0);
+    expect(find.text('detail'), findsNothing);
+
     await tester.tapAt(posterRect.center);
     await tester.pumpAndSettle();
     expect(taps, 1);
-    expect(find.text('detail'), findsNothing);
+  });
+
+  testWidgets('the page behind takes no touches until the pop finishes', (
+    tester,
+  ) async {
+    var taps = 0;
+    await tester.pumpWidget(testApp(onOtherTap: () => taps++));
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    Navigator.of(tester.element(find.text('detail'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.tapAt(otherPosterRect.center);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(taps, 0);
+
+    await tester.pumpAndSettle();
+    await tester.tapAt(otherPosterRect.center);
+    await tester.pumpAndSettle();
+    expect(taps, 1);
   });
 
   testWidgets('the pop shrinks the card back onto the source', (tester) async {

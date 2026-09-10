@@ -699,6 +699,29 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
   });
 
+  testWidgets('a release across a stalled frame keeps its momentum', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(10, 0));
+    // Short of the threshold on travel alone — 330 px leaves the card at
+    // 0.72 where 0.70 commits — so only the speed the finger left at can
+    // carry it. The finger moved 110 px every 8 ms, but the frames it was
+    // delivered across are 50 ms apart, which is all it takes for the
+    // SDK's own tracker to report that the finger had stopped.
+    for (var i = 1; i <= 3; i++) {
+      await gesture.moveBy(
+        const Offset(110, 0),
+        timeStamp: Duration(milliseconds: 8 * i),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await gesture.up(timeStamp: const Duration(milliseconds: 32));
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
   testWidgets('an edge swipe let go on the move carries downward too', (
     tester,
   ) async {

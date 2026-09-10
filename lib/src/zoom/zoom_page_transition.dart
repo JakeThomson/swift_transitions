@@ -140,7 +140,8 @@ class ZoomPageTransition extends StatelessWidget {
 
   /// The transition applied to the route underneath a zoom route: it is
   /// scaled down a little, about the screen's centre, as the card grows
-  /// over it ([kZoomCoveredPageScale]).
+  /// over it ([kZoomCoveredPageScale]), and takes no touches for as long as
+  /// the route is on screen, the landing included.
   ///
   /// A gesture dragging the card does not move it: natively the page holds
   /// wherever the flight left it until the dismissal commits or is given
@@ -372,10 +373,16 @@ class _CoveredPageState extends State<_CoveredPage>
         final progress = widget.progress.status == AnimationStatus.reverse
             ? _returning.value
             : _progress;
-        return Transform.scale(
-          scale: zoomCoveredPageScale(progress),
-          filterQuality: FilterQuality.medium,
-          child: child,
+        return IgnorePointer(
+          // A popping route passes its pointers by so that a landing card
+          // does not eat them, which would otherwise leave the page behind
+          // live while the card is still flying home.
+          ignoring: widget.progress.status != AnimationStatus.dismissed,
+          child: Transform.scale(
+            scale: zoomCoveredPageScale(progress),
+            filterQuality: FilterQuality.medium,
+            child: child,
+          ),
         );
       },
     );

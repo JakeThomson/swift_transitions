@@ -5,6 +5,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
+import '../gestures/release_velocity.dart';
+
 /// Where a [SwiftBackGestureDetector] starts its interactive back swipe.
 enum BackGestureRegion {
   /// The SDK's own region: the leading 20pt, or the device's leading safe
@@ -189,6 +191,8 @@ class _SwiftBackGestureDetectorState<T>
   double _dragged = 0;
 
   late HorizontalDragGestureRecognizer _recognizer;
+  final ReleaseVelocity _release = ReleaseVelocity();
+  Offset _released = Offset.zero;
 
   @override
   void initState() {
@@ -253,7 +257,8 @@ class _SwiftBackGestureDetectorState<T>
     _backGestureController = null;
     controller?.dragEnd(
       _convertToLogical(
-        details.velocity.pixelsPerSecond.dx / context.size!.width,
+        _release.reported(details.velocity.pixelsPerSecond.dx, _released.dx) /
+            context.size!.width,
       ),
     );
   }
@@ -266,9 +271,21 @@ class _SwiftBackGestureDetectorState<T>
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    _release.reset();
+    _released = Offset.zero;
     if (widget.enabledCallback()) {
       _recognizer.addPointer(event);
     }
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) =>
+      _release.add(event.timeStamp, event.position);
+
+  /// The finger as the pointer stream saw it, for the releases the
+  /// recognizer's own tracker reports as standing still ([ReleaseVelocity]).
+  /// The raw up arrives before the recognizer's end.
+  void _handlePointerUp(PointerEvent event) {
+    _released = _release.at(event.timeStamp);
   }
 
   double _convertToLogical(double value) =>
@@ -288,6 +305,9 @@ class _SwiftBackGestureDetectorState<T>
       BackGestureRegion.anywhere => Positioned.fill(
         child: Listener(
           onPointerDown: _handlePointerDown,
+          onPointerMove: _handlePointerMove,
+          onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerUp,
           behavior: HitTestBehavior.translucent,
         ),
       ),
@@ -312,6 +332,9 @@ class _SwiftBackGestureDetectorState<T>
       bottom: 0,
       child: Listener(
         onPointerDown: _handlePointerDown,
+        onPointerMove: _handlePointerMove,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: _handlePointerUp,
         behavior: HitTestBehavior.translucent,
       ),
     );
