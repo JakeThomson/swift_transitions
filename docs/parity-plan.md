@@ -900,7 +900,11 @@ A release at rest seeds nothing and pans are unchanged. A landing ends
 when the card has arrived, not when its progress has: the carry outlives
 the progress spring, and a card 43 pt from its source when the route left
 jumped the rest of the way as the source took over — visible on a swipe
-pulled down and to the right, where the carry is largest. The carry is on
+pulled down and to the right, where the carry is largest.
+`testZoomEdge65DownFling` is that gesture scripted, out to 65 % and 200 pt
+down in one move; on it the card now rides in to the source and sits
+through its overshoot (120 to 116.6 pt and back) as native's does (114.7
+and back), neither of them jumping at the handover. The carry is on
 both axes: a drag recognizer reports only its own — a horizontal one
 zeroes the vertical — so the gesture layer keeps its own tracker on the
 finger and the card carries the follow's slope across the axis as well as
