@@ -151,10 +151,15 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     _carrySimulation = released == Offset.zero
         ? null
         : (
-            SpringSimulation(carry, 0, 0, released.dx),
-            SpringSimulation(carry, 0, 0, released.dy),
+            SpringSimulation(carry, 0, 0, released.dx, tolerance: _kArrived),
+            SpringSimulation(carry, 0, 0, released.dy, tolerance: _kArrived),
           );
-    return simulation;
+    // The flight is over when the card has arrived, not when its progress
+    // has: a card still carrying when the route left would jump the rest
+    // of the way as the source took over.
+    return _carrySimulation == null
+        ? simulation
+        : _ZoomLanding(simulation, _carrySimulation!);
   }
 
   /// How far the landing card is from its flight line, in points.
@@ -600,6 +605,31 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       child: transition,
     );
   }
+}
+
+/// Half a point of the card's carry, and ten a second: below what a
+/// handover to the source can show.
+const Tolerance _kArrived = Tolerance(distance: 0.5, velocity: 10);
+
+/// A landing: its progress, which the route's animation follows, and the
+/// carry that has to run out before the card has arrived.
+class _ZoomLanding extends Simulation {
+  _ZoomLanding(this._progress, this._carry);
+
+  final Simulation _progress;
+  final (Simulation, Simulation) _carry;
+
+  @override
+  double x(double time) => _progress.x(time);
+
+  @override
+  double dx(double time) => _progress.dx(time);
+
+  @override
+  bool isDone(double time) =>
+      _progress.isDone(time) &&
+      _carry.$1.isDone(time) &&
+      _carry.$2.isDone(time);
 }
 
 /// The route's animation with a landing's overshoot restored.

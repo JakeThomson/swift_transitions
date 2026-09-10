@@ -988,7 +988,10 @@ Flutter terms:
   motion the card was released with as a decaying offset on the plain
   landing spring (`ZoomDeparture.velocity`), on both axes, so a flung card
   keeps going its own way before it turns for the source rather than
-  running home on one plane, and is capped at
+  running home on one plane. The flight is over when the card has
+  arrived rather than when its progress has, or a card still carrying
+  when the route left would jump the rest of the way as the source took
+  over. The seed is capped at
   `maxCommitVelocity` 20, and quickened by `landingSpringFor`: a native
   landing shortens with the fingers' own speed rather than the shrink they
   were driving, to 170 ms at 400 pt/s a finger and 100–133 at 800 in either

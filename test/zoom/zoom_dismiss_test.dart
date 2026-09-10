@@ -722,6 +722,33 @@ void main() {
     expect(find.text('detail'), findsNothing);
   });
 
+  testWidgets('a carried card is home before the route goes', (tester) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(5, 200));
+    await gesture.moveBy(const Offset(10, 0));
+    // Down and to the right, which carries the card furthest from the
+    // line it would otherwise land along.
+    for (var i = 1; i <= 6; i++) {
+      await gesture.moveBy(
+        const Offset(100, 40),
+        timeStamp: Duration(milliseconds: 16 * i),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up(timeStamp: const Duration(milliseconds: 104));
+    await tester.pump();
+
+    var last = cardRect(tester);
+    while (find.text('detail').evaluate().isNotEmpty) {
+      last = cardRect(tester);
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    // The last frame the card was drawn on is the source's own, so the
+    // handover has nothing left to jump.
+    expect(last.left, closeTo(posterRect.left, 1));
+    expect(last.top, closeTo(posterRect.top, 1));
+  });
+
   testWidgets('an edge swipe let go on the move carries downward too', (
     tester,
   ) async {

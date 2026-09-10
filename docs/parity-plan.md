@@ -896,7 +896,11 @@ the landing spring, in points, added to the flight frame; the spring is
 the plain one, since native's carry peaks at 60 to 90 ms whatever the
 release speed where the quickened spring would pull it to 40. Verified:
 21 pt at 63 ms against native's 30 at 63, and 34 at 55 against 38 at 92.
-A release at rest seeds nothing and pans are unchanged. The carry is on
+A release at rest seeds nothing and pans are unchanged. A landing ends
+when the card has arrived, not when its progress has: the carry outlives
+the progress spring, and a card 43 pt from its source when the route left
+jumped the rest of the way as the source took over — visible on a swipe
+pulled down and to the right, where the carry is largest. The carry is on
 both axes: a drag recognizer reports only its own — a horizontal one
 zeroes the vertical — so the gesture layer keeps its own tracker on the
 finger and the card carries the follow's slope across the axis as well as

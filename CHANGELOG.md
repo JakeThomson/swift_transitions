@@ -38,6 +38,9 @@
   straight with the flight and about the screen's centre, held still while
   a gesture drags the card, and home on its own spring afterwards, which
   finishes after the card lands rather than with it.
+* End a landing when the card has arrived rather than when its progress
+  has: a card still carrying its release when the route left jumped the
+  rest of the way as the source took over.
 * Carry a flung card's motion into its landing (parity stage 9). Natively
   a card released travelling keeps going its own way before it turns for
   the source — 28 pt past the line an edge swipe flung at 800 pt/s takes,
