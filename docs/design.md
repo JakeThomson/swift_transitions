@@ -996,8 +996,11 @@ Flutter terms:
   landing shortens with the fingers' own speed rather than the shrink they
   were driving, to 170 ms at 400 pt/s a finger and 100–133 at 800 in either
   gesture, which `landingQuickening` 0.3 puts on the spring's frequency and
-  not its damping — which is also why a fast pinch travels less past the
-  source than native's does (section 1.7).
+  not its damping, up to `maxLandingSpeed`: native's landings stop coming
+  down under 1200 pt/s a finger, and an uncapped quickening takes a card
+  thrown at 2500 down to 60 ms, which reads as it vanishing rather than
+  flying home. Putting the speed on the frequency is also why a fast pinch
+  travels less past the source than native's does (section 1.7).
   Rotation and translation share the spring's normalised progress so the
   card lands as one object.
 - Back swipe release: `BackGestureController.releaseSpring`, ω = 22 rad/s,

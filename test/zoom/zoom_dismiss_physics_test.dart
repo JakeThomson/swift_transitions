@@ -211,5 +211,16 @@ void main() {
         );
       },
     );
+
+    test('a landing stops shortening past maxLandingSpeed', () {
+      final capped = physics.landingSpringFor(physics.maxLandingSpeed);
+      final faster = physics.landingSpringFor(physics.maxLandingSpeed * 4);
+      expect(faster.stiffness, capped.stiffness);
+      expect(faster.damping, capped.damping);
+      expect(
+        math.sqrt(capped.stiffness / physics.landingSpring.stiffness),
+        closeTo(1 + physics.maxLandingSpeed * physics.landingQuickening, 1e-9),
+      );
+    });
   });
 }

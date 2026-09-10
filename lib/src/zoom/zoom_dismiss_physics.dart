@@ -43,6 +43,7 @@ class ZoomDismissPhysics {
       damping: 22.5,
     ),
     this.landingQuickening = 0.3,
+    this.maxLandingSpeed = 3,
     this.panDismissThreshold = 0.905,
     this.dismissThreshold = 0.70,
     this.pinchDismissThreshold = 0.5,
@@ -116,6 +117,14 @@ class ZoomDismissPhysics {
   /// give. A pan hands nothing over: flung at 150–800 pt/s it lands in
   /// the 233–272 ms of a release at rest.
   final double landingQuickening;
+
+  /// The speed past which a release no longer shortens the landing, in
+  /// resting card widths per second. Native landings stop coming down
+  /// somewhere under 1200 pt/s a finger — 100–133 ms at 800 and 103–108 at
+  /// 1200, no further — where an uncapped quickening would take a flick
+  /// thrown at 3000 pt/s down to 60 ms, which reads as the card
+  /// disappearing rather than landing (parity stage 9).
+  final double maxLandingSpeed;
 
   /// How far the card moves for each point the finger moves across the
   /// gesture's axis — sideways during a pan, up or down during an edge
@@ -300,7 +309,8 @@ class ZoomDismissPhysics {
     if (speed <= 0) {
       return landingSpring;
     }
-    final quicker = 1 + landingQuickening * speed;
+    final quicker =
+        1 + landingQuickening * math.min(speed, maxLandingSpeed);
     return SpringDescription(
       mass: landingSpring.mass,
       stiffness: landingSpring.stiffness * quicker * quicker,
@@ -325,7 +335,8 @@ class ZoomDismissPhysics {
       other.dismissThreshold == dismissThreshold &&
       other.pinchDismissThreshold == pinchDismissThreshold &&
       other.releaseProjection == releaseProjection &&
-      other.maxCommitVelocity == maxCommitVelocity;
+      other.maxCommitVelocity == maxCommitVelocity &&
+      other.maxLandingSpeed == maxLandingSpeed;
 
   @override
   int get hashCode => Object.hash(
@@ -344,5 +355,6 @@ class ZoomDismissPhysics {
     pinchDismissThreshold,
     releaseProjection,
     maxCommitVelocity,
+    maxLandingSpeed,
   );
 }
