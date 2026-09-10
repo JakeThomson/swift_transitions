@@ -603,13 +603,22 @@ and is available since Flutter 3.29.
 SlideTransition (secondary, −0.29 width on the primary's curve, transformHitTests: false)
   └ SlideTransition (primary, from +1 width)
       └ DecoratedBox (leading edge shadow, cast from the clip shape)
-          └ ClipRSuperellipse (leading corners = DisplayCornerRadii, only while primary < 1 or secondary > 0)
+          └ ClipRSuperellipse (leading corners = DisplayCornerRadii, only while primary < 1)
               └ DecoratedBox (foreground dim, 0.115 × the secondary's curved value)
                   └ child
 ```
 
 The clip is removed at rest (`BorderRadius.zero` and `Clip.none`) so a
-settled page costs nothing. The covered page's slide uses the *same* curve as
+settled page costs nothing, and it belongs to the page that is moving over
+the other: a page receding under a route pushed on top of it keeps square
+corners, as native's does. That page still spans the screen, so rounding it
+cuts the display's own corners out of a page that reaches them and leaves
+the window's ground showing through — a black wedge in the leading corners
+for most of a back swipe, where native paints the page (parity stage 2:
+native's covered page reaches x = 0 on every row of the bottom-left corner
+throughout the swipe). It sits inside the bezel's own corner on hardware,
+but it is there in every screenshot and recording, and on any device whose
+real radius is smaller than the table's. The covered page's slide uses the *same* curve as
 the incoming page's, so the two move in lockstep as measured in section 1.1,
 and its dim is painted here rather than by a barrier so that it tracks a
 back swipe and exists under a top route with no barrier colour;

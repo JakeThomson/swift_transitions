@@ -41,12 +41,18 @@ const double _kCoveredPageDimAlpha = 0.10;
 /// leading corners clipped to the display's corner radius with its
 /// leading-edge shadow cast from that rounded shape.
 ///
-/// The page is clipped while it is in motion — arriving (`primaryRouteAnimation`
-/// incomplete) or receding under a route pushed on top of it
-/// (`secondaryRouteAnimation` active) — and the clip is removed at rest, so a
-/// settled page costs nothing. The covered page moves on the same curve as
-/// the page covering it and darkens in proportion, so the two read as one
-/// motion; both are linear while a back swipe is tracking the finger.
+/// The page is clipped while it is the one moving — arriving, or leaving
+/// under a pop (`primaryRouteAnimation` incomplete) — and the clip is removed
+/// at rest, so a settled page costs nothing. The covered page moves on the
+/// same curve as the page covering it and darkens in proportion, so the two
+/// read as one motion; both are linear while a back swipe is tracking the
+/// finger.
+///
+/// A page receding under another (`secondaryRouteAnimation` active) keeps its
+/// corners square, as native's does (parity stage 2). It still spans the
+/// screen, so rounding it would cut the display's own corners out of a page
+/// that reaches them and leave the window's ground showing through — most of
+/// a back swipe's length, right where the covered page comes home.
 ///
 /// Only the **leading** corners round. A page in flight keeps its trailing
 /// edge on or beyond the display's own edge, where the display already rounds
@@ -256,7 +262,13 @@ class _ClippedPage extends StatelessWidget {
         final inMotion =
             primaryRouteAnimation.value < 1 ||
             secondaryRouteAnimation.value > 0;
-        final active = inMotion && radii != BorderRadius.zero;
+        // The clip and its shadow belong to the page moving over the other,
+        // not to the one receding underneath: a covered page still spans the
+        // screen, so rounding its leading corners cuts the display's own
+        // corners out of it and leaves the window showing through them.
+        // Native paints those pixels (parity stage 2).
+        final moving = primaryRouteAnimation.value < 1;
+        final active = moving && radii != BorderRadius.zero;
         final shape = RoundedSuperellipseBorder(
           borderRadius: active ? radii : BorderRadius.zero,
         );
@@ -267,7 +279,7 @@ class _ClippedPage extends StatelessWidget {
           decoration: ShapeDecoration(
             shape: shape,
             shadows: <BoxShadow>[
-              if (inMotion)
+              if (moving)
                 BoxShadow(
                   color: const Color(
                     0xFF000000,

@@ -80,7 +80,7 @@ void main() {
   });
 
   testWidgets(
-    'the covered page is clipped while another SwiftPageRoute covers it',
+    'a covered SwiftPageRoute keeps square corners and still recedes',
     (tester) async {
       await tester.pumpWidget(
         DisplayCornerRadii(
@@ -108,19 +108,26 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
-      // Two clips are live: the covered ("push again") page receding, and the
-      // incoming ("third") page arriving. Both must be actively clipping —
-      // this is the canTransitionTo regression the design calls out: two
-      // stacked SwiftPageRoutes share a delegatedTransition, so the covered
-      // route keeps driving its own buildTransitions rather than handing off,
-      // and its secondaryRouteAnimation must still reach this clip.
       final clips = tester
           .widgetList<ClipRSuperellipse>(find.byType(ClipRSuperellipse))
           .toList();
       expect(clips, hasLength(greaterThanOrEqualTo(2)));
+      // The arriving ("third") page is clipped. The covered ("push again")
+      // page is not: it still spans the screen, so rounding its leading
+      // corners would cut the display's own corners out of it and leave the
+      // window showing through them.
+      expect(clips.last.clipBehavior, Clip.antiAlias);
+      expect(clips.last.borderRadius, leadingCorners40);
+      expect(clips.first.clipBehavior, Clip.none);
+      expect(clips.first.borderRadius, BorderRadius.zero);
+      // It still recedes, which is the canTransitionTo regression the design
+      // calls out: two stacked SwiftPageRoutes share a delegatedTransition,
+      // so the covered route keeps driving its own buildTransitions rather
+      // than handing off, and its secondaryRouteAnimation must still reach
+      // this transition.
       expect(
-        clips.every((clip) => clip.clipBehavior == Clip.antiAlias),
-        isTrue,
+        tester.getTopLeft(find.byType(ClipRSuperellipse).first).dx,
+        lessThan(0),
       );
     },
   );

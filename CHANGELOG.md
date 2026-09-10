@@ -67,8 +67,9 @@ came from, the deviations that remain are in section 1.7, and the method is in
   push, with the arriving page's remaining distance decaying exponentially
   (`SwiftCurves.push`, a 61 ms time constant over 400 ms), the covered page
   travelling 0.30 of the width on the same curve and dimmed at 0.10 ×
-  progress, and the page clipped to the display's own corner radius with the
-  leading-edge shadow cast from the clipped shape. A covered
+  progress, and the moving page clipped to the display's own corner radius
+  with the leading-edge shadow cast from the clipped shape — the page
+  receding underneath keeps square corners, as native's does. A covered
   `CupertinoPageRoute` or Material route gets the same motion and dim through
   `SwiftPageTransition.delegatedTransition`.
 * `SwiftPageTransitionMixin` for custom routes, and `SwiftPageTransition` for
