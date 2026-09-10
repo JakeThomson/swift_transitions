@@ -8,6 +8,7 @@ simulator, and the example built for the simulator
 (`flutter build ios --simulator --debug`).
 
     ./record.sh <native|flutter> <TestName> <out.mov>   # scripted run + recording
+    PARITY_SHOW_TOUCHES=0 ./record.sh ...               # the same, without the rings
     python3 extract.py out.mov frames/                  # timestamped PNG frames
     python3 track.py frames/ out.csv                    # colour-class boxes per frame
     python3 compare.py native.csv ours.csv card_w       # RMS / timing / plot
@@ -23,6 +24,7 @@ simulator, and the example built for the simulator
     python3 analyze_outline.py frames/ out.csv          # stage 9: the card's box against the covered page
     python3 compare_landing.py dir native ours Script   # stage 9 settle times, one line per release
     python3 sidebyside.py native.csv ours.csv out.mp4   # stage 9 clip of the two runs, cut to the same frame
+    python3 gif.py run.mov 54.25 56.7 out.gif           # a README clip (docs/demo) out of one run
 
 The driver's `Finger` (ParityDriver.swift) runs multi-segment drags
 through XCTest's private event paths, one keyframe per segment; it lifts
