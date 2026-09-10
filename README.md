@@ -17,13 +17,13 @@ Every curve, spring, threshold and gesture in this package was fitted against a
 native SwiftUI app driven through the same scripted gestures on the same
 device. [How it is calibrated](#how-it-is-calibrated) has the numbers.
 
-| Zoom push and pop | Pinch and rotate | Back swipe |
+| Zoom push and pop | Pinch to dismiss | Back swipe |
 |:--:|:--:|:--:|
-| ![The zoom transition](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/zoom.gif) | ![A pinch dismissal springing back](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/pinch-rotate.gif) | ![The interactive back swipe](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/back-swipe.gif) |
+| ![The zoom transition](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/zoom.gif) | ![A pinch, turn and drag landing the page on its poster](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/pinch-dismiss.gif) | ![The interactive back swipe](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/back-swipe.gif) |
 
-The example app on an iPhone 17 simulator. The pinch is released above the
-dismiss threshold, so the card springs back to full screen and un-rotates on
-the way.
+The example app on an iPhone 17 simulator. The middle clip pinches, turns and
+drags the card at once, and lets go below the dismiss threshold, so it lands
+on its poster.
 
 ## Features
 

@@ -8,7 +8,7 @@ runs in `../parity/`.
 | Clip | Shows | Run |
 |---|---|---|
 | `zoom.gif` | The zoom push and pop | `testZoomPoster`, second pass |
-| `pinch-rotate.gif` | A pinch to half size and 45°, released above the threshold, springing back | `testZoomRotate45` |
+| `pinch-dismiss.gif` | A pinch to 0.38 with a 20° turn and the focal point carried 70 pt right and 90 down, released at rest, landing on its poster | `testZoomPinchRotatePanDismiss` |
 | `back-swipe.gif` | A back swipe to 80 % of the width, released at rest | `testSwipe80Rest` |
 
 To record them again after a change, with the example built for the
