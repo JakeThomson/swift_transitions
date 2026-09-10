@@ -63,5 +63,10 @@ Maintainers only.
 
 1. Update the version in `pubspec.yaml` and move the `## Unreleased` entries in
    `CHANGELOG.md` under the new version heading.
-2. Commit, then tag the commit as `vX.Y.Z` and push the tag.
-3. The `publish` workflow publishes the tagged commit to pub.dev.
+2. Check the package as pub.dev will see it: `flutter pub publish --dry-run`,
+   and `dart doc` for broken references.
+3. Commit, then tag the commit as `vX.Y.Z` and push the tag.
+4. The `publish` workflow publishes the tagged commit to pub.dev over an OIDC
+   token from GitHub Actions. It needs automated publishing to be enabled for
+   this repository under the package's admin settings on pub.dev, with the tag
+   pattern `v{{version}}`.

@@ -25,3 +25,4 @@ example/web/
 # Design notes and calibration tooling live in the repository only.
 docs/
 tool/
+tools/
