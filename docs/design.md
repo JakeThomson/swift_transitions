@@ -165,7 +165,7 @@ grab the card at any time during any animation.
 | Release velocity of a flick | the default tracker reads 497 and 121 pt/s where the finger moved at 1200 and 400, and a zoom edge swipe's 800 as 301; `IOSScrollViewFlingVelocityTracker` reads the first two at 1312 and 288 | parity stage 2, `testSwipe20Fling`, `testSwipe35Medium`, `testZoomEdge40Fling` |
 | Card shadow during a zoom flight | 10 % darker 4 pt out, 3 % at 20, gone by 40; none at all within a twentieth of the source | parity stages 3 and 9, the page beside a landing card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
-| Covered page scale under a zoom | 0.914 or smaller | a sibling poster in the grid, 116.6 pt wide mid-flight against 119.3 at rest, back at rest about 200 ms after the card lands; the package holds the covered page at 1.0 (section 1.7) |
+| Covered page scale under a zoom | 0.914 at full screen, straight with the flight (0.989 at 0.12 of it, 0.968 at 0.36, 0.944 at 0.65), about the screen's centre; held still under a gesture; home on a critically damped ω 15 that finishes 270 ms after the card lands | parity stage 9, the poster row's outer edges in `native_ZoomPinch45Rest`, `native_ZoomPan30Rest` |
 | Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 170–217 ms at 400 pt/s a finger, 100–133 at 800, 103–108 at 1200 | parity stages 8 and 9, `native_ZoomPan*`, `native_ZoomPinch*`, `native_ZoomEdge*Fling*` |
 | Landing carry | an edge swipe flung at 800 pt/s takes the card 28–30 pt past the line from the release to the source, at 800 pt/s peaking 48–63 ms in and at 1200 38 pt at 92 ms | parity stage 9, `native_ZoomEdge40/60Fling`, `native2_ZoomEdge40Fling1200` |
 | Landing overshoot | 2 % of the flight past the source, 8 % released on a fast pinch; back within a point of it over 170–250 ms | parity stage 9, the same runs read past the frame the landing settles on (`tools/parity/analyze_overshoot.py`) |
@@ -212,6 +212,8 @@ reasoning behind each is on the constant itself.
 | `kZoomCrossFadeWindow` | 0.55 of the flight | stage 3 |
 | `ZoomTransitionOptions.dimmingColor` | 15 % black, linear in progress | stage 3 |
 | Flight corner radii | straight from the source's to the display's | stage 8, `native_zoom_f` |
+| `kZoomCoveredPageScale` | 0.086 of the covered page, linear in the flight | stage 9, `native_ZoomPinch45Rest`, `native_ZoomPan30Rest` |
+| `kZoomCoveredPageReturn` | ω 15, ζ 1 | stage 9, the same runs' landings |
 | Zoom card shadow | α 0.24, 4 pt down, 30 pt blur, fading out over the last tenth of the flight | stage 3, `native_zoom_a`–`f`; stage 9, `native_ZoomPinch45Rest` |
 | `scaleGain` | 0.67 per card height | stages 4 and 5, `native_ZoomPan*Rest`, `native_ZoomEdge*Rest` |
 | `travelKnee`, `minimumScale` | 0.52 card heights, 0.37 | stage 4, `native_ZoomPan15/30/50/80Rest` |
@@ -268,10 +270,6 @@ size of the difference.
   the target for the same seed; the settle times both fit, so telling the
   two apart needs the whole trace refitting (parity stage 9). Pans, edge
   swipes and releases from rest are within 0.3 % of native.
-- **The covered page's scale.** Natively the page underneath is scaled to
-  0.914 or smaller while the zoom is open and comes back about 200 ms after
-  the card lands; the package holds it at full scale, so the grid behind the
-  card does not breathe (parity stage 9).
 - **The first frame after a tap.** In the simulator's debug build — the
   only build it runs — the example's first flight frame lands 30–80 ms
   after the tap where native's lands at once (parity stage 0).
@@ -981,8 +979,9 @@ Flutter terms:
   landing has left — a pinch's fingers or an edge swipe's speed, never a
   pan's, which natively lands from rest however it was flung — carries the
   motion the card was released with as a decaying offset on the plain
-  landing spring (`ZoomDeparture.velocity`), so a flung card keeps going
-  its own way before it turns for the source, and is capped at
+  landing spring (`ZoomDeparture.velocity`), on both axes, so a flung card
+  keeps going its own way before it turns for the source rather than
+  running home on one plane, and is capped at
   `maxCommitVelocity` 20, and quickened by `landingSpringFor`: a native
   landing shortens with the fingers' own speed rather than the shrink they
   were driving, to 170 ms at 400 pt/s a finger and 100–133 at 800 in either
@@ -1004,6 +1003,15 @@ Flutter terms:
 - The SDK's Cupertino spring (stiffness 522.35, critically damped, 0.404 s)
   is available as `SwiftSprings.standard` for apps that want the exact SDK
   feel on the push transition.
+- The covered page is scaled down under a zoom route, straight with the
+  flight and about the screen's centre (`kZoomCoveredPageScale`), applied
+  by `ZoomPageTransition.delegatedTransition`. A gesture dragging the card
+  does not move it — the route's animation follows the finger and the page
+  holds where the flight left it, as native's does — and it comes home on
+  `kZoomCoveredPageReturn` rather than on the route's own animation, which
+  a committed dismissal seeds so the card lands well before the page has
+  finished growing. A source measured while the page is scaled is read
+  back to its resting rect, which is where both ends of a flight meet it.
 - The dismissal's pan and edge swipe estimate their release velocity with
   `IOSScrollViewFlingVelocityTracker`, as the back swipe does and for the
   same reason (section 3.2); a pinch measures its fingers directly, over

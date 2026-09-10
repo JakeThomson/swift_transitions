@@ -221,6 +221,20 @@ class ZoomDismissPhysics {
   double crossAxisOffsetFor(double offset, {required double width}) =>
       rubberBand(offset, limit: width * crossAxisLimit, tension: crossAxisGain);
 
+  /// How fast the card follows a finger crossing the gesture's axis, for
+  /// the finger's [offset] from where the axis opened: the slope of
+  /// [crossAxisOffsetFor], [crossAxisGain] at the origin and easing off as
+  /// the card nears [crossAxisLimit] of its [width]. A release carries the
+  /// card's own motion, not the finger's ([ZoomDeparture.velocity]).
+  double crossAxisFollowFor(double offset, {required double width}) {
+    final limit = width * crossAxisLimit;
+    if (limit <= 0) {
+      return 0;
+    }
+    final band = offset.abs() * crossAxisGain / limit + 1;
+    return crossAxisGain / (band * band);
+  }
+
   /// The card's uniform scale after [travel] card widths of edge swipe:
   /// linear in the travel with no knee — native drags shrink at one rate to
   /// at least 0.56 of the width, and a finger cannot travel far enough to

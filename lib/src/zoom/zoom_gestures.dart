@@ -103,6 +103,10 @@ class _ZoomDismissGestureDetectorState
   /// dead zone ends. A second finger is the pinch's and leaves these
   /// alone, so a pan whose pinch never begins carries on from where it is.
   int? _panPointer;
+
+  /// The finger's own velocity, for the axis the drag recognizer does not
+  /// report ([_acrossVelocity]).
+  VelocityTracker? _across;
   Offset _panDown = Offset.zero;
   Offset _lastPointer = Offset.zero;
   double _panDragged = 0;
@@ -182,7 +186,7 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handlePanEnd(DragEndDetails details) {
-    _endDrag(details.velocity.pixelsPerSecond.dy);
+    _endDrag(details.velocity.pixelsPerSecond.dy, cross: _acrossVelocity.dx);
   }
 
   /// An edge swipe's controller is fed from here rather than from the raw
@@ -215,8 +219,17 @@ class _ZoomDismissGestureDetectorState
   }
 
   void _handleEdgeEnd(DragEndDetails details) {
-    _endDrag(_toLogical(details.velocity.pixelsPerSecond.dx));
+    _endDrag(
+      _toLogical(details.velocity.pixelsPerSecond.dx),
+      cross: _acrossVelocity.dy,
+    );
   }
+
+  /// The finger's motion at the release, both axes. A drag recognizer
+  /// reports only its own — a horizontal one zeroes the vertical — and the
+  /// card follows the finger across the axis as well as along it.
+  Offset get _acrossVelocity =>
+      _across?.getVelocity().pixelsPerSecond ?? Offset.zero;
 
   void _handleCancel() {
     _endDrag(0);
@@ -225,11 +238,11 @@ class _ZoomDismissGestureDetectorState
   /// A one-finger recognizer letting go of the gesture. Nothing to a pinch,
   /// whose fingers' lift ends it: a scroll view winning the first finger's
   /// arena cancels the pan recognizer just as the second finger lands.
-  void _endDrag(double velocity) {
+  void _endDrag(double velocity, {double cross = 0}) {
     if (_pinchPointers != null) {
       return;
     }
-    _end(velocity);
+    _end(velocity, cross);
   }
 
   /// A scroll view at its top edge is handing a downward drag across. The
@@ -343,12 +356,12 @@ class _ZoomDismissGestureDetectorState
     _begin(ZoomGesture.edgeSwipe, details.globalPosition);
   }
 
-  void _end(double velocity) {
+  void _end(double velocity, [double cross = 0]) {
     final controller = _controller;
     _controller = null;
     _pinchPointers = null;
     _pinchBegun = false;
-    controller?.dragEnd(velocity);
+    controller?.dragEnd(velocity, crossVelocity: cross);
     if (controller != null) {
       // Disposed after the settle: the ticker only drives the sideways
       // chase, which has already been retargeted home by dragEnd.
@@ -361,6 +374,8 @@ class _ZoomDismissGestureDetectorState
       _panPointer = event.pointer;
       _panDown = event.position;
       _lastPointer = event.position;
+      _across = IOSScrollViewFlingVelocityTracker(event.kind)
+        ..addPosition(event.timeStamp, event.position);
     }
     _pointers[event.pointer] = _toNavigator(event.position);
     if (widget.pinch && _pointers.length == 2 && _pinchPointers == null) {
@@ -386,6 +401,7 @@ class _ZoomDismissGestureDetectorState
   void _handlePointerMove(PointerMoveEvent event) {
     if (event.pointer == _panPointer) {
       _lastPointer = event.position;
+      _across?.addPosition(event.timeStamp, event.position);
     }
     final position = _toNavigator(event.position);
     _pointers[event.pointer] = position;

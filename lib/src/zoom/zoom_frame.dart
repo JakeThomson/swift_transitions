@@ -50,6 +50,35 @@ class ZoomFrame {
 /// 0.55 (parity stage 3).
 const double kZoomCrossFadeWindow = 0.55;
 
+/// How far the covered page is scaled down while a zoom route is open.
+///
+/// Read from the grid the covered page carries: the poster row's outer
+/// edges, 384 pt apart at rest, close to 0.914 of that with the card at
+/// full screen, and the point they close about is the screen's centre.
+/// The scale runs straight with the flight's progress — 0.989 at 0.12 of
+/// it, 0.968 at 0.36, 0.944 at 0.65, within 0.003 of the line everywhere
+/// (parity stage 9).
+const double kZoomCoveredPageScale = 0.086;
+
+/// The spring the covered page comes back to rest on when the route above
+/// it pops, from wherever the flight left it.
+///
+/// It does not follow the card home: a native landing settles the card in
+/// about 215 ms and the page behind it keeps growing for 270 ms more,
+/// a critically damped ω 15 — 98 % of the way in 370 ms — where the card's
+/// own landing spring is seeded and underdamped (parity stage 9).
+const SpringDescription kZoomCoveredPageReturn = SpringDescription(
+  mass: 1,
+  stiffness: 225, // ω²
+  damping: 30, // 2ζω
+);
+
+/// The covered page's scale at [progress] of a zoom flight, and the
+/// factor a source measured through it has to be divided by to read as it
+/// will at rest.
+double zoomCoveredPageScale(double progress) =>
+    1 - kZoomCoveredPageScale * progress.clamp(0.0, 1.0);
+
 /// How the covered route's dim follows the flight: in step with the route
 /// animation. Native's dim, read from a patch of the covered page well away
 /// from the card, was 0.15 × progress at every frame (parity stage 3).

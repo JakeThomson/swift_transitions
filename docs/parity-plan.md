@@ -867,6 +867,22 @@ first as native's does — 6 pt against native's 5.4. The release curve is
 unchanged (the fling settles in 212 ms against native's 193, τ 38 against
 43; the slow pop 217 against 232).
 
+*Measured 2026-09-10, from the grid the covered page carries.* The page
+under a zoom route is scaled down, which the package did not do at all.
+The poster row's outer edges — 384 pt apart at rest, and the card never
+covers both until it is nearly full screen — close to 0.914 of that with
+the card at full screen, about a point at x 202 where the screen's centre
+is 201. The scale runs straight with the flight: 0.989 at 0.12 of it,
+0.968 at 0.36, 0.944 at 0.65, 0.931 at 0.78, within 0.003 of the line
+everywhere. It does not follow a gesture — the page holds at 0.914 while
+a pinch takes the card from 327 pt to 186 — and on a committed dismissal
+it comes home on its own critically damped ω 15, finishing 270 ms after
+the card has landed where the card's seeded landing takes 215. Ours now
+reads 0.938 at the same card width native does, holds through the whole
+gesture, and finishes 233 ms after the card. A source measured while the
+page is scaled is read back to its resting rect, or a pop would fly to a
+poster 10 pt small.
+
 *Measured 2026-09-10, from the native edge flings against the line each
 takes from its release to the source.* A landing does not run the card
 straight home. Native carries the card the way it was going first: an
@@ -880,7 +896,14 @@ the landing spring, in points, added to the flight frame; the spring is
 the plain one, since native's carry peaks at 60 to 90 ms whatever the
 release speed where the quickened spring would pull it to 40. Verified:
 21 pt at 63 ms against native's 30 at 63, and 34 at 55 against 38 at 92.
-A release at rest seeds nothing and pans are unchanged. What is left is
+A release at rest seeds nothing and pans are unchanged. The carry is on
+both axes: a drag recognizer reports only its own — a horizontal one
+zeroes the vertical — so the gesture layer keeps its own tracker on the
+finger and the card carries the follow's slope across the axis as well as
+the chase's speed along it, or an edge swipe let go on the move lands on
+one plane. Verified: 23.7 pt across and 23.9 down against native's 30.5
+and 36.8, and a swipe released at 60 % now carries forward (13.4 pt)
+where it used to net backward. What is left is
 that native's position and size are on separate clocks — its card hardly
 shrinks for the first 100 ms of a fling's landing while the carry plays
 out — where ours shrinks throughout, so an edge swipe released at 60 % of

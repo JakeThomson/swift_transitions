@@ -22,12 +22,18 @@
   20 pt beside it reads its own colour from a twentieth of the flight in
   — where ours kept a full one to the end and lost it the frame the route
   popped.
+* Scale the page under a zoom route down as the card grows over it, which
+  iOS does and the package did not (parity stage 9): 0.914 at full screen,
+  straight with the flight and about the screen's centre, held still while
+  a gesture drags the card, and home on its own spring afterwards, which
+  finishes after the card lands rather than with it.
 * Carry a flung card's motion into its landing (parity stage 9). Natively
   a card released travelling keeps going its own way before it turns for
   the source — 28 pt past the line an edge swipe flung at 800 pt/s takes,
   38 at 1200 — where ours ran straight home. `ZoomDeparture` carries the
   release's velocity and the route runs it as a decaying offset on the
-  landing spring.
+  landing spring, on both axes — a drag recognizer reports only its own,
+  so the gesture layer tracks the finger itself for the other.
 * Draw the landing's overshoot, which iOS has and the SDK clipped
   (parity stage 9): `AnimationController` clamps a simulation to the
   controller's bounds, so the part of the landing spring that carries the

@@ -509,7 +509,22 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         navigator,
       );
     }
-    final rect = overlay == null ? null : found?.boundsIn(overlay);
+    // Measured through the covered page's own scale ([_CoveredPage]), and
+    // read back to the size and place it rests at, which is where both
+    // ends of a flight meet it.
+    final scale = zoomCoveredPageScale(animation?.value ?? 0);
+    final measured = overlay == null ? null : found?.boundsIn(overlay);
+    final centre = overlay is RenderBox
+        ? (Offset.zero & overlay.size).center
+        : Offset.zero;
+    final rect = measured == null
+        ? null
+        : Rect.fromLTRB(
+            centre.dx + (measured.left - centre.dx) / scale,
+            centre.dy + (measured.top - centre.dy) / scale,
+            centre.dx + (measured.right - centre.dx) / scale,
+            centre.dy + (measured.bottom - centre.dy) / scale,
+          );
     if (found == null || rect == null) {
       found = null;
       _flightSource = null;

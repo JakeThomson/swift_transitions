@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 import '../corners/display_corner_radii.dart';
@@ -137,21 +138,24 @@ class ZoomPageTransition extends StatelessWidget {
     );
   }
 
-  /// The transition applied to the route underneath a zoom route: none.
+  /// The transition applied to the route underneath a zoom route: it is
+  /// scaled down a little, about the screen's centre, as the card grows
+  /// over it ([kZoomCoveredPageScale]).
   ///
-  /// The covered page stays put at full scale while the card grows over it,
-  /// as on iOS; the dim it receives is the zoom route's modal barrier. The
-  /// builder must be non-null so that a covered [CupertinoPageRoute] or
-  /// [MaterialPageRoute] hands off to it instead of running its own slide,
-  /// and it is a static tear-off because [ModalRoute.didChangeNext] compares
-  /// delegated transitions by identity.
+  /// A gesture dragging the card does not move it: natively the page holds
+  /// wherever the flight left it until the dismissal commits or is given
+  /// up (parity stage 9). The dim the page receives is the zoom route's
+  /// modal barrier. The builder must be non-null so that a covered
+  /// [CupertinoPageRoute] or [MaterialPageRoute] hands off to it instead of
+  /// running its own slide, and it is a static tear-off because
+  /// [ModalRoute.didChangeNext] compares delegated transitions by identity.
   static Widget? delegatedTransition(
     BuildContext context,
     Animation<double> animation,
     Animation<double> secondaryAnimation,
     bool allowSnapshotting,
     Widget? child,
-  ) => child;
+  ) => _CoveredPage(progress: secondaryAnimation, child: child);
 
   @override
   Widget build(BuildContext context) {
@@ -272,6 +276,108 @@ class _FlightSnapshotState extends State<_FlightSnapshot> {
       controller: _controller,
       mode: SnapshotMode.permissive,
       child: widget.child,
+    );
+  }
+}
+
+
+/// The page under a zoom route, scaled down with the flight's [progress]
+/// and held where it is while a gesture drags the card.
+class _CoveredPage extends StatefulWidget {
+  const _CoveredPage({required this.progress, required this.child});
+
+  final Animation<double> progress;
+  final Widget? child;
+
+  @override
+  State<_CoveredPage> createState() => _CoveredPageState();
+}
+
+class _CoveredPageState extends State<_CoveredPage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _returning = AnimationController.unbounded(
+    vsync: this,
+  );
+  ValueNotifier<bool>? _gesture;
+  double _held = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.progress.addStatusListener(_handleStatusChanged);
+  }
+
+  @override
+  void didUpdateWidget(_CoveredPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.progress != oldWidget.progress) {
+      oldWidget.progress.removeStatusListener(_handleStatusChanged);
+      widget.progress.addStatusListener(_handleStatusChanged);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final gesture = Navigator.of(context).userGestureInProgressNotifier;
+    if (gesture != _gesture) {
+      _gesture?.removeListener(_handleGestureChanged);
+      _gesture = gesture..addListener(_handleGestureChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.progress.removeStatusListener(_handleStatusChanged);
+    _gesture?.removeListener(_handleGestureChanged);
+    _returning.dispose();
+    super.dispose();
+  }
+
+  // Where the flight left the page, kept for as long as a finger has the
+  // card: the route's animation follows the gesture and the page does not.
+  void _handleGestureChanged() {
+    _held = widget.progress.value;
+  }
+
+  /// The page comes home on [kZoomCoveredPageReturn] rather than on the
+  /// route's own animation, which a committed dismissal seeds so the card
+  /// lands well before the page has finished growing.
+  void _handleStatusChanged(AnimationStatus status) {
+    if (status == AnimationStatus.reverse) {
+      _returning
+        ..value = _progress
+        ..animateWith(
+          SpringSimulation(kZoomCoveredPageReturn, _progress, 0, 0),
+        );
+    } else if (status == AnimationStatus.forward) {
+      _returning.stop();
+    }
+  }
+
+  /// The flight's progress, held where a gesture found it.
+  double get _progress =>
+      (_gesture?.value ?? false) ? _held : widget.progress.value;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable?>[
+        widget.progress,
+        _gesture,
+        _returning,
+      ]),
+      child: widget.child,
+      builder: (context, child) {
+        final progress = widget.progress.status == AnimationStatus.reverse
+            ? _returning.value
+            : _progress;
+        return Transform.scale(
+          scale: zoomCoveredPageScale(progress),
+          filterQuality: FilterQuality.medium,
+          child: child,
+        );
+      },
     );
   }
 }

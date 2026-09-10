@@ -186,14 +186,14 @@ void main() {
     expect(cardClip(tester).clipBehavior, Clip.antiAlias);
   });
 
-  testWidgets('the covered page stays put and is dimmed', (tester) async {
+  testWidgets('the covered page is scaled down and dimmed', (tester) async {
     await tester.pumpWidget(testApp());
-    final homeBefore = tester.getTopLeft(find.text('home'));
+    final homeBefore = tester.getRect(find.text('home'));
     await tester.tap(find.text('push'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(tester.getTopLeft(find.text('home')), homeBefore);
+    expect(tester.getRect(find.text('home')).width, lessThan(homeBefore.width));
     // The home CupertinoPageRoute has a barrier of its own; the zoom
     // route's is the topmost.
     Color barrierColor() => tester
@@ -204,7 +204,18 @@ void main() {
     expect(barrierColor().a, lessThan(0x26 / 0xFF));
 
     await tester.pumpAndSettle();
-    expect(tester.getTopLeft(find.text('home')), homeBefore);
+    expect(
+      tester.getRect(find.text('home')).width,
+      closeTo(homeBefore.width * zoomCoveredPageScale(1), 0.5),
+    );
+    // Scaled about the screen's centre, so the page keeps its middle.
+    expect(
+      tester.getRect(find.text('home')).center.dx,
+      closeTo(
+        400 + (homeBefore.center.dx - 400) * zoomCoveredPageScale(1),
+        0.5,
+      ),
+    );
     expect(barrierColor().a, closeTo(0x26 / 0xFF, 0.01));
   });
 

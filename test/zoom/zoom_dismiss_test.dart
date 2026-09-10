@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swift_transitions/src/zoom/zoom_frame.dart';
 import 'package:swift_transitions/src/zoom/zoom_transition_layer.dart';
 import 'package:swift_transitions/swift_transitions.dart';
 
@@ -98,6 +99,34 @@ bool sourceHidden(WidgetTester tester) => !tester
       ),
     )
     .visible;
+
+/// The card's frames over the first twelve of a landing.
+Future<List<Rect>> landingSamples(WidgetTester tester) async {
+  final frames = <Rect>[cardRect(tester)];
+  for (var i = 0; i < 12; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+    frames.add(cardRect(tester));
+  }
+  return frames;
+}
+
+/// The furthest the card gets from the straight line between the frame it
+/// was released at and the source, on each axis.
+Offset offTheLine(WidgetTester tester, List<Rect> frames) {
+  final from = frames.first;
+  var off = Offset.zero;
+  for (final frame in frames) {
+    final travelled = from.width == posterRect.width
+        ? 1.0
+        : (from.width - frame.width) / (from.width - posterRect.width);
+    final line = Rect.lerp(from, posterRect, travelled.clamp(0.0, 1.0))!;
+    off = Offset(
+      math.max(off.dx, frame.left - line.left),
+      math.max(off.dy, frame.top - line.top),
+    );
+  }
+  return off;
+}
 
 Future<void> pushAndSettle(
   WidgetTester tester,
@@ -385,6 +414,26 @@ void main() {
     expect(find.text('detail'), findsNothing);
   });
 
+  testWidgets('the covered page holds still while the card is dragged', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    Rect home() => tester.getRect(find.byType(CupertinoButton));
+    final scaled = home();
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 200));
+    await tester.pump();
+    // The card is well up the flight, and the page has not followed it.
+    expect(cardRect(tester).width, lessThan(700));
+    expect(home(), scaled);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    expect(home().width, closeTo(scaled.width / zoomCoveredPageScale(1), 0.5));
+  });
+
   testWidgets('a landing carries the card past the source and back', (
     tester,
   ) async {
@@ -650,6 +699,31 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
   });
 
+  testWidgets('an edge swipe let go on the move carries downward too', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(5, 200));
+    await gesture.moveBy(const Offset(10, 0));
+    for (var i = 1; i <= 6; i++) {
+      await gesture.moveBy(
+        const Offset(100, 40),
+        timeStamp: Duration(milliseconds: 16 * i),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up(timeStamp: const Duration(milliseconds: 104));
+    await tester.pump();
+
+    // The card was going down as well as across, and carries on doing
+    // both: the landing is not run on one plane.
+    final off = offTheLine(tester, await landingSamples(tester));
+    expect(off.dx, greaterThan(8));
+    expect(off.dy, greaterThan(8));
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
   testWidgets('an edge swipe flung away carries past its flight line', (
     tester,
   ) async {
@@ -659,22 +733,17 @@ void main() {
     for (var i = 1; i <= 6; i++) {
       await gesture.moveBy(
         const Offset(100, 0),
-        timeStamp: Duration(milliseconds: 50 * i),
+        timeStamp: Duration(milliseconds: 16 * i),
       );
-      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 16));
     }
-    await gesture.up(timeStamp: const Duration(milliseconds: 308));
+    await gesture.up(timeStamp: const Duration(milliseconds: 104));
     await tester.pump();
 
     // The card is released travelling, and carries on that way before it
-    // turns for the source: natively 28 pt past the line at 800 pt/s.
-    final released = cardRect(tester);
-    var furthest = released.left;
-    for (var i = 0; i < 12; i++) {
-      await tester.pump(const Duration(milliseconds: 16));
-      furthest = math.max(furthest, cardRect(tester).left);
-    }
-    expect(furthest, greaterThan(posterRect.left + 10));
+    // turns for the source: natively 28 pt past the line from the release
+    // to the source at 800 pt/s.
+    expect(offTheLine(tester, await landingSamples(tester)).dx, greaterThan(8));
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsNothing);
   });

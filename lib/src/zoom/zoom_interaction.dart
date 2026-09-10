@@ -374,8 +374,9 @@ class ZoomDismissController {
   }
 
   /// Ends the gesture with the primary axis's release [velocity] in pixels
-  /// per second, positive away from the identity state.
-  void dragEnd(double velocity) {
+  /// per second, positive away from the identity state, and the finger's
+  /// [crossVelocity] across that axis.
+  void dragEnd(double velocity, {double crossVelocity = 0}) {
     if (_released) {
       return;
     }
@@ -418,13 +419,20 @@ class ZoomDismissController {
       progress: controller.value,
       toSource: commit,
       // The motion the card leaves with, in navigator coordinates: the
-      // fingers' own, which the sideways chase is tracking, the way it has
-      // gone. A pinch closes on its focal point rather than travelling.
+      // sideways chase's own along the axis it is tracking, and the
+      // finger's across it through the follow's slope, so an edge swipe
+      // that was moving down lands still moving down rather than running
+      // home on one plane. A pinch closes on its focal point rather than
+      // travelling.
       velocity: switch (gesture) {
-        ZoomGesture.pan => Offset(0, velocity),
+        ZoomGesture.pan => Offset(_horizontal.velocity, velocity),
         ZoomGesture.edgeSwipe => Offset(
-          _horizontal.value < 0 ? -velocity : velocity,
-          0,
+          _horizontal.velocity,
+          physics.crossAxisFollowFor(
+                (_pointer - _anchor).dy,
+                width: restingFrame.rect.width,
+              ) *
+              crossVelocity,
         ),
         ZoomGesture.pinch => Offset.zero,
       },
