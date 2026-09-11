@@ -334,6 +334,53 @@ void main() {
     expect(cardRect(tester), rectCloseTo(popRect(posterRect, t)));
   });
 
+  testWidgets('the pop lands on a source whose page took no scale', (
+    tester,
+  ) async {
+    // A route underneath that declines the transition is not scaled
+    // ([_CoveredPage] never wraps it), so the source rests where it is
+    // measured; the flight must not read it back through a scale the
+    // page was never drawn at.
+    await tester.pumpWidget(
+      CupertinoApp(
+        onGenerateRoute: (settings) => _DecliningRoute<void>(
+          builder: (context) => Stack(
+            children: <Widget>[
+              const Positioned.fill(child: Text('home')),
+              Positioned.fromRect(
+                rect: posterRect,
+                child: ZoomTransitionSource(
+                  tag: 'poster',
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      ZoomPageRoute<void>(
+                        sourceTag: 'poster',
+                        builder: (_) => const Center(child: Text('detail')),
+                      ),
+                    ),
+                    child: const Text('poster'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final homeBefore = tester.getRect(find.text('home'));
+    await tester.tap(find.text('poster'));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.text('home')), homeBefore);
+
+    Navigator.of(tester.element(find.text('detail'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final t = detailRoute(tester).animation!.value;
+    expect(t, inExclusiveRange(0, 1));
+    expect(cardRect(tester), rectCloseTo(popRect(posterRect, t)));
+  });
+
   testWidgets('a changed sourceTag lands the pop on the new source', (
     tester,
   ) async {
@@ -789,4 +836,34 @@ class _Stateful extends StatefulWidget {
 class _StatefulState extends State<_Stateful> {
   @override
   Widget build(BuildContext context) => const Center(child: Text('detail'));
+}
+
+/// A page route that declines every transition, so a zoom route pushed on
+/// top of it neither scales nor dims it.
+class _DecliningRoute<T> extends PageRoute<T> {
+  _DecliningRoute({required this.builder});
+
+  final WidgetBuilder builder;
+
+  @override
+  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => false;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  Duration get transitionDuration => Duration.zero;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) => builder(context);
 }

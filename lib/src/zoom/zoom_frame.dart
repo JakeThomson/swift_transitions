@@ -73,9 +73,7 @@ const SpringDescription kZoomCoveredPageReturn = SpringDescription(
   damping: 30, // 2ζω
 );
 
-/// The covered page's scale at [progress] of a zoom flight, and the
-/// factor a source measured through it has to be divided by to read as it
-/// will at rest.
+/// The covered page's scale at [progress] of a zoom flight.
 double zoomCoveredPageScale(double progress) =>
     1 - kZoomCoveredPageScale * progress.clamp(0.0, 1.0);
 

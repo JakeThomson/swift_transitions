@@ -1,3 +1,17 @@
+## 0.1.2
+
+* A zoom's flight meets its source where the source rests. The source was
+  measured in the overlay and read back through the covered page's scale as
+  the route's animation implied it, and the two disagree whenever the page
+  was drawn for another frame than the one being prepared — under a first
+  frame slower than the push, a router's deferred preparation found the push
+  complete while the page had been built at its start — so the card met a
+  rect 9 % too big and toward the screen's edges, the page cover-fitted into
+  it showing around a source that does not stretch, and snapped onto the
+  source when the route left. It is now measured in the page's own
+  coordinates, which the scale never touches; a route underneath that
+  declines the transition, and so takes no scale, lands right too.
+
 ## 0.1.1
 
 * An aligned zoom flies the way UIKit's does with an `alignmentRectProvider`,

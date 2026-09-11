@@ -515,22 +515,20 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
         navigator,
       );
     }
-    // Measured through the covered page's own scale ([_CoveredPage]), and
-    // read back to the size and place it rests at, which is where both
-    // ends of a flight meet it.
-    final scale = zoomCoveredPageScale(animation?.value ?? 0);
-    final measured = overlay == null ? null : found?.boundsIn(overlay);
-    final centre = overlay is RenderBox
-        ? (Offset.zero & overlay.size).center
-        : Offset.zero;
-    final rect = measured == null
-        ? null
-        : Rect.fromLTRB(
-            centre.dx + (measured.left - centre.dx) / scale,
-            centre.dy + (measured.top - centre.dy) / scale,
-            centre.dx + (measured.right - centre.dx) / scale,
-            centre.dy + (measured.bottom - centre.dy) / scale,
-          );
+    // Measured in the covered page's own coordinates: its subtree fills
+    // the overlay and is laid out at rest, under whatever the page is
+    // drawn through ([_CoveredPage]'s scale), so this is the size and
+    // place the source rests at, which is where both ends of a flight
+    // meet it. Measuring in the overlay and dividing out the scale the
+    // animation implies is not the same thing: the page is drawn at the
+    // scale it was last built for, which the animation has left behind
+    // by the time a deferred flight is prepared under a first frame
+    // slower than the push, and a route that declines the transition
+    // ([TransitionRoute.canTransitionTo]) is not scaled at all.
+    final page = previous is ModalRoute<Object?>
+        ? previous.subtreeContext?.findRenderObject()
+        : null;
+    final rect = page == null ? null : found?.boundsIn(page);
     _alignmentRect = null;
     _pendingAlignment = null;
     if (found == null || rect == null) {

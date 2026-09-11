@@ -1091,8 +1091,18 @@ Flutter terms:
   holds where the flight left it, as native's does — and it comes home on
   `kZoomCoveredPageReturn` rather than on the route's own animation, which
   a committed dismissal seeds so the card lands well before the page has
-  finished growing. A source measured while the page is scaled is read
-  back to its resting rect, which is where both ends of a flight meet it.
+  finished growing. A source is measured in the covered page's own
+  coordinates, its subtree, which fills the overlay and is laid out at
+  rest under the scale — so both ends of a flight meet it where it rests
+  whatever the page is drawn through at the time. Measuring in the overlay
+  and dividing out the scale the animation implies is not the same thing:
+  the page is drawn at the scale it was last built for, which the animation
+  has left behind by the time a deferred flight is prepared under a first
+  frame slower than the push (the whole flight then meets the source's rest
+  rect divided by the scale at full screen, 9 % out and toward the screen's
+  edges, the page cover-fitted into the card showing around a source that
+  does not stretch), and a route that declines the transition is not
+  scaled at all.
   The strip the scale uncovers at the screen's edges — 0.086 of the width
   across at full progress — is painted with the ambient
   `CupertinoTheme.scaffoldBackgroundColor`, which Material's own `Theme`
