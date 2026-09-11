@@ -40,6 +40,8 @@ final class ParityDriver: XCTestCase {
     var dunes: XCUICoordinate { at(208, 340) }
     /// The Aurora still, (16, 507)–(176, 597), in the row under the posters.
     var auroraStill: XCUICoordinate { at(96, 552) }
+    /// The Dunes film, (148, 674)–(268, 854), in the row under the stills.
+    var dunesFilm: XCUICoordinate { at(208, 764) }
     var backButton: XCUICoordinate { at(30, 81) }
     var pageCentre: XCUICoordinate { at(201, 437) }
 
@@ -146,6 +148,17 @@ final class ParityDriver: XCTestCase {
         }
     }
 
+    /// The film zoom: a poster whose page leads with a backdrop, another
+    /// picture at another size, so the whole page shrinks into the poster.
+    func testZoomFilm() {
+        for _ in 0..<2 {
+            dunesFilm.tap()
+            hold(1.5)
+            backButton.tap()
+            hold(1.5)
+        }
+    }
+
     // MARK: Stage 2: the back swipe. Each test pushes the first row, waits,
     // then drags from the leading edge. Names encode the case: position as
     // a fraction of the width, then how it is released.
@@ -240,6 +253,31 @@ final class ParityDriver: XCTestCase {
 
     func testStillEdge60Fling() {
         stillOpen()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 24, y: 437), speed: 300)
+        finger.line(to: CGPoint(x: 402 * 0.6, y: 437), speed: 800)
+        finger.lift()
+        hold(1.5)
+    }
+
+    /// The film page dragged home: a pan flung and an edge swipe flung,
+    /// the landings the film's poster is meant to be met at.
+    func filmOpen() {
+        dunesFilm.tap()
+        hold(1.5)
+    }
+
+    func testFilmPan40Fast() {
+        filmOpen()
+        var finger = Finger(at: Self.grab)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + 20), speed: 300)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + Self.height * 0.4), speed: 800)
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testFilmEdge60Fling() {
+        filmOpen()
         var finger = Finger(at: CGPoint(x: 4, y: 437))
         finger.line(to: CGPoint(x: 24, y: 437), speed: 300)
         finger.line(to: CGPoint(x: 402 * 0.6, y: 437), speed: 800)

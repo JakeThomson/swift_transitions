@@ -22,6 +22,7 @@ the simulator (`flutter build ios --simulator --debug`).
     python3 analyze_landing.py run.csv [...]            # stage 8: the landing spring of any dismissal, one line each
     python3 compare_edge.py dir native flutter          # stage 5 side by side, one line per script
     python3 analyze_outline.py frames/ out.csv          # stage 9: the card's box against the covered page
+    python3 analyze_film.py frames/                     # the film page: the poster's opacity through a pop, per frame
     python3 compare_landing.py dir native ours Script   # stage 9 settle times, one line per release
     python3 sidebyside.py native.csv ours.csv out.mp4   # stage 9 clip of the two runs, cut to the same frame
     python3 gif.py run.mov 54.25 56.7 out.gif           # a README clip (docs/demo) out of one run

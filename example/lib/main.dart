@@ -71,6 +71,12 @@ class GalleryPage extends StatelessWidget {
               header: const Text('Zoom — tap a still, aligned to its art'),
               children: const <Widget>[StillRow()],
             ),
+            CupertinoListSection(
+              header: const Text(
+                'Zoom — tap a film, its page leads with a backdrop',
+              ),
+              children: const <Widget>[FilmRow()],
+            ),
           ],
         ),
       ),
@@ -209,6 +215,58 @@ class StillRow extends StatelessWidget {
   }
 }
 
+/// A horizontally scrolling row of the posters again, each a
+/// [ZoomTransitionSource] that opens its [FilmPage].
+///
+/// A film's page does not open with its poster: it leads with a backdrop —
+/// another picture, wide where the poster is tall, across the top of the
+/// page under a title. Nothing on the page is the poster, so there is
+/// nothing to align the flight to; the whole page shrinks into the poster
+/// and the poster's picture cross-fades in over it, as it does natively.
+class FilmRow extends StatelessWidget {
+  /// Creates the film row.
+  const FilmRow({super.key});
+
+  static const double _height = 180;
+  static const BorderRadius _radius = BorderRadius.all(Radius.circular(12));
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _height + 24,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: posters.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final poster = posters[index];
+          final tag = 'film:${poster.title}';
+          return ZoomTransitionSource(
+            tag: tag,
+            borderRadius: _radius,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  ZoomPageRoute<void>(
+                    sourceTag: tag,
+                    title: poster.title,
+                    builder: (_) => FilmPage(poster: poster),
+                  ),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: _radius,
+                child: PosterArt(poster: poster, width: 120, height: _height),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// A poster's artwork: a coloured card with its title.
 class PosterArt extends StatelessWidget {
   /// Creates the artwork for [poster] at [width] by [height].
@@ -257,6 +315,50 @@ class PosterArt extends StatelessWidget {
               style: const TextStyle(
                 color: CupertinoColors.white,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+    );
+  }
+}
+
+/// A film's backdrop: a wide still in the poster's colours, its title set
+/// large across it — another picture than the poster, not a crop of it.
+class BackdropArt extends StatelessWidget {
+  /// Creates the backdrop for [poster].
+  const BackdropArt({super.key, required this.poster});
+
+  /// The film whose backdrop this is.
+  final Poster poster;
+
+  @override
+  Widget build(BuildContext context) {
+    final lighter = Color.lerp(poster.color, const Color(0xFFFFFFFF), 0.35)!;
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        // Flat: one colour, and not the poster's, so a measurement can
+        // tell the two pictures apart.
+        color: Parity.flat ? lighter : null,
+        gradient: Parity.flat
+            ? null
+            : LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: <Color>[
+                  Color.lerp(poster.color, const Color(0xFF000000), 0.45)!,
+                  lighter,
+                ],
+              ),
+      ),
+      child: Parity.flat
+          ? null
+          : Text(
+              poster.title.toUpperCase(),
+              style: const TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 34,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 4,
               ),
             ),
     );
@@ -421,6 +523,60 @@ class StillPage extends StatelessWidget {
               'Drag down, swipe in from the leading edge, or pinch to shrink '
               'the page into its still. Tap back to zoom home.',
               style: textStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The page a film zooms open into: its backdrop across the top, under the
+/// bar, then its title and a paragraph. The poster is nowhere on it.
+class FilmPage extends StatelessWidget {
+  /// Creates the detail page for [poster].
+  const FilmPage({super.key, required this.poster});
+
+  /// The film whose poster was tapped.
+  final Poster poster;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = CupertinoTheme.of(context).textTheme;
+    return CupertinoPageScaffold(
+      backgroundColor: Parity.flat ? const Color(0xFFE0F0FF) : null,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(poster.title),
+        // Parity: as PosterPage's bar.
+        backgroundColor: Parity.flat ? const Color(0xFEFFFFFF) : null,
+        automaticBackgroundVisibility: false,
+        border: Parity.flat
+            ? null
+            : const Border(
+                bottom: BorderSide(color: Color(0x4D000000), width: 0),
+              ),
+      ),
+      child: ListView(
+        // The backdrop where PosterPage puts its art.
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 40),
+        children: <Widget>[
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: BackdropArt(poster: poster),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(poster.title, style: textTheme.navLargeTitleTextStyle),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Text(
+              'The poster is not on this page: it leads with a backdrop, '
+              'another picture at another size. The whole page shrinks into '
+              'the poster and the poster fades in over it. Drag down, swipe '
+              'in from the leading edge, or pinch to dismiss; tap back to '
+              'zoom home.',
+              style: textTheme.textStyle,
             ),
           ),
         ],

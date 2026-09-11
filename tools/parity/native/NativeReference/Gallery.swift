@@ -25,6 +25,14 @@ extension Color {
         )
     }
 
+    /// `Color.lerp(color, white, 0.35)` from the Flutter example.
+    var lightened: Color {
+        let ui = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return Color(red: r + (1 - r) * 0.35, green: g + (1 - g) * 0.35, blue: b + (1 - b) * 0.35)
+    }
+
     /// `Color.lerp(color, black, 0.45)` from the Flutter example.
     var darkened: Color {
         let ui = UIColor(self)
@@ -61,18 +69,17 @@ struct GalleryView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("push_anywhere")
-                    HStack {
-                        Text("Zoom — tap a poster")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 22)
-                    .padding(.bottom, 8)
-                    .frame(height: 44)
-                    .background(Color(hex: 0xF2F2F7))
+                    SectionHeader("Zoom — tap a poster")
                     PosterRow(namespace: zoom)
+                        .background(Color.white)
+                    SectionHeader("Zoom — tap a still, aligned to its art", height: 53)
+                    // The example's still row, at its points; the aligned
+                    // zoom is UIKit's alone (`Aligned.swift`), so here the
+                    // stills open nothing.
+                    ArtRow(size: CGSize(width: 160, height: 90), radius: 10)
+                        .background(Color.white)
+                    SectionHeader("Zoom — tap a film, its page leads with a backdrop", height: 53)
+                    FilmRow(namespace: zoom)
                         .background(Color.white)
                     Color(hex: 0xF2F2F7).frame(height: 8)
                 }
@@ -85,6 +92,9 @@ struct GalleryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Poster.self) { poster in
                 PosterPager(initial: poster, namespace: zoom)
+            }
+            .navigationDestination(for: Film.self) { film in
+                FilmPage(poster: film.poster, namespace: zoom)
             }
         }
     }
@@ -127,6 +137,90 @@ struct PosterRow: View {
                         source.clipShape(.rect(cornerRadius: 12))
                     }
                     .accessibilityIdentifier("poster_\(poster.title)")
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(height: height + 24)
+    }
+}
+
+/// A `CupertinoListSection` header: 13 pt secondary text on the grouped
+/// grey with the example's insets. The first section's header is 44 pt
+/// tall; a section under another gets a margin too, 53 (measured).
+struct SectionHeader: View {
+    let title: String
+    let height: CGFloat
+
+    init(_ title: String, height: CGFloat = 44) {
+        self.title = title
+        self.height = height
+    }
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, height - 22)
+        .padding(.bottom, 8)
+        .frame(height: height)
+        .background(Color(hex: 0xF2F2F7))
+    }
+}
+
+/// A row of the posters' art at `size` that opens nothing.
+struct ArtRow: View {
+    let size: CGSize
+    let radius: CGFloat
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 12) {
+                ForEach(posters) { poster in
+                    PosterArt(poster: poster)
+                        .frame(width: size.width, height: size.height)
+                        .clipShape(.rect(cornerRadius: radius))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(height: size.height + 24)
+    }
+}
+
+/// A poster opened as a film: its page leads with a backdrop, not the
+/// poster. Mirrors the Flutter example's `FilmRow` tags.
+struct Film: Hashable {
+    let poster: Poster
+    var id: String { "film:\(poster.id)" }
+}
+
+/// The poster row again, each poster a zoom source for its `FilmPage`.
+struct FilmRow: View {
+    let namespace: Namespace.ID
+    private let height: CGFloat = 180
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 12) {
+                ForEach(posters) { poster in
+                    let film = Film(poster: poster)
+                    NavigationLink(value: film) {
+                        PosterArt(poster: poster)
+                            .frame(width: 120, height: height)
+                            .clipShape(.rect(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .matchedTransitionSource(id: film.id, in: namespace) { source in
+                        source.clipShape(.rect(cornerRadius: 12))
+                    }
+                    .accessibilityIdentifier("film_\(poster.title)")
                 }
             }
             .padding(.horizontal, 16)
@@ -204,6 +298,57 @@ struct PosterPage: View {
             }
         }
         .background(Parity.flat ? Color(hex: 0xE0F0FF) : Color.white)
+    }
+}
+
+/// A film's backdrop: a wide still in the poster's colours with its title
+/// set large across it — another picture than the poster.
+struct BackdropArt: View {
+    let poster: Poster
+
+    var body: some View {
+        ZStack {
+            if Parity.flat {
+                poster.color.lightened
+            } else {
+                LinearGradient(
+                    colors: [poster.color.darkened, poster.color.lightened],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                Text(poster.title.uppercased())
+                    .font(.system(size: 34, weight: .heavy))
+                    .kerning(4)
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+}
+
+/// The page a film zooms open into: the backdrop across the top, then the
+/// title and a paragraph. The poster is nowhere on it.
+struct FilmPage: View {
+    let poster: Poster
+    let namespace: Namespace.ID
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                BackdropArt(poster: poster)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                Text(poster.title)
+                    .font(.system(size: 34, weight: .bold))
+                    .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16))
+                Text(
+                    "The poster is not on this page: it leads with a backdrop, another picture at another size. The whole page shrinks into the poster and the poster fades in over it. Drag down, swipe in from the leading edge, or pinch to dismiss; tap back to zoom home."
+                )
+                .padding(EdgeInsets(top: 0, leading: 16, bottom: 16, trailing: 16))
+            }
+        }
+        .background(Parity.flat ? Color(hex: 0xE0F0FF) : Color.white)
+        .navigationTitle(poster.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTransition(.zoom(sourceID: Film(poster: poster).id, in: namespace))
     }
 }
 
