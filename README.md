@@ -1,6 +1,6 @@
 <div align="center">
 
-# swift_transitions
+# Swift Transitions
 
 iOS's navigation transitions for Flutter — the iOS 18 zoom transition with its
 interactive dismissal, and the push, both measured frame by frame from the
