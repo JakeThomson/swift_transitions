@@ -1,70 +1,80 @@
+<div align="center">
+
 # swift_transitions
 
+iOS's navigation transitions for Flutter — the iOS 18 zoom transition with its
+interactive dismissal, and the push, both measured frame by frame from the
+real thing.
+
 [![pub package](https://img.shields.io/pub/v/swift_transitions.svg)](https://pub.dev/packages/swift_transitions)
+[![pub points](https://img.shields.io/pub/points/swift_transitions)](https://pub.dev/packages/swift_transitions/score)
+[![likes](https://img.shields.io/pub/likes/swift_transitions)](https://pub.dev/packages/swift_transitions/score)
 [![CI](https://github.com/JakeThomson/swift_transitions/actions/workflows/ci.yml/badge.svg)](https://github.com/JakeThomson/swift_transitions/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-iOS's navigation transitions for Flutter, measured frame by frame from the
-real thing.
+<img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/zoom.gif" width="220" alt="A page zooming out of a poster and back into it">
+&nbsp;
+<img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/pinch-dismiss.gif" width="220" alt="A page pinched, turned and dragged, then landing on its poster">
+&nbsp;
+<img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/back-swipe.gif" width="220" alt="A back swipe from the leading edge">
+
+</div>
 
 A destination page grows out of the view that opened it and shrinks back into
 it, following the finger through a drag, a swipe or a pinch — the transition
-Apple added in iOS 18 as `navigationTransition(.zoom(sourceID:in:))` in SwiftUI
-and `UIViewController.Transition.zoom` in UIKit. The ordinary push is here too,
+Apple added in iOS 18 as `navigationTransition(.zoom)` in SwiftUI and
+`UIViewController.Transition.zoom` in UIKit. The ordinary push is here too,
 with the same curve, the same back swipe and the display's own rounded corners.
-
-Every curve, spring, threshold and gesture in this package was fitted against a
-native SwiftUI app driven through the same scripted gestures on the same
-device. [How it is calibrated](#how-it-is-calibrated) has the numbers.
-
-| Zoom push and pop | Pinch to dismiss | Back swipe |
-|:--:|:--:|:--:|
-| ![The zoom transition](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/zoom.gif) | ![A pinch, turn and drag landing the page on its poster](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/pinch-dismiss.gif) | ![The interactive back swipe](https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/back-swipe.gif) |
-
-The example app on an iPhone 17 simulator. The middle clip pinches, turns and
-drags the card at once, and lets go below the dismiss threshold, so it lands
-on its poster.
 
 ## Features
 
-* **The zoom transition.** A page flies out of a `ZoomTransitionSource` and
-  back into it, cross-fading with the source's content and morphing from the
-  source's corner radius to the display's.
-* **Interactive dismissal.** A downward pan anywhere on the page, a swipe from
-  the leading edge, or a two-finger pinch shrinks the page into a card that
-  tracks the fingers. Release past the threshold and it lands on its source;
-  release early and it springs back.
-* **Interruptible.** A card in flight can be caught and dragged, a cancelled
+- **The zoom transition** — a page flies out of a `ZoomTransitionSource` and
+  back into it, cross-fading with the source and morphing from the source's
+  corner radius to the display's.
+- **Interactive dismissal** — a downward pan, a swipe from the leading edge or
+  a two-finger pinch shrinks the page into a card that tracks the fingers. Let
+  go past the threshold and it lands on its source; let go early and it springs
+  back.
+- **Interruptible** — a card in flight can be caught and dragged, a cancelled
   dismissal can be grabbed again, and the navigator sees one gesture from the
   first touch to the settle.
-* **Scroll views take part.** A drag on a vertical scroll view at its top edge
-  becomes a dismissal, without any wiring, through the route's own
+- **Scroll views take part** — a drag on a vertical scroll view at its top edge
+  becomes a dismissal with no wiring, through the route's own
   `PrimaryScrollController`.
-* **The push transition.** iOS's push and pop, its 12 pt dead zone, its release
-  projection and its spring, applied per route or to every `MaterialPageRoute`
-  on iOS through a `PageTransitionsBuilder`. The back swipe can start from the
-  leading edge or anywhere on the page, as in iOS 26.
-* **Display-radius corner clipping.** Pages are clipped to the device's actual
-  screen corners, resolved from `MediaQuery` or the iOS device table, and the
-  leading-edge shadow is cast from the clipped shape.
-* **Idiomatic.** `PageRoute`s and `Page`s that compose with Cupertino and
-  Material neighbours, `Hero`-style source lookup, `of(context)` accessors, and
-  a `PageTransitionsBuilder` for theme-wide use. Reduce Motion replaces the
-  zoom flight with a cross-fade, as the native page does.
-* **No dependencies** beyond the Flutter SDK.
+- **The push transition** — iOS's push and pop, its dead zone, its release
+  projection and its spring, per route or for every `MaterialPageRoute` on iOS
+  through a `PageTransitionsBuilder`. The back swipe can start from the leading
+  edge or anywhere on the page, as in iOS 26.
+- **Display-radius corner clipping** — pages are clipped to the device's actual
+  screen corners, and the leading-edge shadow is cast from the clipped shape.
+- **Measured, not eyeballed** — every curve, spring and threshold was fitted
+  against a native SwiftUI app driven through the same scripted gestures on the
+  same device. See [Fidelity](#fidelity).
+- **Idiomatic** — `PageRoute`s and `Page`s that compose with Cupertino and
+  Material neighbours, `Hero`-style source lookup, `of(context)` accessors and a
+  `PageTransitionsBuilder`.
+- **Zero dependencies** beyond the Flutter SDK.
 
 ## Installation
+
+```yaml
+dependencies:
+  swift_transitions: ^0.1.0
+```
 
 ```sh
 flutter pub add swift_transitions
 ```
 
-## Usage
+> Requires Flutter 3.44 and Dart 3.12 or later. Pure Dart: no native code, no
+> platform setup.
 
-### The zoom transition
+## Quick start
 
-Mark what the page grows out of with `ZoomTransitionSource`, and push a
-`ZoomPageRoute` with the matching tag:
+### Step 1: Mark the source
+
+Wrap whatever the page should grow out of in a `ZoomTransitionSource` with a
+tag. Its `borderRadius` is where the card's corners start from.
 
 ```dart
 import 'package:swift_transitions/swift_transitions.dart';
@@ -72,36 +82,43 @@ import 'package:swift_transitions/swift_transitions.dart';
 ZoomTransitionSource(
   tag: poster.id,
   borderRadius: BorderRadius.circular(12),
-  child: GestureDetector(
-    onTap: () => Navigator.of(context).push(
-      ZoomPageRoute<void>(
-        sourceTag: poster.id,
-        builder: (context) => PosterPage(poster),
-      ),
-    ),
-    child: PosterArt(poster),
-  ),
+  child: PosterArt(poster),
 )
 ```
 
-The source is hidden behind a placeholder of its own size for as long as the
-route is up, so the row or grid around it does not reflow. A tag with no source
-falls back to a centred scale-and-fade.
-
-For a declarative `Navigator` — go_router included — use `ZoomPage`:
+### Step 2: Push a zoom route
 
 ```dart
-Page<void> buildPage(BuildContext context, GoRouterState state) => ZoomPage<void>(
-  key: state.pageKey,
-  sourceTag: state.pathParameters['id']!,
-  child: PosterPage.byId(state.pathParameters['id']!),
+Navigator.of(context).push(
+  ZoomPageRoute<void>(
+    sourceTag: poster.id,
+    builder: (context) => PosterPage(poster),
+  ),
 );
 ```
 
-`sourceTag` is read again on every pop, so a paging detail page can set it to
-whichever item it is showing and the dismissal lands on that item's source.
+That's it. The page flies out of the source, the source is hidden behind a
+placeholder of its own size so the row around it doesn't reflow, and every
+dismissal gesture is already wired up.
 
-### The push transition
+> **Using a declarative `Navigator` or go_router?** Use `ZoomPage`:
+>
+> ```dart
+> Page<void> buildPage(BuildContext context, GoRouterState state) =>
+>     ZoomPage<void>(
+>       key: state.pageKey,
+>       sourceTag: state.pathParameters['id']!,
+>       child: PosterPage.byId(state.pathParameters['id']!),
+>     );
+> ```
+
+> **No matching source?** The route falls back to a centred scale-and-fade,
+> the same fallback UIKit uses when a zoom's source view can't be found.
+
+`sourceTag` is read again on every pop, so a paging detail page can set it to
+whichever item it's showing and the dismissal lands on that item's source.
+
+## The push transition
 
 Per route:
 
@@ -111,7 +128,7 @@ Navigator.of(context).push(
 );
 ```
 
-Or for every route on iOS, including `MaterialPageRoute`:
+Or for every route on iOS, `MaterialPageRoute` included:
 
 ```dart
 MaterialApp(
@@ -123,52 +140,36 @@ MaterialApp(
 )
 ```
 
-Both take a `backGestureRegion`: `BackGestureRegion.leadingEdge` (the default,
-the SDK's own region) or `BackGestureRegion.anywhere`, the iOS 26 behaviour
-where a horizontal drag anywhere on the page swipes back.
+Both take a `backGestureRegion`:
 
-A covered `CupertinoPageRoute` or Material route gets the matching motion and
-dim through `SwiftPageTransition.delegatedTransition`, so pages half in and out
-of the package still move in lockstep.
+| Region | Behaviour |
+|---|---|
+| `BackGestureRegion.leadingEdge` | The SDK's own region: the leading 20 pt, or the safe-area inset if larger. **Default.** |
+| `BackGestureRegion.anywhere` | A horizontal drag anywhere on the page swipes back, as in iOS 26. |
 
-### Options
+> A covered `CupertinoPageRoute` or Material route gets the matching motion and
+> dim through `SwiftPageTransition.delegatedTransition`, so pages half in and
+> out of the package still move in lockstep.
 
-`ZoomTransitionOptions` mirrors `UIZoomTransitionOptions`:
+## Interactive dismissal
 
-```dart
-ZoomPageRoute<void>(
-  sourceTag: poster.id,
-  options: ZoomTransitionOptions(
-    // Which gestures may dismiss the route.
-    dismissGestures: const ZoomDismissGestures(pinch: false),
-    // Vetoed dismissals are left to the page, like
-    // UIZoomTransitionOptions.interactiveDismissShouldBegin.
-    interactiveDismissShouldBegin: (context) =>
-        context.gesture != ZoomGesture.pan || !hasUnsavedEdits,
-    // The dim, and an optional blur, over the page underneath.
-    dimmingColor: const Color(0x26000000),
-    dimmingBlurSigma: 0,
-    // The part of the page that lines up with the source, the counterpart of
-    // alignmentRectProvider. Null aligns the whole page.
-    alignmentRect: (context) => Rect.fromLTWH(0, 0, context.pageSize.width, 240),
-    // Rasterise the page once per flight, for pages that are expensive to paint.
-    snapshotDuringTransition: true,
-  ),
-  builder: (context) => PosterPage(poster),
-)
-```
+Every zoom route can be dismissed three ways, all on by default:
 
-The response of the dismissal itself is `ZoomDismissPhysics`, whose default
-`ZoomDismissPhysics.ios26` carries every fitted constant. Each one is
-documented and overridable if you want a different feel.
+| Gesture | How it starts | What commits |
+|---|---|---|
+| **Pan** | A downward drag anywhere on the page, or on a vertical scroll view once it reaches its top | Released far enough down, or flung |
+| **Edge swipe** | A drag from the leading edge | Released past the threshold, or flung — a short, fast flick springs back, as it does natively |
+| **Pinch** | Two fingers closing; the card scales, turns and moves with them | Released below half size, wherever the fingers were headed |
+
+A second finger turns a pan or a swipe into a pinch. A card that's springing
+back can be grabbed again, and a card still being pushed can be caught.
 
 ### Scroll views
 
-A `ZoomPageRoute` installs a `ZoomScrollController` as the page's
-`PrimaryScrollController`, so a vertical `ListView` or `CustomScrollView` on
-iOS hands a downward drag at its top edge to the dismissal with no
-configuration. A scroll view with its own controller should be given the
-route's instead:
+The route installs a `ZoomScrollController` as the page's
+`PrimaryScrollController`, so a `ListView` or `CustomScrollView` on iOS hands a
+top-edge drag to the dismissal with no configuration. A scroll view with its
+own controller should be given the route's instead:
 
 ```dart
 ListView(
@@ -176,6 +177,85 @@ ListView(
   children: ...,
 )
 ```
+
+## Options
+
+`ZoomTransitionOptions` mirrors `UIZoomTransitionOptions`:
+
+```dart
+ZoomPageRoute<void>(
+  sourceTag: poster.id,
+  options: ZoomTransitionOptions(
+    dismissGestures: const ZoomDismissGestures(pinch: false),
+    interactiveDismissShouldBegin: (context) =>
+        context.gesture != ZoomGesture.pan || !hasUnsavedEdits,
+    dimmingColor: const Color(0x26000000),
+    dimmingBlurSigma: 0,
+    alignmentRect: (context) =>
+        Rect.fromLTWH(0, 0, context.pageSize.width, 240),
+    snapshotDuringTransition: true,
+  ),
+  builder: (context) => PosterPage(poster),
+)
+```
+
+| Parameter | Default | Purpose |
+|---|---|---|
+| `dismissGestures` | all | Which of the pan, the edge swipe and the pinch may dismiss |
+| `interactiveDismissShouldBegin` | allow | Asked before a dismissal begins, with the gesture and where it started; return `false` to leave it to the page |
+| `dismissPhysics` | `ZoomDismissPhysics.ios26` | The fitted response of the dismissal — every constant documented and overridable |
+| `dimmingColor` | 15 % black | The dim over the page underneath, eased in with the flight and tracking a dismissal |
+| `dimmingBlurSigma` | `0` | A blur under the dim, the counterpart of `dimmingVisualEffect` |
+| `alignmentRect` | whole page | The part of the page that lines up with the source, asked on the push and again on each pop |
+| `pushSpring` | measured | The spring that drives the push and a non-interactive pop |
+| `snapshotDuringTransition` | `false` | Rasterise the page once per flight — for pages that are expensive to paint |
+
+## Fidelity
+
+A native SwiftUI reference app and the example app were driven through the
+same scripted gestures on the same device, recorded at 60 fps, and the card's
+position, size and corner radius tracked frame by frame in both.
+
+- The push, the back swipe and the zoom flight follow native's curves to
+  1–6 pt RMS.
+- A held card's scale is within 0.006 of native's in every gesture.
+- Releases agree with native's commit tables, and landings from rest agree
+  within a frame.
+
+### Known differences
+
+| | |
+|---|---|
+| **Navigation bars** | Natively the bar's items stay above the flying card and cross-fade in place. With a `CupertinoNavigationBar` on each page the SDK's own bar hero runs instead. A bar above the navigator doesn't fly at all, which is the native shape. |
+| **Touches during a landing** | Natively a touch on a landing card reaches the page underneath. Here it's blocked until the pop has finished, by choice — a half-finished dismissal that opens something else reads as a misfire. |
+| **An edge swipe flung hard** | One released at 800 pt/s lands in 147 ms where native takes 100. Releases from rest, and pinches, match. |
+| **A source that was never built** | A pop to a cell far outside a lazy list's cache extent has no frame to fly to and falls back to a centred rect. |
+
+## Platform support
+
+| Platform | Support | Notes |
+|---|---|---|
+| iOS | ✅ | The display's corner radius from a device table |
+| Android | ✅ | Corner radius from `MediaQuery` on Android 12+ |
+| macOS | ✅ | |
+| Web | ✅ | |
+| Windows | ✅ | |
+| Linux | ✅ | |
+
+The transitions are iOS-styled wherever they run — that's the point. Where no
+corner radius is reported, `DisplayCornerRadii` can supply one for a subtree:
+
+```dart
+DisplayCornerRadii(
+  radii: BorderRadius.circular(24),
+  child: MyApp(),
+)
+```
+
+## Accessibility
+
+With Reduce Motion on, the zoom flight is replaced by a cross-fade, as the
+native page does. Nothing to configure.
 
 ## API
 
@@ -197,76 +277,13 @@ ListView(
 
 ## Example
 
-The [`example/`](example) directory is a runnable gallery: a list that pushes,
+The [`example/`](example) directory is a runnable gallery — a list that pushes
 and a row of posters that zoom.
 
 ```sh
 cd example
 flutter run
 ```
-
-## How it is calibrated
-
-The behaviour here was not eyeballed. A native SwiftUI reference app and the
-example app were driven through the same scripted gestures on the same device
-(iPhone 17 simulator, iOS 27.0), recorded at 60 fps, and the card's position,
-size and corner radius tracked frame by frame in both.
-
-The push, the back swipe and the zoom flight follow native's curves to 1–6 pt
-RMS. A held card's scale is within 0.006 of native's in every gesture, releases
-agree with native's commit tables, and landings from rest agree within a frame.
-
-Every calibrated constant, the recording it came from, and the deviations that
-remain are written up in
-[`docs/design.md`](https://github.com/JakeThomson/swift_transitions/blob/main/docs/design.md);
-the method is in
-[`docs/parity-plan.md`](https://github.com/JakeThomson/swift_transitions/blob/main/docs/parity-plan.md)
-and side-by-side clips of each stage are in
-[`docs/parity/`](https://github.com/JakeThomson/swift_transitions/tree/main/docs/parity).
-
-### Known differences
-
-Section 1.7 of the design document lists these in full, with the size of each.
-The ones you are most likely to see:
-
-* **Navigation bars.** Natively the bar's items stay above the flying card and
-  cross-fade in place. With a `CupertinoNavigationBar` on each page the SDK's
-  own bar hero runs instead, sliding the title across for the length of the
-  flight. A bar above the navigator does not fly at all, which is the native
-  shape.
-* **Touches during a landing.** Natively a touch on a landing card reaches the
-  page underneath and can push again. Here the page underneath is blocked until
-  the pop has finished, by choice — a half-finished dismissal that opens
-  something else reads as a misfire.
-* **An edge swipe flung hard.** One released at 800 pt/s lands in 147 ms where
-  native takes 100. Releases from rest, and pinches, match.
-* **A source that has never been built.** A pop to a cell far outside a lazy
-  list's cache extent has no frame to fly to and falls back to a centred rect.
-
-## Compatibility
-
-Flutter 3.44 and later, Dart 3.12 and later. The package is pure Dart and runs
-on every platform Flutter supports; the transitions are iOS-styled wherever
-they run, which is the point of using them.
-
-## Non-goals
-
-* Reimplementing `Hero`. Shared-element flights between arbitrary widgets are
-  already covered by the SDK.
-* A general-purpose transition library. This package does iOS's navigation
-  transitions and nothing else.
-
-## References
-
-* SwiftUI
-  [`matchedTransitionSource(id:in:)`](https://developer.apple.com/documentation/swiftui/view/matchedtransitionsource(id:in:))
-  and
-  [`navigationTransition(_:)`](https://developer.apple.com/documentation/swiftui/view/navigationtransition(_:)).
-* UIKit
-  [`UIViewController.Transition.zoom(options:sourceViewProvider:)`](https://developer.apple.com/documentation/uikit/uiviewcontroller/transition/zoom(options:sourceviewprovider:))
-  and
-  [`UIZoomTransitionOptions`](https://developer.apple.com/documentation/uikit/uizoomtransitionoptions).
-* WWDC24 session 10145, *Enhance your UI animations and transitions*.
 
 ## Contributing
 
@@ -279,3 +296,10 @@ project follows the
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Links
+
+- [pub.dev](https://pub.dev/packages/swift_transitions)
+- [Repository](https://github.com/JakeThomson/swift_transitions)
+- [Issue tracker](https://github.com/JakeThomson/swift_transitions/issues)
+- Apple: [`navigationTransition(_:)`](https://developer.apple.com/documentation/swiftui/view/navigationtransition(_:)), [`matchedTransitionSource(id:in:)`](https://developer.apple.com/documentation/swiftui/view/matchedtransitionsource(id:in:)), [`UIZoomTransitionOptions`](https://developer.apple.com/documentation/uikit/uizoomtransitionoptions)
