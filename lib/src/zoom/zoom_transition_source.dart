@@ -13,7 +13,11 @@ import 'package:flutter/widgets.dart';
 ///
 /// Like [Hero], the tag must be unique among the sources in one route's
 /// subtree, and a source inside a nested [Navigator] only takes part when
-/// its own route is the current [PageRoute] there.
+/// its own route is the current [PageRoute] there. A source that is not
+/// painting — on a non-selected [IndexedStack] tab, under a [Visibility]
+/// that is not visible, or under a [HeroMode] that is not enabled — is
+/// left out of the count, so a page that keeps its tabs mounted may show
+/// the same item on two of them.
 class ZoomTransitionSource extends StatefulWidget {
   /// Creates a source for a zoom route to grow out of.
   const ZoomTransitionSource({
@@ -56,7 +60,17 @@ class ZoomTransitionSource extends StatefulWidget {
   /// Walks the tree the way [Hero] discovers its participants: every source
   /// whose nearest navigator is [navigator] is a candidate, and a source
   /// inside a nested navigator is a candidate only if its own route is the
-  /// current [PageRoute] of that navigator.
+  /// current [PageRoute] of that navigator. A subtree under a
+  /// [HeroMode] that is not enabled is skipped, as [Hero] skips it.
+  ///
+  /// A source that is not being painted is not a candidate either: one in a
+  /// non-selected [IndexedStack] child, or under a [Visibility] that is not
+  /// visible ([Visibility.of]). A page that keeps its tabs mounted shows the
+  /// same item on two of them with the same tag, and [Hero] — which walks
+  /// them all — asserts on the duplicate, or in profile and release takes
+  /// whichever the walk reached last: the offstage one. The flight then
+  /// hides a source nobody can see and lands on where it is laid out, beside
+  /// the tile the user is looking at.
   static ZoomTransitionSourceState? sourceFor(
     BuildContext context,
     Object tag,
@@ -66,8 +80,11 @@ class ZoomTransitionSource extends StatefulWidget {
 
     void visitor(Element element) {
       final widget = element.widget;
+      if (widget is HeroMode && !widget.enabled) {
+        return;
+      }
       if (widget is ZoomTransitionSource) {
-        if (widget.enabled && widget.tag == tag) {
+        if (widget.enabled && widget.tag == tag && Visibility.of(element)) {
           final route = ModalRoute.of(element);
           final inScope =
               Navigator.of(element) == navigator ||

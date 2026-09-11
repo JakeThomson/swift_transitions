@@ -1,3 +1,13 @@
+## 0.1.1
+
+* `ZoomTransitionSource`: a source that is not being painted no longer takes
+  part in a flight — one on a non-selected `IndexedStack` tab, under a
+  `Visibility` that is not visible, or under a `HeroMode` that is not
+  enabled. A page that keeps its tabs mounted and shows the same item on two
+  of them tripped the duplicate-tag assertion, and in profile and release
+  flew to whichever source the tree walk reached last: the offstage one,
+  leaving the visible tile in place and landing the card beside it.
+
 ## 0.1.0
 
 First release. iOS's navigation transitions for Flutter, fitted against a

@@ -481,6 +481,101 @@ void main() {
     expect(sourceHidden(tester, 'poster'), isFalse);
   });
 
+  /// A home with the same tag on two tabs of an [IndexedStack], the visible
+  /// tab's source at [posterRect] and the hidden tab's at [otherPosterRect],
+  /// plus a third copy under a disabled [HeroMode] at [otherPosterRect].
+  Widget tabbedApp() {
+    return DisplayCornerRadii(
+      radii: BorderRadius.circular(40),
+      child: CupertinoApp(
+        home: Builder(
+          builder: (context) => Stack(
+            children: <Widget>[
+              IndexedStack(
+                children: <Widget>[
+                  Stack(
+                    children: <Widget>[
+                      Positioned.fromRect(
+                        rect: posterRect,
+                        child: const ZoomTransitionSource(
+                          tag: 'poster',
+                          child: Text('visible'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Stack(
+                    children: <Widget>[
+                      Positioned.fromRect(
+                        rect: otherPosterRect,
+                        child: const ZoomTransitionSource(
+                          tag: 'poster',
+                          child: Text('offstage'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Positioned.fromRect(
+                rect: otherPosterRect,
+                child: const HeroMode(
+                  enabled: false,
+                  child: ZoomTransitionSource(
+                    tag: 'poster',
+                    child: Text('hero mode off'),
+                  ),
+                ),
+              ),
+              CupertinoButton(
+                onPressed: () => Navigator.of(context).push(
+                  ZoomPageRoute<void>(
+                    sourceTag: 'poster',
+                    builder: (_) => const Text('detail'),
+                  ),
+                ),
+                child: const Text('push'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets(
+    'a source on a non-selected IndexedStack tab or under a disabled HeroMode '
+    'is not matched',
+    (tester) async {
+      await tester.pumpWidget(tabbedApp());
+      // Two sources share the tag with the visible one; only the visible one
+      // is a candidate, so this does not trip the duplicate-tag assertion
+      // and the flight leaves from the tab the user can see.
+      await tester.tap(find.text('push'));
+      await tester.pump();
+      await tester.pump();
+      expect(cardRect(tester), rectCloseTo(posterRect));
+      final hidden = find.byWidgetPredicate(
+        (widget) => widget is Visibility && !widget.visible,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.descendant(of: hidden, matching: find.byType(Text)),
+            )
+            .data,
+        'visible',
+      );
+
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.text('detail'))).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      final t = detailRoute(tester).animation!.value;
+      expect(cardRect(tester), rectCloseTo(popRect(posterRect, t)));
+    },
+  );
+
   testWidgets('Reduce Motion fades the page in with no card', (tester) async {
     await tester.pumpWidget(testApp(disableAnimations: true));
     await tester.tap(find.text('push'));
