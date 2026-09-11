@@ -43,12 +43,33 @@ class ZoomFrame {
   int get hashCode => Object.hash(rect, rotation, radii, sourceOpacity);
 }
 
-/// The fraction of a push (or a pop, from the other end) over which the
-/// source's pixels cross-fade with the page's. Read off a native flight
-/// where the copy sat over the page's light top strip: 0.58 at progress
-/// 0.21, 0.39 at 0.33, gone by 0.63 — a straight fade over the first
-/// 0.55 (parity stage 3).
+/// The fraction of a push over which the source's pixels cross-fade with
+/// the page's. Read off a native flight where the copy sat over the
+/// page's light top strip: 0.58 at progress 0.21, 0.39 at 0.33, gone by
+/// 0.63 — a straight fade over the first 0.55 (parity stage 3).
 const double kZoomCrossFadeWindow = 0.55;
+
+/// Where on the flight line a pop's cross-fade begins, the source's
+/// picture then coming in over the page across [kZoomCrossFadeWindow]:
+/// solid from 0.31 of the way, with most of the flight still to go. On a
+/// native pop of a page that is not its poster — a film's, leading with
+/// a backdrop — the poster read 0.07, 0.19, 0.39 and 0.55 solid over the
+/// backdrop at 0.84, 0.75, 0.66 and 0.56 of the way, a straight line from
+/// 0.86 (parity, the film page), where the aligned pop's picture reads
+/// much the same ([zoomAlignedPictureOpacity]). A fade over the last part of
+/// the flight, the push's mirrored, is invisible on a page that is its
+/// own poster and a double exposure on one that is not: the page shows
+/// through the poster until the card has all but landed.
+const double kZoomPopCrossFadeStart = 0.86;
+
+/// The fraction of a landing — the flight of a card let go of — over
+/// which the source's picture comes in over the page, from the release.
+/// A native pan flung at 0.64 of the way read 0.04, 0.28 and 0.79 solid
+/// at 0.09, 0.28 and 0.39 of the landing, and 0.9 by 0.42 (parity, the
+/// film page): the fade is a beat of the landing, not of the flight line,
+/// and a card held shows none of it ([ZoomFrame.sourceOpacity] is 0 while
+/// a finger has the card).
+const double kZoomLandingCrossFadeWindow = 0.45;
 
 /// How far the covered page is scaled down while a zoom route is open.
 ///
@@ -107,7 +128,10 @@ double zoomPushVerticalProgress(double t) =>
 /// The frame of a zoom flight (push, committed dismissal, or cancel) at
 /// progress [t], where `t = 0` is [source] at rest and `t = 1` is [screen]
 /// at rest. The vertical edges run a little behind the horizontal ones on
-/// a push and a little ahead on a pop, per [zoomVerticalProgress].
+/// a push and a little ahead on a pop, per [zoomVerticalProgress]. The
+/// source's picture fades out over the first [kZoomCrossFadeWindow] of a
+/// push and in over the same length of a pop from
+/// [kZoomPopCrossFadeStart], the start of either flight.
 ///
 /// The corners run straight from [sourceRadii] to [screenRadii] with the
 /// progress: a native card's top-left corner reads 13 pt at the source,
@@ -134,7 +158,9 @@ ZoomFrame zoomFlightFrame({
     ),
     rotation: 0,
     radii: BorderRadius.lerp(sourceRadii, screenRadii, t)!,
-    sourceOpacity: 1 - (t / kZoomCrossFadeWindow).clamp(0, 1),
+    sourceOpacity: pushing
+        ? 1 - (t / kZoomCrossFadeWindow).clamp(0, 1)
+        : ((kZoomPopCrossFadeStart - t) / kZoomCrossFadeWindow).clamp(0, 1),
   );
 }
 
@@ -252,12 +278,12 @@ Rect zoomAlignedPictureRect({
 /// at, or the frame a push was interrupted at — and flying to [to], at
 /// progress [t] from 0 ([from]) to 1 ([to]).
 ///
-/// When the destination is the source, [sourceOpacity] runs the cross-fade
-/// over the last [kZoomCrossFadeWindow] of the flight as [zoomFlightFrame]
-/// does; when it is the full screen (a cancelled dismissal) there is
-/// nothing to fade to. A landing whose spring overshoots the source carries
-/// on past it, [t] above 1: the card is the source by then, so its corners
-/// shrink with it rather than carrying on past the source's own.
+/// When the destination is the source, the source's picture comes in over
+/// the first [kZoomLandingCrossFadeWindow] of the landing; when it is the
+/// full screen (a cancelled dismissal) there is nothing to fade to. A
+/// landing whose spring overshoots the source carries on past it, [t]
+/// above 1: the card is the source by then, so its corners shrink with it
+/// rather than carrying on past the source's own.
 ZoomFrame zoomDepartureFrame({
   required double t,
   required ZoomFrame from,
@@ -276,8 +302,6 @@ ZoomFrame zoomDepartureFrame({
     radii: t <= 1
         ? BorderRadius.lerp(from.radii, toRadii, t)!
         : toRadii * (rect.width / to.width),
-    sourceOpacity: toSource
-        ? ((t - (1 - kZoomCrossFadeWindow)) / kZoomCrossFadeWindow).clamp(0, 1)
-        : 0,
+    sourceOpacity: toSource ? (t / kZoomLandingCrossFadeWindow).clamp(0, 1) : 0,
   );
 }

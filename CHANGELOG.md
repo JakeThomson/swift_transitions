@@ -11,6 +11,14 @@
   source when the route left. It is now measured in the page's own
   coordinates, which the scale never touches; a route underneath that
   declines the transition, and so takes no scale, lands right too.
+* A pop's cross-fade comes in from the start of the flight, as native's
+  does — solid from about a third of the way, with most of the flight still
+  to go — and a landing's over the first part of the landing. It ran over
+  the last part of the flight, the push's window mirrored, which a page that
+  is its own poster hides and a page that leads with anything else shows as a
+  double exposure: the page through the poster until the card had all but
+  landed. Measured on a film page, which the example now has: a poster row
+  whose pages lead with a backdrop, another picture at another size.
 
 ## 0.1.1
 

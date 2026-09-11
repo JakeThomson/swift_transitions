@@ -38,9 +38,55 @@ void main() {
     expect(frame.sourceOpacity, 0);
   });
 
-  test('the source fades out within the cross-fade window', () {
-    expect(frameAt(kZoomCrossFadeWindow).sourceOpacity, 0);
-    expect(frameAt(kZoomCrossFadeWindow / 2).sourceOpacity, closeTo(0.5, 1e-9));
+  test('a push fades the source out within the cross-fade window', () {
+    ZoomFrame pushing(double t) => zoomFlightFrame(
+      t: t,
+      source: source,
+      screen: screen,
+      sourceRadii: sourceRadii,
+      screenRadii: screenRadii,
+      pushing: true,
+    );
+    expect(pushing(0).sourceOpacity, 1);
+    expect(pushing(kZoomCrossFadeWindow).sourceOpacity, 0);
+    expect(pushing(kZoomCrossFadeWindow / 2).sourceOpacity, closeTo(0.5, 1e-9));
+  });
+
+  test('a pop fades the source in from the start of the flight', () {
+    expect(frameAt(1).sourceOpacity, 0);
+    expect(frameAt(kZoomPopCrossFadeStart).sourceOpacity, 0);
+    expect(
+      frameAt(kZoomPopCrossFadeStart - kZoomCrossFadeWindow / 2).sourceOpacity,
+      closeTo(0.5, 1e-9),
+    );
+    expect(
+      frameAt(kZoomPopCrossFadeStart - kZoomCrossFadeWindow).sourceOpacity,
+      1,
+    );
+    expect(frameAt(0).sourceOpacity, 1);
+  });
+
+  test('a landing fades the source in over its own first part', () {
+    final from = ZoomFrame(
+      rect: Rect.lerp(source, screen, 0.6)!,
+      rotation: 0,
+      radii: screenRadii,
+      sourceOpacity: 0,
+    );
+    ZoomFrame landing(double t) => zoomDepartureFrame(
+      t: t,
+      from: from,
+      to: source,
+      toRadii: sourceRadii,
+      toSource: true,
+    );
+    expect(landing(0).sourceOpacity, 0);
+    expect(
+      landing(kZoomLandingCrossFadeWindow / 2).sourceOpacity,
+      closeTo(0.5, 1e-9),
+    );
+    expect(landing(kZoomLandingCrossFadeWindow).sourceOpacity, 1);
+    expect(landing(1).sourceOpacity, 1);
   });
 
   test('a push widens before it grows tall', () {

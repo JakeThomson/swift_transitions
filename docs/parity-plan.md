@@ -400,6 +400,34 @@ the last 7 % cannot be read); pop within 13 pt over five samples before
 the lead was applied. Still open: the radii, and the pop lead's
 verification.
 
+*The film page, measured 2026-09-11* (`../swift_transitions_parity/film/`,
+`native_testZoomFilm_flat`, `native_testFilmPan40Fast_flat`; the example's
+film row, posters 120×180 from (16, 674), whose page leads with a 16:9
+backdrop in another colour under the bar, then a title and a paragraph —
+a page that is not its poster, where the poster row's pop hid its
+cross-fade in plain sight). Read off the backdrop band, the poster colour
+over it (`analyze_film.py` there): on a native pop the poster reads 0.07,
+0.19, 0.39, 0.55 solid with the card 357, 332, 307, 279 pt wide — 0.84,
+0.75, 0.66, 0.56 of the way — and is solid from about a third of the way,
+a straight line from 0.86 over 0.53 of the flight, the same shape the
+aligned pop's picture has; the portal is the source's own aspect at the
+card's width, top-aligned, and the page shows below it until the card has
+that aspect. A pan flung at 0.64 of the way reads nothing of the poster
+while held and 0.04, 0.28, 0.79 at 0.09, 0.28, 0.39 of its landing, 0.9 by
+0.42. Ours faded in over the last 0.55 of the flight, the push's window
+mirrored: nothing until 0.55 of the way and the page through the poster
+until the landing — a double exposure on any page that is not its poster.
+Now `kZoomPopCrossFadeStart` 0.86 and `kZoomLandingCrossFadeWindow` 0.45
+(`flutter_film_flat2`: 0.19, 0.40, 0.48 at 332, 300, 269 pt).
+
+The same recordings caught the landing rect: a source measured for a
+flight in the overlay and read back through the scale the animation
+implies lands 9 % out when the page underneath was drawn at another
+scale — a deferred preparation under a first frame slower than the push
+finds the animation complete while the page was built at progress 0 —
+so `_prepareFlight` now measures in the covered page's own coordinates
+(design.md section 1.6).
+
 ## 4. The pan dismissal
 
 **Owns** (`ZoomDismissPhysics`): `scaleGain` 0.64, `travelKnee` 0.48,

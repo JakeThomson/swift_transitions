@@ -140,7 +140,7 @@ can be rotated by tens of degrees mid-gesture.
 
 **Release.** If the gesture is released far enough or fast enough, the card
 flies into the source cell's frame, un-rotating on the way, and its content
-cross-fades to the source's content over the last part of the flight. The
+cross-fades to the source's content over the first part of the landing. The
 source cell reappears at the end. Landing from a nearby position took about
 six frames at 30 fps (0.2 s); from further away it is a velocity-seeded
 spring. If released early the card springs back to full screen. In the
@@ -213,6 +213,7 @@ reasoning behind each is on the constant itself.
 | `kZoomPushSpring` | ω 19, ζ 1 | stage 3, `native_zoom_a`–`f` |
 | Zoom vertical lead | −0.05 pushing, +0.03 popping | stage 3, the same runs |
 | `kZoomCrossFadeWindow` | 0.55 of the flight | stage 3 |
+| `kZoomPopCrossFadeStart`, `kZoomLandingCrossFadeWindow` | a pop's picture comes in from 0.86 of the way over the same 0.55, solid from 0.31 — 0.07, 0.19, 0.39, 0.55 over the backdrop at 0.84, 0.75, 0.66, 0.56; a landing's over its own first 0.45 — 0.04, 0.28, 0.79 at 0.09, 0.28, 0.39 of a flung pan's landing; a held card shows none | the film page, `native_testZoomFilm_flat`, `native_testFilmPan40Fast_flat` |
 | Aligned flight | the card is the plain one (screen ↔ source, vertical lead and all: edges within a few points at mid-flight); behind it the page scales uniformly by the larger of the source-to-art ratios, the art's top left landing on the source's (a 4:3 art on a 16:9 still flies the 16:9 art's line to the point and overhangs below), its art's centre behind its scale by 0.14 (1 − f) on a pop and 0.25 f(1 − f) tall, 0.1 f(1 − f) across on a push; page opacity = progress; the source's picture over the art's top left at the source's own aspect, at (0.78 − t) / 0.5 — 0.10, 0.30, 0.72, 0.88, 0.99 at f 0.13, 0.34, 0.55, 0.63, 0.71 | stage 3 aligned, `native_still2`, `native_still_43` (UIKit `alignmentRectProvider`) |
 | `ZoomTransitionOptions.dimmingColor` | 15 % black, linear in progress | stage 3 |
 | Flight corner radii | straight from the source's to the display's | stage 8, `native_zoom_f` |
@@ -670,7 +671,10 @@ Two regimes produce a `ZoomFrame`:
 (or a spring on the controller). `rect = Rect.lerp(alignedSource, screen, t)`,
 `radii = lerp(source.radii, display.radii, t)` interpolated in the card's own
 space so the visible radius scales with the card, and `sourceOpacity` fades
-out over the first ~40 % of a push and in over the last ~40 % of a pop. A
+out over the first 0.55 of a push and in over the same length of a pop from
+0.86 of the way (`kZoomPopCrossFadeStart`) — the start of either flight — or
+over the first 0.45 of a landing from a release
+(`kZoomLandingCrossFadeWindow`); a held card shows none of the source. A
 spring settles within a tolerance of its end, so the ends are read from the
 animation status rather than its value.
 
