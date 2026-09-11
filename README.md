@@ -12,11 +12,12 @@ real thing.
 [![CI](https://github.com/JakeThomson/swift_transitions/actions/workflows/ci.yml/badge.svg)](https://github.com/JakeThomson/swift_transitions/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+
+<img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/back-swipe.gif" width="220" alt="A back swipe from the leading edge">
+&nbsp;
 <img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/zoom.gif" width="220" alt="A page zooming out of a poster and back into it">
 &nbsp;
 <img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/pinch-dismiss.gif" width="220" alt="A page pinched, turned and dragged, then landing on its poster">
-&nbsp;
-<img src="https://raw.githubusercontent.com/JakeThomson/swift_transitions/main/docs/demo/back-swipe.gif" width="220" alt="A back swipe from the leading edge">
 
 </div>
 
