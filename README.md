@@ -71,14 +71,44 @@ flutter pub add swift_transitions
 
 ## Quick start
 
-### Step 1: Mark the source
+### Step 1: iOS's push and pop, everywhere
 
-Wrap whatever the page should grow out of in a `ZoomTransitionSource` with a
-tag. Its `borderRadius` is where the card's corners start from.
+Give your `MaterialApp` the transitions builder and every route on iOS —
+`MaterialPageRoute` included — pushes, pops and swipes back the way a native
+`NavigationStack` does, with the display's own rounded corners.
 
 ```dart
 import 'package:swift_transitions/swift_transitions.dart';
 
+MaterialApp(
+  theme: ThemeData(
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {TargetPlatform.iOS: SwiftPageTransitionsBuilder()},
+    ),
+  ),
+)
+```
+
+> **Using `CupertinoApp`?** It has no `PageTransitionsTheme`; push a
+> `SwiftPageRoute` where you would push a `CupertinoPageRoute`:
+>
+> ```dart
+> Navigator.of(context).push(
+>   SwiftPageRoute<void>(builder: (context) => const DetailPage()),
+> );
+> ```
+
+> **Want the back swipe to work from anywhere on the page, as in iOS 26?**
+> Pass `backGestureRegion: BackGestureRegion.anywhere` to the builder or the
+> route. The default is the SDK's own leading-edge region.
+
+### Step 2: Mark a zoom source
+
+For the zoom transition, wrap whatever the page should grow out of in a
+`ZoomTransitionSource` with a tag. Its `borderRadius` is where the card's
+corners start from.
+
+```dart
 ZoomTransitionSource(
   tag: poster.id,
   borderRadius: BorderRadius.circular(12),
@@ -86,7 +116,7 @@ ZoomTransitionSource(
 )
 ```
 
-### Step 2: Push a zoom route
+### Step 3: Push a zoom route
 
 ```dart
 Navigator.of(context).push(
@@ -120,27 +150,9 @@ whichever item it's showing and the dismissal lands on that item's source.
 
 ## The push transition
 
-Per route:
-
-```dart
-Navigator.of(context).push(
-  SwiftPageRoute<void>(builder: (context) => const DetailPage()),
-);
-```
-
-Or for every route on iOS, `MaterialPageRoute` included:
-
-```dart
-MaterialApp(
-  theme: ThemeData(
-    pageTransitionsTheme: const PageTransitionsTheme(
-      builders: {TargetPlatform.iOS: SwiftPageTransitionsBuilder()},
-    ),
-  ),
-)
-```
-
-Both take a `backGestureRegion`:
+`SwiftPageRoute` and `SwiftPage` are the push as a route and as a page, and
+`SwiftPageTransitionsBuilder` applies it to every route through the theme.
+All three take a `backGestureRegion`:
 
 | Region | Behaviour |
 |---|---|
