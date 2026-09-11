@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		2B83BB9A16A196CD1385B889 /* ParityDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F9EEB684E82421F7E647297 /* ParityDriver.swift */; };
 		3C83DCBB91A69350D4741D98 /* Gallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54440166FFD45F041989CD8F /* Gallery.swift */; };
+		673E247B0781C32C2ACFD08E /* Aligned.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B132FB3901284EFA8913459 /* Aligned.swift */; };
 		BE8D4F4B4EEDF88D71564CC2 /* Touch.m in Sources */ = {isa = PBXBuildFile; fileRef = 629BCA2FA715B90A4412A1D1 /* Touch.m */; };
 		E7929D23AA4C2D83A94C7E74 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597073FE5D499ED8A01E7C14 /* App.swift */; };
 /* End PBXBuildFile section */
@@ -24,6 +25,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2B132FB3901284EFA8913459 /* Aligned.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Aligned.swift; sourceTree = "<group>"; };
 		2F9EEB684E82421F7E647297 /* ParityDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityDriver.swift; sourceTree = "<group>"; };
 		38A462DBFC0B3BAD650C2E84 /* ParityDriver.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParityDriver.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		54440166FFD45F041989CD8F /* Gallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gallery.swift; sourceTree = "<group>"; };
@@ -39,6 +41,7 @@
 		5B28FBBE8CBC65A09C8AF02E /* NativeReference */ = {
 			isa = PBXGroup;
 			children = (
+				2B132FB3901284EFA8913459 /* Aligned.swift */,
 				597073FE5D499ED8A01E7C14 /* App.swift */,
 				54440166FFD45F041989CD8F /* Gallery.swift */,
 				B3E5CCF09595B7CCDCC56044 /* Info.plist */,
@@ -152,6 +155,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				673E247B0781C32C2ACFD08E /* Aligned.swift in Sources */,
 				E7929D23AA4C2D83A94C7E74 /* App.swift in Sources */,
 				3C83DCBB91A69350D4741D98 /* Gallery.swift in Sources */,
 			);

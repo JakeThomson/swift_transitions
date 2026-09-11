@@ -18,6 +18,8 @@ final class ParityDriver: XCTestCase {
         app = XCUIApplication(bundleIdentifier: Self.bundleIds[which]!)
         app.launchEnvironment["PARITY_SHOW_TOUCHES"] = ProcessInfo.processInfo.environment["PARITY_SHOW_TOUCHES"] ?? "1"
         app.launchEnvironment["PARITY_FLAT"] = ProcessInfo.processInfo.environment["PARITY_FLAT"] ?? "0"
+        app.launchEnvironment["PARITY_UIKIT"] = ProcessInfo.processInfo.environment["PARITY_UIKIT"] ?? "0"
+        app.launchEnvironment["PARITY_ART_4_3"] = ProcessInfo.processInfo.environment["PARITY_ART_4_3"] ?? "0"
         app.launch()
         // Let the first frame and any launch animation settle before a recording starts.
         sleep(2)
@@ -36,6 +38,8 @@ final class ParityDriver: XCTestCase {
     var firstRow: XCUICoordinate { at(200, 129) }
     var secondRow: XCUICoordinate { at(200, 173) }
     var dunes: XCUICoordinate { at(208, 340) }
+    /// The Aurora still, (16, 507)–(176, 597), in the row under the posters.
+    var auroraStill: XCUICoordinate { at(96, 552) }
     var backButton: XCUICoordinate { at(30, 81) }
     var pageCentre: XCUICoordinate { at(201, 437) }
 
@@ -130,6 +134,18 @@ final class ParityDriver: XCTestCase {
         }
     }
 
+    /// The aligned zoom: a still whose page keeps the art under a title.
+    /// Native runs it with `PARITY_UIKIT=1`, the UIKit scene being the only
+    /// one with an `alignmentRectProvider`.
+    func testZoomStill() {
+        for _ in 0..<2 {
+            auroraStill.tap()
+            hold(1.5)
+            backButton.tap()
+            hold(1.5)
+        }
+    }
+
     // MARK: Stage 2: the back swipe. Each test pushes the first row, waits,
     // then drags from the leading edge. Names encode the case: position as
     // a fraction of the width, then how it is released.
@@ -191,6 +207,42 @@ final class ParityDriver: XCTestCase {
         finger.line(to: CGPoint(x: 24, y: 437), speed: 300)
         finger.line(to: CGPoint(x: 402 * fraction, y: 437), speed: speed)
         if rest { finger.hold(0.6) }
+        finger.lift()
+        hold(1.5)
+    }
+
+    /// The still page dragged: a pan released early, at rest, springs
+    /// back; a pan flung lands; an edge swipe flung lands — the aligned
+    /// page's interactive dismissal, every kind (stage 3, aligned).
+    func stillOpen() {
+        auroraStill.tap()
+        hold(1.5)
+    }
+
+    func testStillPan30Rest() {
+        stillOpen()
+        var finger = Finger(at: Self.grab)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + 20), speed: 300)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + Self.height * 0.3), speed: 300)
+        finger.hold(0.6)
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testStillPan40Fast() {
+        stillOpen()
+        var finger = Finger(at: Self.grab)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + 20), speed: 300)
+        finger.line(to: CGPoint(x: Self.grab.x, y: Self.grab.y + Self.height * 0.4), speed: 800)
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testStillEdge60Fling() {
+        stillOpen()
+        var finger = Finger(at: CGPoint(x: 4, y: 437))
+        finger.line(to: CGPoint(x: 24, y: 437), speed: 300)
+        finger.line(to: CGPoint(x: 402 * 0.6, y: 437), speed: 800)
         finger.lift()
         hold(1.5)
     }
@@ -428,6 +480,35 @@ final class ParityDriver: XCTestCase {
         a.hold(0.6); b.hold(0.6)
         Finger.lift([a, b])
         hold(1.5)
+    }
+
+    /// Closes to `scale` and then turns by `degrees` while carrying the
+    /// fingers' focal point by `by`, all at once, and lifts at rest: a
+    /// pinch, a pan and a turn together, released below the dismiss
+    /// threshold so the card lands on its poster.
+    func zoomPinchRotatePan(scale: CGFloat, degrees: CGFloat, by: CGVector) {
+        openDunes()
+        var (a, b) = Self.pinchFingers()
+        let half = Self.span * scale / 2
+        a.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y - half), speed: 300)
+        b.line(to: CGPoint(x: Self.centre.x, y: Self.centre.y + half), speed: 300)
+        a.hold(0.2); b.hold(0.2)
+        let steps = 8
+        for i in 1...steps {
+            let f = CGFloat(i) / CGFloat(steps)
+            let angle = degrees * f * .pi / 180
+            let centre = CGPoint(x: Self.centre.x + by.dx * f, y: Self.centre.y + by.dy * f)
+            let dx = half * sin(angle), dy = half * cos(angle)
+            a.line(to: CGPoint(x: centre.x + dx, y: centre.y - dy), speed: 200)
+            b.line(to: CGPoint(x: centre.x - dx, y: centre.y + dy), speed: 200)
+        }
+        a.hold(0.6); b.hold(0.6)
+        Finger.lift([a, b])
+        hold(1.5)
+    }
+
+    func testZoomPinchRotatePanDismiss() {
+        zoomPinchRotatePan(scale: 0.38, degrees: 20, by: CGVector(dx: 70, dy: 90))
     }
 
     func testZoomRotate15() { zoomRotate(degrees: 15, scale: 0.7) }

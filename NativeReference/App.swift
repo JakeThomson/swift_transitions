@@ -6,6 +6,8 @@ import UIKit
 enum Parity {
     static let showTouches = ProcessInfo.processInfo.environment["PARITY_SHOW_TOUCHES"] == "1"
     static let flat = ProcessInfo.processInfo.environment["PARITY_FLAT"] == "1"
+    /// The UIKit scene (`Aligned.swift`) in place of the SwiftUI gallery.
+    static let uikit = ProcessInfo.processInfo.environment["PARITY_UIKIT"] == "1"
 }
 
 @main
@@ -29,7 +31,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
         let window = TouchWindow(windowScene: scene)
-        window.rootViewController = UIHostingController(rootView: GalleryView())
+        window.rootViewController = Parity.uikit
+            ? UINavigationController(rootViewController: AlignedGalleryViewController())
+            : UIHostingController(rootView: GalleryView())
         self.window = window
         window.makeKeyAndVisible()
     }
