@@ -23,9 +23,8 @@ judged on a device.
 
 ### 0.1 The native reference app
 
-A SwiftUI app, `NativeReference`, in a sibling folder to the package
-(`../swift_transitions_native/`, its own repository; it is not part of the
-pub package). iOS 26 deployment target, iPhone only, portrait only. It
+A SwiftUI app, `NativeReference`, in `tools/parity/native/` (kept out of
+the pub package by `.pubignore`; until 2026-09-11 a sibling repository). iOS 26 deployment target, iPhone only, portrait only. It
 mirrors `example/lib/main.dart` screen for screen and point for point:
 
 | Flutter example | Native |
@@ -156,7 +155,7 @@ recording of each.
   UDID in `tools/parity/parity.env`), separate from any simulator in daily
   use. `VERSIONS` in the recordings folder pins it.
 - The native project is generated with `xcodegen` from `project.yml`
-  (`../swift_transitions_native`, its own repository). Its home screen is
+  (`tools/parity/native`). Its home screen is
   laid out by hand rather than with `List`, since SwiftUI's list rows are
   52 pt and the example's tiles are 44 pt; the measured offsets are in
   `Gallery.swift`. Home screens differ by 0.8 % of pixels at rest.

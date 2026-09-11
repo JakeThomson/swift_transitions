@@ -3,9 +3,9 @@
 Dev-only scripts for `docs/parity-plan.md`. Not part of the package.
 
 Requirements: Python 3 with numpy and Pillow, ffmpeg/ffprobe on the path,
-Xcode with the `swift_transitions_native` project built for the parity
-simulator, and the example built for the simulator
-(`flutter build ios --simulator --debug`).
+Xcode with the `native/` project (generated with `xcodegen` from its
+`project.yml`) built for the parity simulator, and the example built for
+the simulator (`flutter build ios --simulator --debug`).
 
     ./record.sh <native|flutter> <TestName> <out.mov>   # scripted run + recording
     PARITY_SHOW_TOUCHES=0 ./record.sh ...               # the same, without the rings
