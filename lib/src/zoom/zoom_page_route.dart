@@ -48,6 +48,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
   ZoomTransitionSourceState? _source;
   ZoomFlightSource? _flightSource;
   Rect? _alignmentRect;
+  ZoomFlightDirection? _pendingAlignment;
   ZoomDismissController? _dismiss;
 
   /// What the next pop's simulation is seeded with, in units of what the
@@ -493,9 +494,9 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   /// Finds the source for [sourceTag] in the route underneath, measures it
   /// for the flight about to start, asks the options which part of the
-  /// page aligns with it, and swaps which source is hidden if the tag has
-  /// changed. With animations disabled there is no flight, and the source
-  /// stays put under the fade.
+  /// page aligns with it ([_alignFlight]), and swaps which source is hidden
+  /// if the tag has changed. With animations disabled there is no flight,
+  /// and the source stays put under the fade.
   void _prepareFlight(ZoomFlightDirection direction) {
     final navigator = this.navigator;
     final previous = _previousRoute;
@@ -530,29 +531,71 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
             centre.dx + (measured.right - centre.dx) / scale,
             centre.dy + (measured.bottom - centre.dy) / scale,
           );
+    _alignmentRect = null;
+    _pendingAlignment = null;
     if (found == null || rect == null) {
       found = null;
       _flightSource = null;
-      _alignmentRect = null;
     } else {
       _flightSource = ZoomFlightSource(
         rect: rect,
         radii: found.borderRadius,
         child: found.flightChild,
       );
-      _alignmentRect = options.alignmentRect?.call(
-        ZoomAlignmentRectContext(
-          sourceRect: rect,
-          pageSize: (overlay as RenderBox).size,
-          direction: direction,
-        ),
-      );
+      _alignFlight(direction, rect, (overlay as RenderBox).size);
     }
     if (found != _source) {
       _source?.show();
       _source = found;
       found?.hide();
     }
+  }
+
+  /// Asks the options which part of the page lines up with the source at
+  /// [sourceRect], with the page laid out so the provider can measure it,
+  /// as UIKit's provider can its `zoomedViewController`: now on a pop, or
+  /// a push prepared at the end of a frame, and otherwise — a push from a
+  /// tap handler, whose page has not been built yet — at the end of the
+  /// first frame. That first frame draws the card as the source's picture,
+  /// the cross-fade being at its start, so the page's own alignment is not
+  /// seen until it is known.
+  void _alignFlight(ZoomFlightDirection direction, Rect sourceRect, Size page) {
+    if (options.alignmentRect == null ||
+        _askAlignment(direction, sourceRect, page)) {
+      return;
+    }
+    _pendingAlignment = direction;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (navigator == null || _pendingAlignment != direction) {
+        return; // Disposed before the frame ended, or a new flight since.
+      }
+      _pendingAlignment = null;
+      if (_askAlignment(direction, sourceRect, page)) {
+        changedInternalState();
+      }
+    }, debugLabel: 'ZoomRouteTransitionMixin.alignFlight');
+  }
+
+  /// Asks the provider if the page is laid out, and says whether it was.
+  bool _askAlignment(
+    ZoomFlightDirection direction,
+    Rect sourceRect,
+    Size page,
+  ) {
+    final context = subtreeContext;
+    final box = context?.findRenderObject();
+    if (context == null || box is! RenderBox || !box.hasSize) {
+      return false;
+    }
+    _alignmentRect = options.alignmentRect!(
+      ZoomAlignmentRectContext(
+        sourceRect: sourceRect,
+        pageSize: page,
+        direction: direction,
+        pageContext: context,
+      ),
+    );
+    return true;
   }
 
   @override

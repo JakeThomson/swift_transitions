@@ -140,6 +140,116 @@ ZoomFrame zoomFlightFrame({
   );
 }
 
+/// How far along its line an aligned page's art is when the page's scale
+/// is [t] along, per axis.
+///
+/// Natively an aligned page's position runs behind its scale. On a pop the
+/// art starts a beat late and catches up — behind by 0.14 of what is left,
+/// on both axes; on a push it trails most at mid-flight, by 0.25 · f(1 − f)
+/// vertically and 0.1 · f(1 − f) across, f being the scale's progress from
+/// the source (parity stage 3, aligned, from the art's centre against its
+/// width; both fit within 0.01). Both converge by the end.
+Offset zoomAlignedCentreProgress(double t, {required bool pushing}) {
+  if (pushing) {
+    final bump = t * (1 - t);
+    return Offset(t - 0.1 * bump, t - 0.25 * bump);
+  }
+  final behind = math.min(1.0, 1.14 * t);
+  return Offset(behind, behind);
+}
+
+/// How much of the source's picture is over an aligned page at progress
+/// [t]: none at rest, all of it from a little before the flight's last
+/// quarter, fading in over the middle of the flight — the still's label
+/// read 0.10, 0.30, 0.72, 0.88 and 0.99 white at 0.13, 0.34, 0.55, 0.63
+/// and 0.71 of the way to the source (parity stage 3, aligned). Under it
+/// the page's own art stays solid: natively the page fades everywhere but
+/// there.
+double zoomAlignedPictureOpacity(double t) =>
+    ((0.78 - t) / 0.5).clamp(0.0, 1.0);
+
+/// The scale of an aligned page at the source end of its flight: the
+/// larger of the two ratios between [source] and [alignment], so the art
+/// covers the source.
+double zoomAlignedLandingScale({
+  required Rect source,
+  required Rect alignment,
+}) =>
+    math.max(source.width / alignment.width, source.height / alignment.height);
+
+/// The page's bounds at the source end of an aligned flight: scaled by
+/// [zoomAlignedLandingScale] with the art's top left on the source's.
+///
+/// An art of another aspect than its source overhangs it, natively, below
+/// or to the right — the page scaled by the larger ratio and the art's top
+/// left put on the source's, not its centre (parity stage 3, aligned, a
+/// 4:3 art on a 16:9 still: the art's top left flies the line it flies
+/// with a 16:9 art, to the point, and lands 30 pt too tall).
+Rect zoomAlignedLandingRect({
+  required Rect source,
+  required Rect alignment,
+  required Size pageSize,
+}) {
+  final scale = zoomAlignedLandingScale(source: source, alignment: alignment);
+  return (source.topLeft - alignment.topLeft * scale) & (pageSize * scale);
+}
+
+/// Where an aligned page is at progress [t] of a flight between its
+/// source end ([zoomAlignedLandingRect]) and [from] — the page's bounds at
+/// the far end: at rest when null, or where a card let go of it — scaled
+/// as one picture, straight from the one to the other, with its art's
+/// centre behind per [zoomAlignedCentreProgress]. The card clipping it is
+/// [zoomFlightFrame]'s, flying the same line as any other (parity stage 3,
+/// aligned: the card's edges at mid-flight are the plain card's to a few
+/// points, while the art inside reads its own scale).
+Rect zoomAlignedPageRect({
+  required double t,
+  required Rect source,
+  required Rect alignment,
+  required Size pageSize,
+  Rect? from,
+  bool pushing = false,
+}) {
+  final landing = zoomAlignedLandingRect(
+    source: source,
+    alignment: alignment,
+    pageSize: pageSize,
+  );
+  final far = from ?? (Offset.zero & pageSize);
+  final scale = lerpDouble(landing.width, far.width, t)! / pageSize.width;
+  final centre = zoomAlignedCentreProgress(t, pushing: pushing);
+  // The art's centre on the line between its two ends, and the page
+  // around it.
+  Offset artIn(Rect page) =>
+      page.topLeft + alignment.center * (page.width / pageSize.width);
+  final near = artIn(landing);
+  final away = artIn(far);
+  final art = Offset(
+    lerpDouble(near.dx, away.dx, centre.dx)!,
+    lerpDouble(near.dy, away.dy, centre.dy)!,
+  );
+  return (art - alignment.center * scale) & (pageSize * scale);
+}
+
+/// Where the source's picture is over an aligned page at [pageRect]: at
+/// the top left of the art, at the source's own aspect, scaled as the
+/// page is against its landing scale — the source itself at the source
+/// end.
+Rect zoomAlignedPictureRect({
+  required Rect pageRect,
+  required Rect alignment,
+  required Size pageSize,
+  required Size sourceSize,
+}) {
+  final scale = pageRect.width / pageSize.width;
+  final landing = zoomAlignedLandingScale(
+    source: Offset.zero & sourceSize,
+    alignment: alignment,
+  );
+  return (pageRect.topLeft + alignment.topLeft * scale) &
+      (sourceSize * (scale / landing));
+}
+
 /// The frame of a card leaving from [from] — the frame a gesture released it
 /// at, or the frame a push was interrupted at — and flying to [to], at
 /// progress [t] from 0 ([from]) to 1 ([to]).

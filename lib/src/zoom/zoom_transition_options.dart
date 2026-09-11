@@ -43,11 +43,18 @@ class ZoomTransitionOptions {
   /// The part of the page that aligns with the source during a flight, the
   /// counterpart of `UIZoomTransitionOptions.alignmentRectProvider`.
   ///
-  /// Asked when a flight starts, on the push and again on each pop. The
-  /// rect is in the page's coordinates; the card grows out of the source
-  /// showing that part of the page, and shrinks back onto it. Null, or a
-  /// null result, aligns the whole page to the source: the page fills the
-  /// card, anchored at its top centre.
+  /// Asked once the page is laid out, on the push and again on each pop.
+  /// The rect is in the page's coordinates; the card grows out of the
+  /// source showing that part of the page, and shrinks back onto it. Null,
+  /// or a null result, aligns the whole page to the source: the page fills
+  /// the card, anchored at its top centre.
+  ///
+  /// A source is a preview of its page, and this is how the page says
+  /// where the preview is. Without it a page whose top does not look like
+  /// the source — the art lower down, under a title — reads as a double
+  /// exposure while the card is on its way, the source's picture over the
+  /// scaled page, as it does natively. Returning the art's own rect, from
+  /// [ZoomAlignmentRectContext.rectOf], is the fix UIKit prescribes.
   final ZoomAlignmentRectProvider? alignmentRect;
 
   /// The spring that drives the push and the non-interactive pop.
@@ -94,7 +101,8 @@ enum ZoomFlightDirection {
   pop,
 }
 
-/// What [ZoomTransitionOptions.alignmentRect] is asked with.
+/// What [ZoomTransitionOptions.alignmentRect] is asked with, the
+/// counterpart of `UIZoomTransitionAlignmentRectContext`.
 @immutable
 class ZoomAlignmentRectContext {
   /// Creates the context of a flight about to start.
@@ -102,6 +110,7 @@ class ZoomAlignmentRectContext {
     required this.sourceRect,
     required this.pageSize,
     required this.direction,
+    required this.pageContext,
   });
 
   /// The source's bounds, in the navigator's coordinates.
@@ -112,6 +121,29 @@ class ZoomAlignmentRectContext {
 
   /// Which way the flight is going.
   final ZoomFlightDirection direction;
+
+  /// The page, laid out, as `zoomedViewController` is natively: what a
+  /// provider measures its art in ([rectOf]), or reads which item the page
+  /// is showing from.
+  final BuildContext pageContext;
+
+  /// The bounds of the widget at [context], in the page's coordinates —
+  /// the rect to return for the art the source is a preview of. Null if
+  /// either is not laid out.
+  Rect? rectOf(BuildContext context) {
+    final box = context.findRenderObject();
+    final page = pageContext.findRenderObject();
+    if (box is! RenderBox ||
+        page is! RenderBox ||
+        !box.hasSize ||
+        !page.hasSize) {
+      return null;
+    }
+    return MatrixUtils.transformRect(
+      box.getTransformTo(page),
+      Offset.zero & box.size,
+    );
+  }
 }
 
 /// Chooses the part of the page that aligns with the source.

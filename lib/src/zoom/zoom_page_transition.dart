@@ -82,8 +82,18 @@ class ZoomPageTransition extends StatelessWidget {
   /// end of the flight.
   final BorderRadius? cornerRadii;
 
-  /// The part of the page that fills the card at the source end of the
-  /// flight, or null for the whole page. See [ZoomTransitionLayer].
+  /// The part of the page that lands on the source, or null for the whole
+  /// page.
+  ///
+  /// Natively an aligned page flies as one picture inside the ordinary
+  /// card: the card is [zoomFlightFrame]'s, morphing from the screen to the
+  /// source as any card does, and the page behind it is scaled uniformly
+  /// and carried so that this rect lands on the source
+  /// ([zoomAlignedPageRect]), fading out with the flight while the source's
+  /// picture fades in over this rect ([zoomAlignedPictureOpacity]) —
+  /// UIKit's zoom with an `alignmentRectProvider` (parity stage 3,
+  /// aligned). Held, or springing back to the screen, an aligned page is
+  /// the card's page like any other.
   final Rect? alignmentRect;
 
   /// Whether the page is painted from a snapshot while it flies.
@@ -166,6 +176,7 @@ class ZoomPageTransition extends StatelessWidget {
         final screen = Offset.zero & pageSize;
         final screenRadii = cornerRadii ?? DisplayCornerRadii.of(context);
         final source = this.source;
+        final alignment = source == null ? null : alignmentRect;
         final fallbackRect = fallbackRectFor(screen);
         final liveFrame = this.liveFrame;
         return AnimatedBuilder(
@@ -187,7 +198,12 @@ class ZoomPageTransition extends StatelessWidget {
                     ? math.min(animation.value, 1.0)
                     : animation.value.clamp(0.0, 1.0),
             };
-            final ZoomFrame frame;
+            ZoomFrame frame;
+            // Where an aligned page is behind its card, or null for the
+            // page fitted to the card.
+            Rect? pageRect;
+            // How far a landing card is carried off its line.
+            var carried = Offset.zero;
             if (held != null) {
               frame = held;
             } else if (departure != null && !animation.isCompleted) {
@@ -198,7 +214,7 @@ class ZoomPageTransition extends StatelessWidget {
                 screen: screen,
                 screenRadii: screenRadii,
               );
-              final carried = carry?.value ?? Offset.zero;
+              carried = carry?.value ?? Offset.zero;
               frame = carried == Offset.zero
                   ? onLine
                   : ZoomFrame(
@@ -218,6 +234,53 @@ class ZoomPageTransition extends StatelessWidget {
               );
             }
             final atRest = animation.isCompleted && held == null;
+            // An aligned page flies as one picture behind the card on a
+            // flight to or from its source, fading; held, or springing
+            // back to the screen, it is the card's page like any other.
+            var pageOpacity = 1.0;
+            final landing = departure != null && departure.toSource;
+            if (alignment != null &&
+                held == null &&
+                !atRest &&
+                (departure == null || landing)) {
+              // A landing flies the page from where the card let go of
+              // it, and carries it as the card is carried — past the
+              // source too, where the landing spring overshoots, so the
+              // page keeps the card's momentum; a flight on the line
+              // flies from the source end.
+              final progress = landing
+                  ? (departure.progress <= 0
+                        ? 0.0
+                        : math.min(1.0, t / departure.progress))
+                  : t.clamp(0.0, 1.0);
+              final page = zoomAlignedPageRect(
+                t: progress,
+                source: source!.rect,
+                alignment: alignment,
+                pageSize: pageSize,
+                from: landing ? departure.frame.rect : null,
+                pushing: animation.status == AnimationStatus.forward,
+              ).shift(carried);
+              pageRect = page;
+              final shown = progress.clamp(0.0, 1.0);
+              pageOpacity = shown;
+              // The card clips the page, never the picture: where the two
+              // flights differ — the art a little behind the card, an
+              // aspect the card has not reached — the card takes the
+              // picture in.
+              final picture = zoomAlignedPictureRect(
+                pageRect: page,
+                alignment: alignment,
+                pageSize: pageSize,
+                sourceSize: source.rect.size,
+              );
+              frame = ZoomFrame(
+                rect: frame.rect.expandToInclude(picture),
+                rotation: frame.rotation,
+                radii: frame.radii,
+                sourceOpacity: zoomAlignedPictureOpacity(shown),
+              );
+            }
             return Opacity(
               opacity: source == null && held == null ? t : 1,
               child: ZoomTransitionLayer(
@@ -226,7 +289,9 @@ class ZoomPageTransition extends StatelessWidget {
                 atRest: atRest,
                 flightChild: source?.child,
                 sourceSize: source?.rect.size,
-                alignmentRect: source == null ? null : alignmentRect,
+                alignmentRect: alignment,
+                pageRect: pageRect,
+                pageOpacity: pageOpacity,
                 child: _FlightSnapshot(
                   enabled: snapshot && !atRest,
                   child: child!,

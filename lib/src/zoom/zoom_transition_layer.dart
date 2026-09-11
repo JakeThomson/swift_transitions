@@ -13,16 +13,29 @@ import 'zoom_frame.dart';
 /// narrower than it is tall shows the top of the page at the card's width
 /// and a wide, short card shows the page's top strip at full scale.
 ///
-/// With an [alignmentRect], that part of the page is what fills the card
-/// at the source end of the flight, and the window widens to the whole page
-/// as the card grows to the screen: the window is the rect interpolated
-/// toward the page's bounds by how far the card's size is from the source's
-/// ([sourceSize]) to the page's.
+/// With a [pageRect] the page is not fitted to the card but drawn at that
+/// rect — an aligned flight's page, scaled as one picture behind the card
+/// and carried so that its art lands on the source ([zoomAlignedPageRect]);
+/// the card clips it as it clips any page.
 ///
-/// [flightChild] is the source's own content, drawn over the page inside the
-/// card at [ZoomFrame.sourceOpacity] and fitted to the card the same way, so
-/// the two cross-fade as one picture. [sourceSize] is the size it is drawn
-/// at before fitting.
+/// [flightChild] is the source's own content, laid out at [sourceSize] and
+/// drawn over the page inside the card at [ZoomFrame.sourceOpacity], so the
+/// two cross-fade as one picture. It fills the card, or with an
+/// [alignmentRect] sits at the top left of that part of the page, carried
+/// by the page's own transform and scaled with it, at the source's own
+/// aspect — natively the picture of a 16:9 still over a 4:3 art is 16:9,
+/// neither stretched nor cropped — so it lands on the source exactly.
+///
+/// [pageOpacity] fades the page the way an aligned page fades natively:
+/// out, linearly with the flight, as the card shrinks to its source —
+/// everywhere but over its art, which natively stays solid while the
+/// source's picture fades in on top of it and covers it well before the
+/// landing. With an [alignmentRect] and a [pageRect] the picture is drawn
+/// twice: opaque under the page, so the art never thins to the page
+/// underneath, and over it at [ZoomFrame.sourceOpacity] (parity stage 3,
+/// aligned: the art reads its own colour at every frame while the
+/// paragraph beside it is half gone, and the still's label is white by
+/// 0.7 of the way).
 ///
 /// The tree has the same shape at rest and in flight — the clip and the
 /// transforms become identities rather than being removed — so the page's
@@ -37,6 +50,8 @@ class ZoomTransitionLayer extends StatelessWidget {
     this.flightChild,
     this.sourceSize,
     this.alignmentRect,
+    this.pageRect,
+    this.pageOpacity = 1,
     required this.child,
   });
 
@@ -57,9 +72,16 @@ class ZoomTransitionLayer extends StatelessWidget {
   /// and the card's size at the source end of the flight.
   final Size? sourceSize;
 
-  /// The part of the page, in its own coordinates, that fills the card at
-  /// the source end of the flight. Null for the whole page.
+  /// The part of the page, in its own coordinates, that [flightChild] is
+  /// drawn over. Null for the whole page.
   final Rect? alignmentRect;
+
+  /// Where the page is drawn, in the card's parent's coordinates, or null
+  /// for the page fitted to the card.
+  final Rect? pageRect;
+
+  /// The page's opacity, 1.0 at rest.
+  final double pageOpacity;
 
   /// The page.
   final Widget child;
@@ -77,60 +99,89 @@ class ZoomTransitionLayer extends StatelessWidget {
   // and 2.8 % darker until the pop took the card away (parity stage 9).
   static const double _shadowFadeWindow = 0.1;
 
-  /// How far the card's size is from [sourceSize] toward [pageSize], by
-  /// the square root of area so a card halfway along a linear flight reads
-  /// as about halfway; 1.0 without a source or an [alignmentRect].
-  double get _growth {
-    final source = sourceSize;
-    if (alignmentRect == null || source == null) {
-      return 1;
-    }
-    final from = math.sqrt(source.width * source.height);
-    final to = math.sqrt(pageSize.width * pageSize.height);
-    if (to - from <= 0) {
-      return 1;
-    }
-    final now = math.sqrt(frame.rect.width * frame.rect.height);
-    return ((now - from) / (to - from)).clamp(0.0, 1.0);
-  }
-
   /// How much of the shadow the card carries this frame: all of it for
-  /// most of the flight, fading out over [_shadowFadeWindow]. 1.0 without
-  /// a source, whose fallback card never reaches one.
+  /// most of the flight, fading out over [_shadowFadeWindow], and with the
+  /// page when that fades. 1.0 without a source, whose fallback card never
+  /// reaches one.
   double get _shadowFade {
     final source = sourceSize;
     if (source == null || pageSize.width - source.width <= 0) {
-      return 1;
+      return pageOpacity;
     }
     final along =
         (frame.rect.width - source.width) / (pageSize.width - source.width);
-    return (along / _shadowFadeWindow).clamp(0.0, 1.0);
-  }
-
-  /// The part of the page the card shows this frame.
-  Rect get _window {
-    final page = Offset.zero & pageSize;
-    final alignment = alignmentRect;
-    if (alignment == null) {
-      return page;
-    }
-    return Rect.lerp(alignment, page, _growth)!;
+    return (along / _shadowFadeWindow).clamp(0.0, 1.0) * pageOpacity;
   }
 
   @override
   Widget build(BuildContext context) {
     final rect = frame.rect;
-    final window = _window;
-    final scale = window.isEmpty
-        ? 1.0
-        : math.max(rect.width / window.width, rect.height / window.height);
-    // The window's top centre on the card's top centre.
-    final shift = Offset(
-      rect.width / 2 - window.center.dx * scale,
-      -window.top * scale,
-    );
+    final page = pageRect;
+    final double scale;
+    final Offset shift;
+    if (page != null && !pageSize.isEmpty) {
+      scale = page.width / pageSize.width;
+      shift = page.topLeft - rect.topLeft;
+    } else {
+      scale = pageSize.isEmpty
+          ? 1.0
+          : math.max(
+              rect.width / pageSize.width,
+              rect.height / pageSize.height,
+            );
+      // The page's top centre on the card's top centre.
+      shift = Offset(rect.width / 2 - pageSize.width / 2 * scale, 0);
+    }
     final showSource =
         flightChild != null && sourceSize != null && frame.sourceOpacity > 0;
+    // An aligned page in flight keeps its art solid: the picture under it.
+    final solidArt =
+        alignmentRect != null &&
+        pageRect != null &&
+        flightChild != null &&
+        sourceSize != null &&
+        !atRest;
+    // Where the source's picture goes: over the art it is a preview of,
+    // carried by the page's own transform, or over the whole card.
+    final alignment = alignmentRect;
+    final source = sourceSize;
+    final Rect picture;
+    if (alignment == null || source == null) {
+      picture = Offset.zero & rect.size;
+    } else {
+      // The source's own size, scaled as the page is relative to its
+      // landing scale: at the source end the picture is the source.
+      picture = zoomAlignedPictureRect(
+        pageRect: (shift + rect.topLeft) & (pageSize * scale),
+        alignment: alignment,
+        pageSize: pageSize,
+        sourceSize: source,
+      ).shift(-rect.topLeft);
+    }
+    // A picture of the source, not the source: it neither takes pointers
+    // (a grab mid-flight must reach the page) nor ticks. Its slot is
+    // always in the stack, empty when there is nothing to show, so the
+    // stack has the same children at rest and in flight and the page
+    // between them keeps its element and state.
+    Widget copy(double opacity, {required bool shown}) => Positioned.fromRect(
+      rect: picture,
+      child: !shown
+          ? const SizedBox.shrink()
+          : IgnorePointer(
+              child: Opacity(
+                opacity: opacity,
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  clipBehavior: Clip.hardEdge,
+                  child: SizedBox.fromSize(
+                    size: sourceSize,
+                    child: flightChild,
+                  ),
+                ),
+              ),
+            ),
+    );
     return Stack(
       clipBehavior: Clip.none,
       children: <Widget>[
@@ -161,39 +212,29 @@ class ZoomTransitionLayer extends StatelessWidget {
                   fit: StackFit.expand,
                   clipBehavior: Clip.none,
                   children: <Widget>[
-                    OverflowBox(
-                      alignment: Alignment.topLeft,
-                      minWidth: 0,
-                      maxWidth: double.infinity,
-                      minHeight: 0,
-                      maxHeight: double.infinity,
-                      child: Transform(
-                        transform: Matrix4.translationValues(
-                          shift.dx,
-                          shift.dy,
-                          0,
-                        )..scaleByDouble(scale, scale, 1, 1),
-                        child: SizedBox.fromSize(size: pageSize, child: child),
-                      ),
-                    ),
-                    // A picture of the source, not the source: it neither
-                    // takes pointers (a grab mid-flight must reach the page)
-                    // nor ticks.
-                    if (showSource)
-                      IgnorePointer(
-                        child: Opacity(
-                          opacity: frame.sourceOpacity,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            alignment: Alignment.topCenter,
-                            clipBehavior: Clip.hardEdge,
-                            child: SizedBox.fromSize(
-                              size: sourceSize,
-                              child: flightChild,
-                            ),
+                    copy(1, shown: solidArt),
+                    Opacity(
+                      opacity: pageOpacity,
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        minWidth: 0,
+                        maxWidth: double.infinity,
+                        minHeight: 0,
+                        maxHeight: double.infinity,
+                        child: Transform(
+                          transform: Matrix4.translationValues(
+                            shift.dx,
+                            shift.dy,
+                            0,
+                          )..scaleByDouble(scale, scale, 1, 1),
+                          child: SizedBox.fromSize(
+                            size: pageSize,
+                            child: child,
                           ),
                         ),
                       ),
+                    ),
+                    copy(frame.sourceOpacity, shown: showSource),
                   ],
                 ),
               ),

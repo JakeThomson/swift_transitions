@@ -4,6 +4,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swift_transitions/src/zoom/zoom_frame.dart';
 
+Matcher offsetCloseTo(Offset expected, {double distance = 1e-6}) =>
+    predicate<Offset>(
+      (o) => (o - expected).distance < distance,
+      'an offset within $distance of $expected',
+    );
+
 void main() {
   final source = const Rect.fromLTWH(20, 40, 80, 120);
   final screen = const Rect.fromLTWH(0, 0, 390, 844);
@@ -59,6 +65,60 @@ void main() {
     expect(
       frame.rect.top,
       lerpDouble(source.top, screen.top, zoomPushVerticalProgress(0.63)),
+    );
+  });
+
+  test("an aligned card's centre runs behind its size", () {
+    // The measured native lags: on a pop 0.14 of what is left, on a push
+    // a bump peaking at mid-flight, 0.25 tall and 0.1 across.
+    expect(zoomAlignedCentreProgress(1, pushing: false), const Offset(1, 1));
+    expect(zoomAlignedCentreProgress(0, pushing: false), Offset.zero);
+    final pop = zoomAlignedCentreProgress(0.5, pushing: false);
+    expect(pop.dx, closeTo(0.57, 1e-9));
+    expect(pop.dy, closeTo(0.57, 1e-9));
+    expect(zoomAlignedCentreProgress(0.9, pushing: false), const Offset(1, 1));
+    final push = zoomAlignedCentreProgress(0.5, pushing: true);
+    expect(push.dx, closeTo(0.475, 1e-9));
+    expect(push.dy, closeTo(0.4375, 1e-9));
+    expect(zoomAlignedCentreProgress(1, pushing: true), const Offset(1, 1));
+
+    // A page 390 by 844 whose art, 300 by 200 at (45, 300), lands on a
+    // source of the same aspect at the far left: the page scales to 0.4
+    // as one picture, and halfway its scale is the plain lerp while its
+    // art's centre is 0.57 along on a pop.
+    const alignment = Rect.fromLTWH(45, 300, 300, 200);
+    const still = Rect.fromLTWH(16, 500, 120, 80);
+    final landing = zoomAlignedLandingRect(
+      source: still,
+      alignment: alignment,
+      pageSize: screen.size,
+    );
+    expect(landing.width, closeTo(156, 1e-9));
+    expect(
+      landing.topLeft + alignment.center * 0.4,
+      offsetCloseTo(still.center),
+    );
+    final page = zoomAlignedPageRect(
+      t: 0.5,
+      source: still,
+      alignment: alignment,
+      pageSize: screen.size,
+    );
+    expect(page.width, closeTo(lerpDouble(156, 390, 0.5)!, 1e-9));
+    final art = page.topLeft + alignment.center * (page.width / 390);
+    expect(
+      art,
+      offsetCloseTo(Offset.lerp(still.center, alignment.center, 0.57)!),
+    );
+    // At rest the page is itself.
+    expect(
+      zoomAlignedPageRect(
+        t: 1,
+        source: still,
+        alignment: alignment,
+        pageSize: screen.size,
+      ),
+      Offset.zero & screen.size,
     );
   });
 

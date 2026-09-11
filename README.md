@@ -191,6 +191,36 @@ ListView(
 )
 ```
 
+### A page that doesn't open with the art
+
+A source is a preview of its page, and the flight fits the whole page into the
+card, top first. A page whose art sits under a title reads as a double
+exposure on its way — the source's picture over the shrunken title, as it does
+natively. `alignmentRect` is UIKit's `alignmentRectProvider`: it says where
+the art is, and the page then flies as one picture — scaled so the art lands
+on the source, fading out around it as it goes, the way UIKit's aligned zoom
+does. It's asked once the page is laid out, so the art can be measured
+through a key:
+
+```dart
+final art = GlobalKey();
+Navigator.of(context).push(
+  ZoomPageRoute<void>(
+    sourceTag: still.id,
+    options: ZoomTransitionOptions(
+      alignmentRect: (flight) {
+        final context = art.currentContext;
+        return context == null ? null : flight.rectOf(context);
+      },
+    ),
+    builder: (context) => StillPage(still, artKey: art),
+  ),
+);
+```
+
+The example's still row does this. A null rect — the art scrolled out of a
+lazy list, say — aligns the whole page.
+
 ## Options
 
 `ZoomTransitionOptions` mirrors `UIZoomTransitionOptions`:
@@ -204,8 +234,7 @@ ZoomPageRoute<void>(
         context.gesture != ZoomGesture.pan || !hasUnsavedEdits,
     dimmingColor: const Color(0x26000000),
     dimmingBlurSigma: 0,
-    alignmentRect: (context) =>
-        Rect.fromLTWH(0, 0, context.pageSize.width, 240),
+    alignmentRect: (flight) => flight.rectOf(artKey.currentContext!),
     snapshotDuringTransition: true,
   ),
   builder: (context) => PosterPage(poster),
@@ -219,7 +248,7 @@ ZoomPageRoute<void>(
 | `dismissPhysics` | `ZoomDismissPhysics.ios26` | The fitted response of the dismissal — every constant documented and overridable |
 | `dimmingColor` | 15 % black | The dim over the page underneath, eased in with the flight and tracking a dismissal |
 | `dimmingBlurSigma` | `0` | A blur under the dim, the counterpart of `dimmingVisualEffect` |
-| `alignmentRect` | whole page | The part of the page that lines up with the source, asked on the push and again on each pop |
+| `alignmentRect` | whole page | The part of the page that lines up with the source, asked with the page laid out on the push and again on each pop |
 | `pushSpring` | measured | The spring that drives the push and a non-interactive pop |
 | `snapshotDuringTransition` | `false` | Rasterise the page once per flight — for pages that are expensive to paint |
 

@@ -218,6 +218,90 @@ void main() {
     expect(sourceHidden(tester), isTrue);
   });
 
+  testWidgets('an aligned page is held and springs back like any other', (
+    tester,
+  ) async {
+    const art = Rect.fromLTWH(40, 160, 300, 200);
+    await pushAndSettle(
+      tester,
+      staticDetail,
+      options: ZoomTransitionOptions(alignmentRect: (_) => art),
+    );
+    ZoomTransitionLayer layer() =>
+        tester.widget<ZoomTransitionLayer>(find.byType(ZoomTransitionLayer));
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump();
+    // Held: the page fills the card, opaque, its picture out of the way.
+    expect(cardRect(tester).width, lessThan(800));
+    expect(layer().pageRect, isNull);
+    expect(layer().pageOpacity, 1);
+    expect(layer().frame.sourceOpacity, 0);
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    // Springing back to the screen: still the card's page, opaque.
+    expect(layer().pageRect, isNull);
+    expect(layer().pageOpacity, 1);
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+    expect(cardRect(tester), screen);
+    expect(layer().pageOpacity, 1);
+  });
+
+  testWidgets('an aligned page lands from where it was let go, fading', (
+    tester,
+  ) async {
+    const art = Rect.fromLTWH(40, 160, 300, 200);
+    await pushAndSettle(
+      tester,
+      staticDetail,
+      options: ZoomTransitionOptions(alignmentRect: (_) => art),
+    );
+    ZoomTransitionLayer layer() =>
+        tester.widget<ZoomTransitionLayer>(find.byType(ZoomTransitionLayer));
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    final held = cardRect(tester);
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    // Landing: the page flies from the held card toward the source, inside
+    // the card, fading, with the picture coming in over its art — and the
+    // card never cuts the picture, whatever its own line and carry do.
+    final page = layer().pageRect!;
+    expect(page.width, lessThan(held.width));
+    expect(page.width, greaterThan(posterRect.width));
+    expect(layer().pageOpacity, inExclusiveRange(0, 1));
+    expect(cardRect(tester).width, lessThan(held.width));
+    for (var i = 0; i < 20; i++) {
+      final shown = layer().pageRect;
+      if (shown == null) break;
+      final picture = zoomAlignedPictureRect(
+        pageRect: shown,
+        alignment: art,
+        pageSize: screen.size,
+        sourceSize: posterRect.size,
+      );
+      final card = layer().frame.rect;
+      expect(card.left, lessThanOrEqualTo(picture.left + 1e-6));
+      expect(card.top, lessThanOrEqualTo(picture.top + 1e-6));
+      expect(card.right, greaterThanOrEqualTo(picture.right - 1e-6));
+      expect(card.bottom, greaterThanOrEqualTo(picture.bottom - 1e-6));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    expect(sourceHidden(tester), isFalse);
+  });
+
   testWidgets('a committed release pops and lands from where it was', (
     tester,
   ) async {

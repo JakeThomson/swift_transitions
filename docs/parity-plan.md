@@ -349,7 +349,40 @@ pop (the debug-build latency above).
 *Measured 2026-09-09, flat palette.* SwiftUI scales the whole page into
 the card from its top, bar strip and all — there is no art alignment —
 so the example no longer passes an `alignmentRect` (the option stays for
-apps that want UIKit's provider). The card's shadow beside it at
+apps that want UIKit's provider).
+
+*Aligned case measured 2026-09-11* (`../swift_transitions_parity/aligned/`,
+`native_still2`, the UIKit scene `Aligned.swift` reached with
+`PARITY_UIKIT=1`, `testZoomStill`; the still 160×90 at (16, 507), the art
+370×208 at (16, 287) under a title and a paragraph). Read off the art's
+blue and the paragraph's line pitch: the page scales uniformly (art width
+and height agree within 1 %) on a ω 21 spring, from itself to the size that
+puts the art on the still; the art's centre follows on a ω 22 spring
+starting ~12 ms later — behind the scale by 0.14 (1 − f) on the pop, by
+0.25 f(1 − f) tall and 0.1 f(1 − f) across on the push, both within 0.01 —
+which is why the card's left edge sits at 17 pt from the first frame and
+eases to 9 rather than hugging the screen's edge. The card clipping it is
+the plain one: at 53 ms its top, bottom and right edges read 262, 727 and
+278 against `zoomFlightFrame`'s 262, 730 and 278 (the white-bbox reading
+of "card top 104" earlier that day was the gallery's own white). Over the
+header band the page reads .54 opaque 98 ms in, .45 at 116, .32 at 131,
+.17 at 150, .06 at 200 and gone by 216 — opacity ≈ progress — while the
+art's top row stays R 54 (pure 58) at every frame and the still's label
+over it reads .10, .30, .72, .88, .99 white at f .13, .34, .55, .63, .71:
+the page's art stays solid and the source's picture fades in over it,
+square-cornered (a portal without the mask), covering it from f ≈ .7. The
+push is the mirror. Now `zoomAlignedPageRect`, `zoomAlignedCentreProgress`,
+`zoomAlignedPictureOpacity` and `ZoomTransitionLayer.pageRect`/
+`pageOpacity`; the still page's pan, pan-fling and edge-fling recorded
+(`flutter_Still*_b`). The mismatched aspect (`PARITY_ART_4_3=1`, a 4:3 art
+on the 16:9 still, `native_still_43`): the art's top left flies the 16:9
+run's line to the point (23.3, 398 at s .689; 19.3, 453 at .562) and lands
+on the still's top left, the art 30 pt too tall below it; the picture is
+16:9 at the art's top left, 208 × 117 at s .562. Ours (`flutter_still_43`)
+within 1 pt at matched scale. Flutter recorded clean at
+host load 5 (`flutter_still6`): art left/top at matched scale within 1 pt
+at s .68, .53 and .51; the pop's first moving frame lands 15–25 ms either
+side of native's between runs (tap-to-first-frame latency). The card's shadow beside it at
 mid-flight: 10.5 % at 4 pt, 6.1 % at 12, 3.1 % at 20, 1.7 % at 28, gone
 by 40; below it 14 % at 2 pt, 9.2 % at 10, 5.7 % at 18, 3.1 % at 26 — a
 Gaussian of σ ≈ 18 pt at α 0.24 offset 4 pt down, now drawn by

@@ -1,5 +1,18 @@
 ## 0.1.1
 
+* An aligned zoom flies the way UIKit's does with an `alignmentRectProvider`,
+  measured against it: behind the ordinary card the page scales as one
+  picture so the art lands on the source, its position a beat behind its
+  scale, fading out with the flight while the source's picture comes in
+  over the art. It was a window on the page that closed in on the art
+  while the page stayed near full size.
+* `ZoomAlignmentRectContext` carries the page, laid out, as
+  `UIZoomTransitionAlignmentRectContext` carries its `zoomedViewController`:
+  `pageContext`, and `rectOf` for a widget's bounds in the page's
+  coordinates, so a provider measures the art it aligns to through a key
+  rather than guessing a rect. It is asked once the page is laid out; a push
+  from a tap handler asks at the end of its first frame, which the cross-fade
+  draws as the source anyway. The example's still row shows the pattern.
 * `ZoomTransitionSource`: a source that is not being painted no longer takes
   part in a flight — one on a non-selected `IndexedStack` tab, under a
   `Visibility` that is not visible, or under a `HeroMode` that is not

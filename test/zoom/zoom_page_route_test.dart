@@ -360,22 +360,44 @@ void main() {
     tester,
   ) async {
     final asked = <ZoomAlignmentRectContext>[];
+    final art = GlobalKey();
+    final measured = <Rect?>[];
     await tester.pumpWidget(
       testApp(
         options: ZoomTransitionOptions(
           alignmentRect: (context) {
             asked.add(context);
+            measured.add(context.rectOf(art.currentContext!));
             return const Rect.fromLTWH(0, 0, 400, 300);
           },
+        ),
+        detail: Stack(
+          children: <Widget>[
+            const Center(child: Text('detail')),
+            Positioned.fromRect(
+              rect: const Rect.fromLTWH(40, 160, 300, 200),
+              child: SizedBox(key: art),
+            ),
+          ],
         ),
       ),
     );
     await tester.tap(find.text('push'));
+    // The push came from a tap handler, before its page was built: the
+    // provider is asked at the end of the first frame, with the page laid
+    // out; that frame drew the card as the source's picture regardless.
+    await tester.pump();
+    expect(asked, hasLength(1));
     await tester.pumpAndSettle();
     expect(asked, hasLength(1));
     expect(asked.single.direction, ZoomFlightDirection.push);
     expect(asked.single.sourceRect, posterRect);
     expect(asked.single.pageSize, screen.size);
+    expect(
+      (asked.single.pageContext.findRenderObject()! as RenderBox).size,
+      screen.size,
+    );
+    expect(measured.single, const Rect.fromLTWH(40, 160, 300, 200));
 
     final route = detailRoute(tester) as ZoomPageRoute<void>;
     route.sourceTag = 'other';
@@ -385,6 +407,84 @@ void main() {
     expect(asked, hasLength(2));
     expect(asked.last.direction, ZoomFlightDirection.pop);
     expect(asked.last.sourceRect, otherPosterRect);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'an aligned page flies as the whole page scaled onto its source',
+    (tester) async {
+      const art = Rect.fromLTWH(40, 160, 300, 200);
+      await tester.pumpWidget(
+        testApp(options: ZoomTransitionOptions(alignmentRect: (_) => art)),
+      );
+      await tester.tap(find.text('push'));
+      await tester.pump();
+      ZoomTransitionLayer layer() =>
+          tester.widget<ZoomTransitionLayer>(find.byType(ZoomTransitionLayer));
+      final landing = zoomAlignedLandingRect(
+        source: posterRect,
+        alignment: art,
+        pageSize: screen.size,
+      );
+      // The poster is 80 by 120 and the art 300 by 200: the page lands at
+      // 0.6, 480 by 360, the art covering the poster from its top left
+      // and overhanging it to the right.
+      expect(landing.size, const Size(480, 360));
+      final artAtLanding = Rect.fromLTWH(
+        landing.left + art.left * 0.6,
+        landing.top + art.top * 0.6,
+        art.width * 0.6,
+        art.height * 0.6,
+      );
+      expect(artAtLanding.topLeft, posterRect.topLeft);
+      expect(artAtLanding.height, posterRect.height);
+      expect(artAtLanding.width, greaterThan(posterRect.width));
+      await tester.pump(const Duration(milliseconds: 80));
+      final route = detailRoute(tester);
+      final t = route.animation!.value;
+      expect(t, inExclusiveRange(0.1, 0.9));
+      // The card is the ordinary one, on the line from the poster to the
+      // screen; the page behind it scales from its landing to itself, and
+      // fades in with the flight over the source's picture.
+      expect(
+        layer().frame.rect.width,
+        closeTo(lerpDouble(posterRect.width, 800, t)!, 1),
+      );
+      expect(layer().pageRect!.width, closeTo(lerpDouble(480, 800, t)!, 1));
+      expect(layer().pageOpacity, closeTo(t, 1e-9));
+      expect(
+        layer().frame.sourceOpacity,
+        closeTo(zoomAlignedPictureOpacity(t), 1e-9),
+      );
+      expect(layer().alignmentRect, art);
+      await tester.pumpAndSettle();
+      expect(layer().pageOpacity, 1);
+    },
+  );
+
+  testWidgets('the page keeps its element through a flight', (tester) async {
+    // An aligned flight changes what the card's stack holds around the
+    // page; the page must not be rebuilt for it, or a scroll view loses
+    // its position and the dismissal its hand-off.
+    const art = Rect.fromLTWH(40, 160, 300, 200);
+    await tester.pumpWidget(
+      testApp(
+        options: ZoomTransitionOptions(alignmentRect: (_) => art),
+        detail: const _Stateful(),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump();
+    final first = tester.state<_StatefulState>(find.byType(_Stateful));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.state<_StatefulState>(find.byType(_Stateful)), same(first));
+    await tester.pumpAndSettle();
+    expect(tester.state<_StatefulState>(find.byType(_Stateful)), same(first));
+    Navigator.of(tester.element(find.text('detail'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.state<_StatefulState>(find.byType(_Stateful)), same(first));
     await tester.pumpAndSettle();
   });
 
@@ -677,4 +777,16 @@ void main() {
     expect(cardRect(tester), rectCloseTo(screen));
     expect(sourceHidden(tester, 'poster'), isTrue);
   });
+}
+
+class _Stateful extends StatefulWidget {
+  const _Stateful();
+
+  @override
+  State<_Stateful> createState() => _StatefulState();
+}
+
+class _StatefulState extends State<_Stateful> {
+  @override
+  Widget build(BuildContext context) => const Center(child: Text('detail'));
 }

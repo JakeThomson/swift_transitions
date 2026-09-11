@@ -9,11 +9,15 @@ void main() {
   // A part of the page with the source's aspect, off centre.
   const alignment = Rect.fromLTWH(80, 60, 200, 300);
   const marker = Key('marker');
+  const picture = Key('picture');
 
   Future<void> pumpLayer(
     WidgetTester tester, {
     required Rect rect,
     Rect? alignmentRect,
+    Rect? pageRect,
+    double sourceOpacity = 0,
+    double pageOpacity = 1,
   }) {
     return tester.pumpWidget(
       Directionality(
@@ -23,12 +27,15 @@ void main() {
             rect: rect,
             rotation: 0,
             radii: BorderRadius.zero,
-            sourceOpacity: 0,
+            sourceOpacity: sourceOpacity,
           ),
           pageSize: pageSize,
           atRest: false,
+          flightChild: const SizedBox(key: picture),
           sourceSize: source.size,
           alignmentRect: alignmentRect,
+          pageRect: pageRect,
+          pageOpacity: pageOpacity,
           child: Stack(
             children: <Widget>[
               Positioned.fromRect(
@@ -60,10 +67,23 @@ void main() {
     },
   );
 
-  testWidgets('the alignment rect sits on the card at the source end', (
+  testWidgets('an aligned page is drawn at its pageRect, clipped by the card', (
     tester,
   ) async {
-    await pumpLayer(tester, rect: source, alignmentRect: alignment);
+    // The page at the source end: scaled by 0.4 so the alignment rect
+    // covers the source, the card being the source itself.
+    final landing = zoomAlignedLandingRect(
+      source: source,
+      alignment: alignment,
+      pageSize: pageSize,
+    );
+    expect(landing.width, closeTo(pageSize.width * 0.4, 1e-6));
+    await pumpLayer(
+      tester,
+      rect: source,
+      alignmentRect: alignment,
+      pageRect: landing,
+    );
     final rect = markerRect(tester);
     expect(rect.left, closeTo(source.left, 1e-6));
     expect(rect.top, closeTo(source.top, 1e-6));
@@ -80,22 +100,123 @@ void main() {
     expect(markerRect(tester), alignment);
   });
 
-  testWidgets('the window widens with the card', (tester) async {
+  testWidgets("the source's picture is drawn over the alignment rect", (
+    tester,
+  ) async {
     await pumpLayer(
       tester,
       rect: Rect.lerp(source, Offset.zero & pageSize, 0.5)!,
       alignmentRect: alignment,
+      pageRect: zoomAlignedPageRect(
+        t: 0.5,
+        source: source,
+        alignment: alignment,
+        pageSize: pageSize,
+      ),
+      sourceOpacity: 0.5,
     );
-    final rect = markerRect(tester);
-    // Bigger than at the source end, smaller than itself.
-    expect(rect.width, greaterThan(source.width));
-    expect(rect.width, lessThan(alignment.width));
-    // The window has grown past the alignment rect on every side, so the
-    // rect now sits inside the card rather than on its edges.
-    final card = Rect.lerp(source, Offset.zero & pageSize, 0.5)!;
-    expect(rect.left, greaterThan(card.left));
-    expect(rect.top, greaterThan(card.top));
-    expect(rect.right, lessThan(card.right));
+    // Wherever the page's transform puts the art, the picture sits on it —
+    // both copies, the solid one under the page and the fading one over.
+    expect(find.byKey(picture), findsNWidgets(2));
+    expect(tester.getRect(find.byKey(picture).first), markerRect(tester));
+    expect(tester.getRect(find.byKey(picture).last), markerRect(tester));
+    // An art of another aspect: the picture keeps the source's, at the
+    // art's top left, scaled as the page is.
+    const wide = Rect.fromLTWH(80, 60, 300, 300);
+    await pumpLayer(
+      tester,
+      rect: source,
+      alignmentRect: wide,
+      pageRect: zoomAlignedLandingRect(
+        source: source,
+        alignment: wide,
+        pageSize: pageSize,
+      ),
+      sourceOpacity: 0.5,
+    );
+    final shown = tester.getRect(find.byKey(picture).first);
+    expect(shown.topLeft, source.topLeft);
+    expect(shown.size, source.size);
+    // Without an alignment rect one fills the card.
+    await pumpLayer(tester, rect: source, sourceOpacity: 0.5);
+    expect(tester.getRect(find.byKey(picture)), source);
+  });
+
+  testWidgets(
+    'the stack always has the picture under, the page, the picture over',
+    (tester) async {
+      // The same three children at rest and in flight, aligned or not, so
+      // the page keeps its element and state: an empty slot is a slot.
+      List<Widget> stack() => tester
+          .widget<Stack>(
+            find
+                .ancestor(of: find.byKey(marker), matching: find.byType(Stack))
+                .at(1),
+          )
+          .children;
+      double? opacityOf(Widget positioned) {
+        final finder = find.descendant(
+          of: find.byWidget(positioned),
+          matching: find.byType(Opacity),
+        );
+        return finder.evaluate().isEmpty
+            ? null
+            : tester.widget<Opacity>(finder).opacity;
+      }
+
+      await pumpLayer(
+        tester,
+        rect: source,
+        alignmentRect: alignment,
+        pageRect: zoomAlignedLandingRect(
+          source: source,
+          alignment: alignment,
+          pageSize: pageSize,
+        ),
+        sourceOpacity: 0.4,
+      );
+      var children = stack();
+      expect(children, hasLength(3));
+      expect(children.first, isA<Positioned>());
+      expect(opacityOf(children.first), 1);
+      expect(children[1], isA<Opacity>());
+      expect(children.last, isA<Positioned>());
+      expect(opacityOf(children.last), 0.4);
+
+      await pumpLayer(tester, rect: source, sourceOpacity: 0.4);
+      children = stack();
+      expect(children, hasLength(3));
+      expect(opacityOf(children.first), isNull);
+      expect(opacityOf(children.last), 0.4);
+
+      await pumpLayer(tester, rect: source);
+      children = stack();
+      expect(children, hasLength(3));
+      expect(opacityOf(children.first), isNull);
+      expect(opacityOf(children.last), isNull);
+    },
+  );
+
+  testWidgets('the page fades with pageOpacity, the picture does not', (
+    tester,
+  ) async {
+    await pumpLayer(
+      tester,
+      rect: source,
+      alignmentRect: alignment,
+      sourceOpacity: 0.7,
+      pageOpacity: 0.3,
+    );
+    final page = tester.widget<Opacity>(
+      find.ancestor(of: find.byKey(marker), matching: find.byType(Opacity)),
+    );
+    expect(page.opacity, 0.3);
+    final copy = tester.widget<Opacity>(
+      find
+          .ancestor(of: find.byKey(picture), matching: find.byType(Opacity))
+          .first,
+    );
+    expect(copy.opacity, 0.7);
   });
 
   testWidgets('the card sheds its shadow as it reaches the source', (

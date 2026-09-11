@@ -177,8 +177,11 @@ UIKit (iOS 18): `UIViewController.preferredTransition = .zoom(options:sourceView
 `ZoomOptions` exposes `alignmentRectProvider`, `dimmingColor`,
 `dimmingVisualEffect` (a `UIBlurEffect`) and `interactiveDismissShouldBegin`
 (a closure receiving an `InteractionContext` with the gesture's location and
-velocity). The source view provider is called on both push and pop, so the
-source can change while the page is open (a paging detail view).
+velocity). The alignment rect provider receives a
+`UIZoomTransitionAlignmentRectContext` with the `zoomedViewController`, so
+the app measures its art in the destination's own view. The source view
+provider is called on both push and pop, so the source can change while the
+page is open (a paging detail view).
 
 SwiftUI (iOS 18): `.navigationTransition(.zoom(sourceID:in:))` on the
 destination and `.matchedTransitionSource(id:in:configuration:)` on the
@@ -210,6 +213,7 @@ reasoning behind each is on the constant itself.
 | `kZoomPushSpring` | ω 19, ζ 1 | stage 3, `native_zoom_a`–`f` |
 | Zoom vertical lead | −0.05 pushing, +0.03 popping | stage 3, the same runs |
 | `kZoomCrossFadeWindow` | 0.55 of the flight | stage 3 |
+| Aligned flight | the card is the plain one (screen ↔ source, vertical lead and all: edges within a few points at mid-flight); behind it the page scales uniformly by the larger of the source-to-art ratios, the art's top left landing on the source's (a 4:3 art on a 16:9 still flies the 16:9 art's line to the point and overhangs below), its art's centre behind its scale by 0.14 (1 − f) on a pop and 0.25 f(1 − f) tall, 0.1 f(1 − f) across on a push; page opacity = progress; the source's picture over the art's top left at the source's own aspect, at (0.78 − t) / 0.5 — 0.10, 0.30, 0.72, 0.88, 0.99 at f 0.13, 0.34, 0.55, 0.63, 0.71 | stage 3 aligned, `native_still2`, `native_still_43` (UIKit `alignmentRectProvider`) |
 | `ZoomTransitionOptions.dimmingColor` | 15 % black, linear in progress | stage 3 |
 | Flight corner radii | straight from the source's to the display's | stage 8, `native_zoom_f` |
 | `kZoomCoveredPageScale` | 0.086 of the covered page, linear in the flight | stage 9, `native_ZoomPinch45Rest`, `native_ZoomPan30Rest` |
@@ -430,7 +434,7 @@ class ZoomDismissGestures {
 
 /// What `interactiveDismissShouldBegin` and `alignmentRect` receive.
 class ZoomInteractionContext { final ZoomGesture gesture; final Offset location; final Offset velocity; final ScrollMetrics? primaryScrollMetrics; }
-class ZoomAlignmentRectContext { final Rect sourceRect; final Size pageSize; final ZoomFlightDirection direction; }
+class ZoomAlignmentRectContext { final Rect sourceRect; final Size pageSize; final ZoomFlightDirection direction; final BuildContext pageContext; Rect? rectOf(BuildContext context); }
 
 /// A page that zooms out of the [ZoomTransitionSource] whose tag is [sourceTag].
 class ZoomPageRoute<T> extends PageRoute<T> with CupertinoRouteTransitionMixin<T> {
@@ -746,11 +750,19 @@ nothing.
         └ Transform.rotate(frame.rotation)
             └ ClipRSuperellipse(frame.radii)
                 └ Stack
-                    ├ OverflowBox(alignment topCenter)
-                    │   └ Transform.scale(max(rect.width / pageWidth, rect.height / pageHeight))
-                    │       └ SizedBox(page size) ─ the live page
-                    └ Opacity(sourceOpacity) ─ source flightChild, FittedBox(cover) at the source's size
+                    ├ Positioned(picture rect) ─ the source's picture, opaque, under an aligned page in flight; empty otherwise
+                    ├ Opacity(pageOpacity)
+                    │   └ OverflowBox(alignment topCenter)
+                    │       └ Transform.scale(max(rect.width / pageWidth, rect.height / pageHeight))
+                    │           └ SizedBox(page size) ─ the live page
+                    └ Positioned(picture rect) ─ Opacity(sourceOpacity) ─ source flightChild, FittedBox(cover) at the source's size; empty when not shown
 ```
+
+The stack always has these three children, the two picture slots empty
+when there is nothing to show: a child list whose leading and trailing
+members come and go around an unkeyed page is one the framework can fail
+to match, and then the page is inflated afresh — its scroll position,
+and the dismissal's hand-off from its scroll view, gone with its element.
 
 The page is laid out at its full size once and scaled; it does not reflow,
 matching iOS. The scale is an aspect fill anchored at the top centre, so a
@@ -761,6 +773,47 @@ first case. The tree has the same shape at rest and in flight — the clip and
 transforms become identities rather than being removed — so the page's
 element subtree keeps its position and state. `transformHitTests` stays true
 so the page remains tappable at rest.
+
+**An aligned flight** (`ZoomTransitionOptions.alignmentRect`) changes what
+is behind the card, not the card. Natively (UIKit's zoom with an
+`alignmentRectProvider`; parity stage 3, aligned) the card is the ordinary
+one — the rect that morphs from the screen to the source with the vertical
+lead, its edges at mid-flight the plain card's to a few points — and the
+page behind it flies as one picture: scaled uniformly from itself to the
+size that puts the alignment rect on the source (the art's width and height
+agree to 1 % at every frame), with the art's centre carried along its own
+line a little behind the scale (`zoomAlignedCentreProgress`: 0.14 of what
+is left on a pop, a bump of 0.25 · f(1 − f) tall and 0.1 · f(1 − f) across
+on a push), which is what keeps the card off the screen's edge and its
+corners in view from the first frame. The page's opacity is the flight's
+progress — everywhere but over its art, which stays solid — and the
+source's picture fades in *over* the art, faster than the page fades: the
+still's label reads 0.10, 0.30, 0.72, 0.88 and 0.99 white at 0.13, 0.34,
+0.55, 0.63 and 0.71 of the way, so from a little before the last quarter
+the picture simply sits in front of the page's own art
+(`zoomAlignedPictureOpacity`). An art of another aspect than its source
+changes none of it: the page scales by the larger ratio, the art's top
+left lands on the source's and the art overhangs it, and the picture keeps
+the source's aspect at the art's top left — neither stretched to the art
+nor cropped to it (`zoomAlignedLandingRect`, `zoomAlignedLandingScale`;
+a 4:3 art on the 16:9 still measured to the point against the 16:9 run,
+the picture 208 × 117 at s 0.56). UIKit's picture is a portal of the source
+view without its corner mask, so it is square-cornered until the real
+source shows at the end; ours is the source's widget as the app draws it,
+corners and all — the one thing here not matched, by choice. In the tree
+above this is `ZoomTransitionLayer.pageRect` (`zoomAlignedPageRect`) with
+`pageOpacity` = progress, the picture drawn twice through the page's
+transform: opaque under the page, so the art never thins to the page
+beneath, and over it at `sourceOpacity`. Held, or springing back to the
+screen, an aligned page is the card's page like any other; a landing
+flies it from where the card let go of it, carried as the card is carried
+and past the source where the landing spring overshoots, so the page keeps
+the card's momentum rather than stopping while the card shrinks through
+it. And where the two flights differ — the art a little behind the card,
+an aspect the card has not reached, a carry — the card takes the picture
+in (`Rect.expandToInclude`): the card clips the page, never the picture. The unaligned SwiftUI reference
+also fades its page, but its picture follows `kZoomCrossFadeWindow` and the
+art is see-through mid-flight; the unaligned model stays as fitted.
 
 Optionally, `snapshotDuringTransition` wraps the page in a `SnapshotWidget`
 with `SnapshotMode.permissive` for the duration of a flight, the same
@@ -1213,10 +1266,10 @@ Interruptible push, dynamic `sourceTag` for paging detail pages,
 `alignmentRect`, `snapshotDuringTransition`, `dimmingBlurSigma`. Performance
 pass on a real device with a heavy page (the host app's glass surfaces):
 frame times during flight with and without snapshotting recorded in the
-CHANGELOG. The alignment rect is applied in the transition layer as a
-window on the page — the rect at the source end, widening to the page's
-bounds as the card grows, by the square root of the card's area between
-the two — so the dragged and landing frames need no separate treatment.
+CHANGELOG. The alignment rect was first applied in the transition layer as
+a window on the page, widening to the page's bounds as the card grew;
+measured against UIKit on 2026-09-11 it is instead the page scaled as one
+picture behind the ordinary card, fading (section 3.4).
 
 **M6 Release (1–2 days).**
 README with API tour and GIFs from the example, dartdoc pass (the analyzer

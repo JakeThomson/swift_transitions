@@ -13,7 +13,8 @@ Future<void> main() async {
 ///
 /// A gallery of source views that open destination pages: the push
 /// transition from list tiles, and the zoom transition from a row of
-/// posters.
+/// posters, and from a row of stills whose pages keep the art below a
+/// title and align the flight to it.
 class ExampleApp extends StatelessWidget {
   const ExampleApp({super.key});
 
@@ -65,6 +66,10 @@ class GalleryPage extends StatelessWidget {
             CupertinoListSection(
               header: const Text('Zoom — tap a poster'),
               children: const <Widget>[PosterRow()],
+            ),
+            CupertinoListSection(
+              header: const Text('Zoom — tap a still, aligned to its art'),
+              children: const <Widget>[StillRow()],
             ),
           ],
         ),
@@ -131,6 +136,70 @@ class PosterRow extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: _radius,
                 child: PosterArt(poster: poster, width: 120, height: _height),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// A horizontally scrolling row of stills — the posters' art cut wide —
+/// each a [ZoomTransitionSource] that opens its [StillPage].
+///
+/// A still's page does not open with the art: a title and a paragraph
+/// come first. Left to itself the zoom would fit the whole page into the
+/// card, top first, so the card would read as a double exposure on its
+/// way — the still's picture over the page's shrunken title — as it does
+/// natively. The route's `alignmentRect` says where the art is instead,
+/// measured through a [GlobalKey] once the page is laid out, and the card
+/// grows out of the still showing the art and shrinks back onto it.
+class StillRow extends StatelessWidget {
+  /// Creates the still row.
+  const StillRow({super.key});
+
+  static const double _height = 90;
+  static const BorderRadius _radius = BorderRadius.all(Radius.circular(10));
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _height + 24,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: posters.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final poster = posters[index];
+          // Tags are unique within a route, and the posters have the titles.
+          final tag = 'still:${poster.title}';
+          return ZoomTransitionSource(
+            tag: tag,
+            borderRadius: _radius,
+            child: GestureDetector(
+              onTap: () {
+                final art = GlobalKey();
+                Navigator.of(context).push(
+                  ZoomPageRoute<void>(
+                    sourceTag: tag,
+                    title: poster.title,
+                    options: ZoomTransitionOptions(
+                      alignmentRect: (flight) {
+                        // Scrolled far enough for the list to have let go
+                        // of the art: the whole page aligns instead.
+                        final context = art.currentContext;
+                        return context == null ? null : flight.rectOf(context);
+                      },
+                    ),
+                    builder: (_) => StillPage(poster: poster, artKey: art),
+                  ),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: _radius,
+                child: PosterArt(poster: poster, width: 160, height: _height),
               ),
             ),
           );
@@ -284,6 +353,74 @@ class PosterPage extends StatelessWidget {
               'poster, which is then the one this page lands on. Tap back '
               'to zoom home.',
               style: CupertinoTheme.of(context).textTheme.textStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The page a still zooms open into: its art under a title and a paragraph,
+/// keyed with [artKey] so the route can align the flight to it.
+class StillPage extends StatelessWidget {
+  /// Creates the detail page for [poster].
+  const StillPage({super.key, required this.poster, required this.artKey});
+
+  /// The poster whose still was tapped.
+  final Poster poster;
+
+  /// The key on the art, for the route's `alignmentRect` to measure.
+  final GlobalKey artKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = CupertinoTheme.of(context).textTheme.textStyle;
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(middle: Text(poster.title)),
+      child: ListView(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 44),
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              poster.title,
+              style: CupertinoTheme.of(
+                context,
+              ).textTheme.navLargeTitleTextStyle,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Text(
+              'The still is a preview of this art, not of this page: the '
+              'title and this paragraph come first. The route aligns the '
+              'flight to the art instead, so the card grows out of the '
+              'still showing it and shrinks back onto it.',
+              style: textStyle,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: AspectRatio(
+              key: artKey,
+              aspectRatio: 16 / 9,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.all(Radius.circular(12)),
+                child: PosterArt(
+                  poster: poster,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Drag down, swipe in from the leading edge, or pinch to shrink '
+              'the page into its still. Tap back to zoom home.',
+              style: textStyle,
             ),
           ),
         ],
