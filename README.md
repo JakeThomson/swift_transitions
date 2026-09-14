@@ -32,8 +32,9 @@ with the same curve, the same back swipe and the display's own rounded corners.
 - **The zoom transition** — a page flies out of a `ZoomTransitionSource` and
   back into it, cross-fading with the source and morphing from the source's
   corner radius to the display's.
-- **Interactive dismissal** — a downward pan, a swipe from the leading edge or
-  a two-finger pinch shrinks the page into a card that tracks the fingers. Let
+- **Interactive dismissal** — a downward pan, a back swipe from anywhere on
+  the page or a two-finger pinch shrinks the page into a card that tracks the
+  fingers. Let
   go past the threshold and it lands on its source; let go early and it springs
   back.
 - **Interruptible** — a card in flight can be caught and dragged, a cancelled
@@ -44,8 +45,8 @@ with the same curve, the same back swipe and the display's own rounded corners.
   `PrimaryScrollController`.
 - **The push transition** — iOS's push and pop, its dead zone, its release
   projection and its spring, per route or for every `MaterialPageRoute` on iOS
-  through a `PageTransitionsBuilder`. The back swipe can start from the leading
-  edge or anywhere on the page, as in iOS 26.
+  through a `PageTransitionsBuilder`. The back swipe starts anywhere on the
+  page, as in iOS 26, or from the leading edge as the SDK's does.
 - **Display-radius corner clipping** — pages are clipped to the device's actual
   screen corners, and the leading-edge shadow is cast from the clipped shape.
 - **Measured, not eyeballed** — every curve, spring and threshold was fitted
@@ -99,9 +100,9 @@ MaterialApp(
 > );
 > ```
 
-> **Want the back swipe to work from anywhere on the page, as in iOS 26?**
-> Pass `backGestureRegion: BackGestureRegion.anywhere` to the builder or the
-> route. The default is the SDK's own leading-edge region.
+> **Want the SDK's leading-edge back swipe instead of iOS 26's from
+> anywhere?** Pass `backGestureRegion: BackGestureRegion.leadingEdge` to the
+> builder or the route.
 
 ### Step 2: Mark a zoom source
 
@@ -157,8 +158,8 @@ All three take a `backGestureRegion`:
 
 | Region | Behaviour |
 |---|---|
-| `BackGestureRegion.leadingEdge` | The SDK's own region: the leading 20 pt, or the safe-area inset if larger. **Default.** |
-| `BackGestureRegion.anywhere` | A horizontal drag anywhere on the page swipes back, as in iOS 26. |
+| `BackGestureRegion.anywhere` | A horizontal drag anywhere on the page swipes back, as in iOS 26. A horizontal scrollable on the page keeps its own drags; the leading edge still wins over it, as the SDK's does. **Default.** |
+| `BackGestureRegion.leadingEdge` | The SDK's own region: the leading 20 pt, or the safe-area inset if larger. |
 
 > A covered `CupertinoPageRoute` or Material route gets the matching motion and
 > dim through `SwiftPageTransition.delegatedTransition`, so pages half in and
@@ -171,7 +172,7 @@ Every zoom route can be dismissed three ways, all on by default:
 | Gesture | How it starts | What commits |
 |---|---|---|
 | **Pan** | A downward drag anywhere on the page, or on a vertical scroll view once it reaches its top | Released far enough down, or flung |
-| **Edge swipe** | A drag from the leading edge | Released past the threshold, or flung — a short, fast flick springs back, as it does natively |
+| **Back swipe** | A trailing drag anywhere on the page (or from the leading edge, with `backGestureRegion`) | Released past the threshold, or flung — a short, fast flick springs back, as it does natively |
 | **Pinch** | Two fingers closing; the card scales, turns and moves with them | Released below half size, wherever the fingers were headed |
 
 A second finger turns a pan or a swipe into a pinch. A card that's springing
@@ -243,7 +244,8 @@ ZoomPageRoute<void>(
 
 | Parameter | Default | Purpose |
 |---|---|---|
-| `dismissGestures` | all | Which of the pan, the edge swipe and the pinch may dismiss |
+| `dismissGestures` | all | Which of the pan, the back swipe and the pinch may dismiss |
+| `backGestureRegion` | anywhere | Where the back swipe may start: anywhere on the page, or the leading edge |
 | `interactiveDismissShouldBegin` | allow | Asked before a dismissal begins, with the gesture and where it started; return `false` to leave it to the page |
 | `dismissPhysics` | `ZoomDismissPhysics.ios26` | The fitted response of the dismissal — every constant documented and overridable |
 | `dimmingColor` | 15 % black | The dim over the page underneath, eased in with the flight and tracking a dismissal |
@@ -271,6 +273,7 @@ position, size and corner radius tracked frame by frame in both.
 | **Navigation bars** | Natively the bar's items stay above the flying card and cross-fade in place. With a `CupertinoNavigationBar` on each page the SDK's own bar hero runs instead. A bar above the navigator doesn't fly at all, which is the native shape. |
 | **Touches during a landing** | Natively a touch on a landing card reaches the page underneath. Here it's blocked until the pop has finished, by choice — a half-finished dismissal that opens something else reads as a misfire. |
 | **An edge swipe flung hard** | One released at 800 pt/s lands in 147 ms where native takes 100. Releases from rest, and pinches, match. |
+| **A pager on its first page** | Natively a trailing drag on a horizontal scroll view that has nowhere to scroll goes to the back swipe. Here the scroll view keeps it and over-scrolls. |
 | **A source that was never built** | A pop to a cell far outside a lazy list's cache extent has no frame to fly to and falls back to a centred rect. |
 
 ## Platform support

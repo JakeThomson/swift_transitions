@@ -2,7 +2,7 @@
 ///
 /// [ZoomPageRoute] is the zoom transition introduced in iOS 18, where a
 /// destination page grows out of a [ZoomTransitionSource] and shrinks back
-/// into it through a pan, an edge swipe or a pinch; SwiftUI spells it
+/// into it through a pan, a back swipe or a pinch; SwiftUI spells it
 /// `matchedTransitionSource` and `navigationTransition(.zoom)`.
 /// [SwiftPageRoute] is the ordinary push, with the same curve, the same back
 /// swipe and the display's own corner radius, and

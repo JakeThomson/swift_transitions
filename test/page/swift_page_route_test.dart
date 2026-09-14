@@ -7,7 +7,7 @@ import 'package:swift_transitions/swift_transitions.dart';
 /// [secondPage] when its button is tapped.
 Widget testApp({
   required Widget secondPage,
-  BackGestureRegion backGestureRegion = BackGestureRegion.leadingEdge,
+  BackGestureRegion backGestureRegion = BackGestureRegion.anywhere,
 }) {
   return CupertinoApp(
     home: Builder(
@@ -136,7 +136,10 @@ void main() {
     'a release past the midpoint on the leading edge commits the pop',
     (tester) async {
       await tester.pumpWidget(
-        testApp(secondPage: const Center(child: Text('second'))),
+        testApp(
+          secondPage: const Center(child: Text('second')),
+          backGestureRegion: BackGestureRegion.leadingEdge,
+        ),
       );
       await tester.tap(find.text('push'));
       await tester.pumpAndSettle();
@@ -155,7 +158,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      testApp(secondPage: const Center(child: Text('second'))),
+      testApp(
+        secondPage: const Center(child: Text('second')),
+        backGestureRegion: BackGestureRegion.leadingEdge,
+      ),
     );
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
@@ -173,7 +179,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      testApp(secondPage: const Center(child: Text('second'))),
+      testApp(
+        secondPage: const Center(child: Text('second')),
+        backGestureRegion: BackGestureRegion.leadingEdge,
+      ),
     );
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
@@ -192,7 +201,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      testApp(secondPage: const Center(child: Text('second'))),
+      testApp(
+        secondPage: const Center(child: Text('second')),
+        backGestureRegion: BackGestureRegion.leadingEdge,
+      ),
     );
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
@@ -221,7 +233,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      testApp(secondPage: const Center(child: Text('second'))),
+      testApp(
+        secondPage: const Center(child: Text('second')),
+        backGestureRegion: BackGestureRegion.leadingEdge,
+      ),
     );
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();
@@ -238,7 +253,10 @@ void main() {
     'userGestureInProgress is set for the drag and cleared after it settles',
     (tester) async {
       await tester.pumpWidget(
-        testApp(secondPage: const Center(child: Text('second'))),
+        testApp(
+          secondPage: const Center(child: Text('second')),
+          backGestureRegion: BackGestureRegion.leadingEdge,
+        ),
       );
       await tester.tap(find.text('push'));
       await tester.pumpAndSettle();
@@ -295,6 +313,105 @@ void main() {
     },
   );
 
+  testWidgets('a swipe from anywhere waits out 27px and commits from 42 %', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(secondPage: const Center(child: Text('second'))),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final route = ModalRoute.of(tester.element(find.text('second')))!;
+
+    // Native's page held still for the first 27 pt of a mid-page drag
+    // (parity stage 10), 15 more than an edge swipe's.
+    final gesture = await tester.startGesture(const Offset(200, 300));
+    await gesture.moveBy(const Offset(27, 0));
+    await tester.pump();
+    expect(route.animation!.value, 1);
+    // Then followed 1:1: 320px past the dead zone is 0.40 of the 800px
+    // view, short of the 42 % line.
+    await gesture.moveBy(const Offset(320, 0));
+    await tester.pump();
+    expect(route.animation!.value, closeTo(0.6, 1e-9));
+    await tester.pump(const Duration(milliseconds: 100));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('second'), findsOneWidget);
+
+    // 0.43 at rest pops, where an edge swipe would spring back.
+    final again = await tester.startGesture(const Offset(200, 300));
+    await again.moveBy(const Offset(27 + 344, 0));
+    await tester.pump(const Duration(milliseconds: 100));
+    await again.up();
+    await tester.pumpAndSettle();
+    expect(find.text('second'), findsNothing);
+  });
+
+  testWidgets('a horizontal scrollable on the page wins over the swipe', (
+    tester,
+  ) async {
+    final pageController = PageController(initialPage: 1);
+    addTearDown(pageController.dispose);
+    await tester.pumpWidget(
+      testApp(
+        secondPage: PageView(
+          controller: pageController,
+          children: const <Widget>[Text('first'), Text('second')],
+        ),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final route = ModalRoute.of(tester.element(find.text('second')))!;
+
+    // A trailing drag over the pager scrolls it back a page, as it would
+    // natively; the route stays put. (The scrollable's own recognizer only
+    // starts on the first move; the second scrolls.)
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(500, 0));
+    await tester.pump();
+    expect(route.animation!.value, 1);
+    expect(pageController.page, lessThan(1));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(route.isCurrent, isTrue);
+    expect(pageController.page, 0);
+    expect(find.text('first'), findsOneWidget);
+  });
+
+  testWidgets('from the leading edge the swipe wins over the scrollable', (
+    tester,
+  ) async {
+    final pageController = PageController(initialPage: 1);
+    addTearDown(pageController.dispose);
+    await tester.pumpWidget(
+      testApp(
+        secondPage: PageView(
+          controller: pageController,
+          children: const <Widget>[Text('first'), Text('second')],
+        ),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final route = ModalRoute.of(tester.element(find.text('second')))!;
+
+    // The strip lies over the page, as the SDK's does: its swipe is the
+    // edge swipe, with the edge's 12px dead zone, and the pager stays put.
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(212, 0));
+    await tester.pump();
+    expect(route.animation!.value, closeTo(0.75, 1e-9));
+    expect(pageController.page, 1);
+    await gesture.moveBy(const Offset(300, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('second'), findsNothing);
+  });
+
   testWidgets('the covered page keeps pace at 0.30 of the width and dims', (
     tester,
   ) async {
@@ -321,7 +438,10 @@ void main() {
 
   testWidgets('the covered page tracks the finger linearly', (tester) async {
     await tester.pumpWidget(
-      testApp(secondPage: const Center(child: Text('second'))),
+      testApp(
+        secondPage: const Center(child: Text('second')),
+        backGestureRegion: BackGestureRegion.leadingEdge,
+      ),
     );
     await tester.tap(find.text('push'));
     await tester.pumpAndSettle();

@@ -13,23 +13,51 @@ enum BackGestureRegion {
   /// area inset if it is larger.
   leadingEdge,
 
-  /// A horizontal drag starting anywhere on the page, as in iOS 26.
+  /// A horizontal drag starting anywhere on the page, as iOS 26's
+  /// `interactiveContentPopGestureRecognizer` allows by default — and still
+  /// from the leading edge, which keeps its own recognizer.
   ///
   /// Only a drag whose first movement runs toward the trailing edge starts
   /// the swipe; a drag that opens the other way is left unclaimed after
-  /// that first frame. This does not resolve the gesture arena against
-  /// another full-width horizontal recognizer (a nested `PageView`, say) —
-  /// it only stops the swipe from visibly starting in the wrong direction.
+  /// that first frame. A horizontal scrollable on the page (a `PageView`,
+  /// say) wins a drag begun over it, as it would natively, since the
+  /// swipe's recognizer sits above the page in the tree and so enters the
+  /// arena after the page's own; a drag begun on the leading edge is the
+  /// edge swipe, with its own dead zone and commit line, and wins over the
+  /// scrollable as the SDK's does. Natively the scroll view also yields a
+  /// drag it cannot scroll — a pager on its first page — to the pop; here
+  /// it over-scrolls instead.
   anywhere,
 }
 
-const double _kBackGestureWidth = 20.0;
+/// The measured differences between the two regions' recognizers on the
+/// push's page: the edge region is UIKit's screen-edge recognizer (parity
+/// stage 2), the anywhere region its content pop recognizer (stage 10).
+/// The zoom page's card answers a swipe with its own dead zone and commit
+/// line (`ZoomDismissPhysics`).
+extension BackGestureRegionMetrics on BackGestureRegion {
+  /// How far the finger travels from where it went down before the page
+  /// starts to follow it. Native's page stayed put for the first 12 pt of
+  /// an edge swipe and then sat 12 pt behind the finger (once a two-frame
+  /// display lag is taken out); from anywhere else it waits 27 pt, and
+  /// then sits 27 pt behind.
+  double get deadZone => switch (this) {
+    BackGestureRegion.leadingEdge => 12.0,
+    BackGestureRegion.anywhere => 27.0,
+  };
 
-/// How far the finger travels from where it went down before the page
-/// starts to follow it. Native's page stayed put for the first 12 pt of
-/// every swipe and then sat 12 pt behind the finger (parity stage 2, once
-/// a two-frame display lag is taken out).
-const double _kDeadZone = 12.0;
+  /// The position, as a fraction of the width, a release must reach.
+  /// Native sprang back from 51 % and 52 % at rest and popped from 54 % on
+  /// an edge swipe, so that line is a little past the midpoint; from
+  /// anywhere it sprang back from 41 % and popped from 43 %, whether the
+  /// touch was a quarter or a half of the way across.
+  double get releaseThreshold => switch (this) {
+    BackGestureRegion.leadingEdge => 0.53,
+    BackGestureRegion.anywhere => 0.42,
+  };
+}
+
+const double _kBackGestureWidth = 20.0;
 
 /// How long a release's velocity is projected over when deciding whether
 /// the page has passed the midpoint. From the native commit table (parity
@@ -37,11 +65,6 @@ const double _kDeadZone = 12.0;
 /// 66 % moving back at 500 pt/s still popped — one window of 115–130 ms
 /// separates them all; the scroll view's deceleration would be 500 ms.
 const double _kReleaseProjection = 0.12;
-
-/// The position, as a fraction of the width, a release must reach: native
-/// sprang back from 51 % and 52 % at rest and popped from 54 % (parity
-/// stage 2), so the line is a little past the midpoint.
-const double _kReleaseThreshold = 0.53;
 
 /// A controller for an iOS-style back gesture, ported from the SDK's
 /// private `_CupertinoBackGestureController` (`cupertino/route.dart`) so
@@ -98,12 +121,12 @@ class BackGestureController<T> {
   /// per second, positive toward the pop), committing or cancelling it.
   ///
   /// The pop commits if the page's position plus its projected travel
-  /// passes 53 % of the width, the rule that reproduces the native commit
-  /// table. The SDK's — commit past the midpoint, or at a fling of a full
-  /// screen width per second either way — sends a short flick springing
-  /// back. Either way the page lands on [releaseSpring], seeded with the
-  /// release velocity.
-  void dragEnd(double velocity) {
+  /// passes [threshold], the region's [BackGestureRegionMetrics.releaseThreshold] —
+  /// the rule that reproduces the native commit table. The SDK's — commit
+  /// past the midpoint, or at a fling of a full screen width per second
+  /// either way — sends a short flick springing back. Either way the page
+  /// lands on [releaseSpring], seeded with the release velocity.
+  void dragEnd(double velocity, {required double threshold}) {
     final isCurrent = getIsCurrent();
     final bool animateForward;
 
@@ -113,8 +136,7 @@ class BackGestureController<T> {
       animateForward = getIsActive();
     } else {
       final travelled = 1 - controller.value;
-      animateForward =
-          travelled + projectedTravel(velocity) < _kReleaseThreshold;
+      animateForward = travelled + projectedTravel(velocity) < threshold;
     }
 
     // The controller runs from 1 (page on top) down to 0 (popped), so the
@@ -190,6 +212,13 @@ class _SwiftBackGestureDetectorState<T>
   // follows only the part beyond the dead zone.
   double _dragged = 0;
 
+  // Which region the touch went down in, which decides the swipe's dead
+  // zone and commit line, and the pointer the recognizer was given so the
+  // layer around the page does not hand it the one the edge strip already
+  // has.
+  BackGestureRegion _touched = BackGestureRegion.leadingEdge;
+  int? _pointer;
+
   late HorizontalDragGestureRecognizer _recognizer;
   final ReleaseVelocity _release = ReleaseVelocity();
   Offset _released = Offset.zero;
@@ -229,7 +258,7 @@ class _SwiftBackGestureDetectorState<T>
 
   void _handleDragStart(DragStartDetails details) {
     _dragged = 0;
-    if (widget.region == BackGestureRegion.anywhere) {
+    if (_touched == BackGestureRegion.anywhere) {
       _awaitingDirection = true;
     } else {
       _backGestureController = widget.onStartPopGesture();
@@ -245,9 +274,10 @@ class _SwiftBackGestureDetectorState<T>
       }
       _backGestureController = widget.onStartPopGesture();
     }
-    final before = math.max(0.0, _dragged - _kDeadZone);
+    final deadZone = _touched.deadZone;
+    final before = math.max(0.0, _dragged - deadZone);
     _dragged += delta;
-    final after = math.max(0.0, _dragged - _kDeadZone);
+    final after = math.max(0.0, _dragged - deadZone);
     _backGestureController?.dragUpdate((after - before) / context.size!.width);
   }
 
@@ -260,6 +290,7 @@ class _SwiftBackGestureDetectorState<T>
         _release.reported(details.velocity.pixelsPerSecond.dx, _released.dx) /
             context.size!.width,
       ),
+      threshold: _touched.releaseThreshold,
     );
   }
 
@@ -267,13 +298,26 @@ class _SwiftBackGestureDetectorState<T>
     _awaitingDirection = false;
     final controller = _backGestureController;
     _backGestureController = null;
-    controller?.dragEnd(0);
+    controller?.dragEnd(0, threshold: _touched.releaseThreshold);
   }
 
-  void _handlePointerDown(PointerDownEvent event) {
+  /// The edge strip is hit before the layer around the page, so a touch on
+  /// the strip is the edge swipe by the time the layer sees it.
+  void _handleEdgePointerDown(PointerDownEvent event) =>
+      _handlePointerDown(event, BackGestureRegion.leadingEdge);
+
+  void _handleAnywherePointerDown(PointerDownEvent event) =>
+      _handlePointerDown(event, BackGestureRegion.anywhere);
+
+  void _handlePointerDown(PointerDownEvent event, BackGestureRegion region) {
+    if (event.pointer == _pointer) {
+      return;
+    }
     _release.reset();
     _released = Offset.zero;
     if (widget.enabledCallback()) {
+      _pointer = event.pointer;
+      _touched = region;
       _recognizer.addPointer(event);
     }
   }
@@ -286,6 +330,9 @@ class _SwiftBackGestureDetectorState<T>
   /// The raw up arrives before the recognizer's end.
   void _handlePointerUp(PointerEvent event) {
     _released = _release.at(event.timeStamp);
+    if (event.pointer == _pointer) {
+      _pointer = null;
+    }
   }
 
   double _convertToLogical(double value) =>
@@ -300,21 +347,24 @@ class _SwiftBackGestureDetectorState<T>
       debugCheckHasDirectionality(context),
       'SwiftBackGestureDetector needs a Directionality',
     );
-    final gestureLayer = switch (widget.region) {
-      BackGestureRegion.leadingEdge => _leadingEdgeGestureLayer(context),
-      BackGestureRegion.anywhere => Positioned.fill(
-        child: Listener(
-          onPointerDown: _handlePointerDown,
-          onPointerMove: _handlePointerMove,
-          onPointerUp: _handlePointerUp,
-          onPointerCancel: _handlePointerUp,
-          behavior: HitTestBehavior.translucent,
-        ),
+    // The edge strip lies over the page, as the SDK's does, so it wins
+    // over whatever the page puts under it; the layer around the page,
+    // which takes the rest of the page in the anywhere region, enters the
+    // arena after the page's own recognizers, so a horizontal scrollable
+    // on the page takes its drags first.
+    return Listener(
+      onPointerDown: switch (widget.region) {
+        BackGestureRegion.leadingEdge => null,
+        BackGestureRegion.anywhere => _handleAnywherePointerDown,
+      },
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerUp,
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: <Widget>[widget.child, _leadingEdgeGestureLayer(context)],
       ),
-    };
-    return Stack(
-      fit: StackFit.passthrough,
-      children: <Widget>[widget.child, gestureLayer],
     );
   }
 
@@ -331,10 +381,7 @@ class _SwiftBackGestureDetectorState<T>
       top: 0,
       bottom: 0,
       child: Listener(
-        onPointerDown: _handlePointerDown,
-        onPointerMove: _handlePointerMove,
-        onPointerUp: _handlePointerUp,
-        onPointerCancel: _handlePointerUp,
+        onPointerDown: _handleEdgePointerDown,
         behavior: HitTestBehavior.translucent,
       ),
     );

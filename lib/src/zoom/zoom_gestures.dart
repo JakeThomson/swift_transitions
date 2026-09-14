@@ -4,22 +4,34 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
 import '../gestures/release_velocity.dart';
+import '../page/back_gesture.dart';
 import 'zoom_interaction.dart';
 
 /// Called when a gesture wants to begin a dismissal at [grabPoint] (in
 /// navigator coordinates); returns the controller driving it, or null if the
-/// dismissal may not begin.
+/// dismissal may not begin. [swipeRegion] is where a back swipe began —
+/// the leading edge, or anywhere else — which sets its commit line.
 typedef ZoomDismissStartCallback =
-    ZoomDismissController? Function(ZoomGesture gesture, Offset grabPoint);
+    ZoomDismissController? Function(
+      ZoomGesture gesture,
+      Offset grabPoint, {
+      required BackGestureRegion swipeRegion,
+    });
 
 const double _kEdgeSwipeWidth = 20.0;
 
-/// How far an edge swipe travels before the card moves, the same 12 pt as
-/// the back swipe's: UIKit's edge recognizer holds the page still for that
-/// long (parity stage 2), and the zoom page's card behaves the same way
-/// (stage 5). The finger then leads the card by this much for the rest of
-/// the gesture.
-const double _kEdgeDeadZone = 12.0;
+/// How far a back swipe travels before the card moves. From the leading
+/// edge, the same 12 pt as the push's page: UIKit's edge recognizer holds
+/// the page still for that long (parity stage 2), and the zoom page's card
+/// behaves the same way (stage 5). From anywhere else, the platform's slop,
+/// as the pan: the native card shrank from 18 ± 4 pt of travel whether the
+/// touch was a quarter, a half or three quarters of the way across (stage
+/// 10) — not the 27 pt the push's page waits for. The finger then leads
+/// the card by this much for the rest of the gesture.
+double _swipeDeadZone(BackGestureRegion region) => switch (region) {
+  BackGestureRegion.leadingEdge => 12.0,
+  BackGestureRegion.anywhere => kTouchSlop,
+};
 
 /// How far a pan travels before the card moves: the native card holds
 /// still for the first 16–20 pt of a drag (parity stage 4), the platform's
@@ -39,10 +51,16 @@ const double _kPinchDeadZone = kTouchSlop / 2;
 /// recognizer for pages without a vertical scroll view, the route's
 /// [ZoomScrollController] for pages with one (the scroll view wins the
 /// arena and hands a top-edge drag across, see [ZoomScrollController]), and
-/// a horizontal drag recognizer on the leading edge for the swipe. An
-/// opaque [Listener] underneath tracks the raw pointers for the pivot and
-/// the sideways chase, grabs a page that is still being pushed, and drives
-/// the pinch.
+/// a horizontal drag recognizer for the back swipe — on the leading edge,
+/// or over the whole page. An opaque [Listener] underneath tracks the raw
+/// pointers for the pivot and the sideways chase, grabs a page that is
+/// still being pushed, and drives the pinch.
+///
+/// The page is the [Listener]'s child, so the page's own recognizers enter
+/// the arena first: a horizontal scrollable on the page takes the drags it
+/// wants ahead of a back swipe from anywhere, as it does natively. The
+/// leading-edge strip lies over the page instead, and a swipe begun there
+/// is the edge swipe, which wins over the scrollable as the SDK's does.
 ///
 /// The pinch is read from the raw pointers rather than from a
 /// [ScaleGestureRecognizer], because a scroll view accepts a finger as soon
@@ -57,7 +75,8 @@ class ZoomDismissGestureDetector extends StatefulWidget {
   const ZoomDismissGestureDetector({
     super.key,
     required this.pan,
-    required this.edgeSwipe,
+    required this.backSwipe,
+    required this.backGestureRegion,
     required this.pinch,
     required this.onStart,
     required this.scrollController,
@@ -67,8 +86,11 @@ class ZoomDismissGestureDetector extends StatefulWidget {
   /// Whether a downward drag may dismiss.
   final bool pan;
 
-  /// Whether a drag from the leading edge may dismiss.
-  final bool edgeSwipe;
+  /// Whether a back swipe may dismiss.
+  final bool backSwipe;
+
+  /// Where the back swipe may start.
+  final BackGestureRegion backGestureRegion;
 
   /// Whether a two-finger pinch may dismiss.
   final bool pinch;
@@ -91,12 +113,23 @@ class _ZoomDismissGestureDetectorState
     extends State<ZoomDismissGestureDetector> {
   ZoomDismissController? _controller;
   late final VerticalDragGestureRecognizer _panRecognizer;
-  late final HorizontalDragGestureRecognizer _edgeRecognizer;
+  late final HorizontalDragGestureRecognizer _swipeRecognizer;
 
-  /// How far the live edge swipe has travelled, for the dead zone, and
+  /// How far the live back swipe has travelled, for the dead zone, and
   /// where it went down.
-  double _edgeDragged = 0;
-  Offset _edgeDown = Offset.zero;
+  double _swipeDragged = 0;
+  Offset _swipeDown = Offset.zero;
+
+  /// A back swipe from anywhere begins only once its first move is known
+  /// to run toward the trailing edge; one that opens the other way is left
+  /// alone for the rest of the touch.
+  bool _swipeAwaitingDirection = false;
+
+  /// Where the swipe's touch went down — the edge strip, or the page — and
+  /// which pointer the swipe recognizer was given, so the layer around
+  /// the page does not hand it the one the strip already has.
+  BackGestureRegion _swipeRegion = BackGestureRegion.leadingEdge;
+  int? _swipePointer;
 
   /// The finger a pan may start from: which it is, where it went down and
   /// where it is now, and how far the live pan has travelled, for its dead
@@ -141,12 +174,12 @@ class _ZoomDismissGestureDetectorState
       ..onUpdate = _handlePanUpdate
       ..onEnd = _handlePanEnd
       ..onCancel = _handleCancel;
-    _edgeRecognizer = HorizontalDragGestureRecognizer(debugOwner: this)
+    _swipeRecognizer = HorizontalDragGestureRecognizer(debugOwner: this)
       ..dragStartBehavior = DragStartBehavior.down
       ..velocityTrackerBuilder = _iosVelocityTracker
-      ..onStart = _handleEdgeStart
-      ..onUpdate = _handleEdgeUpdate
-      ..onEnd = _handleEdgeEnd
+      ..onStart = _handleSwipeStart
+      ..onUpdate = _handleSwipeUpdate
+      ..onEnd = _handleSwipeEnd
       ..onCancel = _handleCancel;
     _attachScrollController(widget.scrollController);
   }
@@ -194,36 +227,43 @@ class _ZoomDismissGestureDetectorState
     );
   }
 
-  /// An edge swipe's controller is fed from here rather than from the raw
+  /// A back swipe's controller is fed from here rather than from the raw
   /// pointer stream, which runs ahead of the recognizer and would see the
   /// dead zone a move late.
-  void _handleEdgeUpdate(DragUpdateDetails details) {
+  void _handleSwipeUpdate(DragUpdateDetails details) {
     if (_letGo) {
       return;
     }
-    final before = _edgeDragged;
-    _edgeDragged = _toLogical(details.globalPosition.dx - _edgeDown.dx);
-    if (_edgeDragged <= _kEdgeDeadZone) {
+    final before = _swipeDragged;
+    _swipeDragged = _toLogical(details.globalPosition.dx - _swipeDown.dx);
+    if (_swipeAwaitingDirection) {
+      _swipeAwaitingDirection = false;
+      if (_swipeDragged > 0) {
+        _begin(ZoomGesture.backSwipe, _swipeDown);
+      }
+    }
+    final deadZone = _swipeDeadZone(_swipeRegion);
+    if (_swipeDragged <= deadZone) {
       return;
     }
     final controller = _controller;
     if (controller == null) {
       return;
     }
-    if (before <= _kEdgeDeadZone) {
+    if (before <= deadZone) {
       // Leaving the dead zone: the chase anchors where it ends, not at the
       // first move seen past it.
       controller.pointerMoved(
-        _toNavigator(_edgeDown + Offset(_toLogical(_kEdgeDeadZone), 0)),
+        _toNavigator(_swipeDown + Offset(_toLogical(deadZone), 0)),
       );
     }
     // The part of this delta past the dead zone.
     controller
-      ..dragUpdate(_edgeDragged - math.max(before, _kEdgeDeadZone))
+      ..dragUpdate(_swipeDragged - math.max(before, deadZone))
       ..pointerMoved(_toNavigator(details.globalPosition));
   }
 
-  void _handleEdgeEnd(DragEndDetails details) {
+  void _handleSwipeEnd(DragEndDetails details) {
     _endDrag(
       _toLogical(
         _release.reported(details.velocity.pixelsPerSecond.dx, _released.dx),
@@ -296,7 +336,7 @@ class _ZoomDismissGestureDetectorState
   @override
   void dispose() {
     _panRecognizer.dispose();
-    _edgeRecognizer.dispose();
+    _swipeRecognizer.dispose();
     _detachScrollController(widget.scrollController);
     final controller = _controller;
     if (controller != null) {
@@ -329,7 +369,11 @@ class _ZoomDismissGestureDetectorState
     if (_controller != null) {
       return true;
     }
-    final controller = widget.onStart(gesture, _toNavigator(global));
+    final controller = widget.onStart(
+      gesture,
+      _toNavigator(global),
+      swipeRegion: _swipeRegion,
+    );
     if (controller == null) {
       return false;
     }
@@ -351,10 +395,15 @@ class _ZoomDismissGestureDetectorState
     _panDragged = 0;
   }
 
-  void _handleEdgeStart(DragStartDetails details) {
-    _edgeDragged = 0;
-    _edgeDown = details.globalPosition;
-    _begin(ZoomGesture.edgeSwipe, details.globalPosition);
+  void _handleSwipeStart(DragStartDetails details) {
+    _swipeDragged = 0;
+    _swipeDown = details.globalPosition;
+    switch (_swipeRegion) {
+      case BackGestureRegion.leadingEdge:
+        _begin(ZoomGesture.backSwipe, details.globalPosition);
+      case BackGestureRegion.anywhere:
+        _swipeAwaitingDirection = true;
+    }
   }
 
   void _end(double velocity, [double cross = 0]) {
@@ -362,6 +411,7 @@ class _ZoomDismissGestureDetectorState
     _controller = null;
     _pinchPointers = null;
     _pinchBegun = false;
+    _swipeAwaitingDirection = false;
     controller?.dragEnd(velocity, crossVelocity: cross);
     if (controller != null) {
       // Disposed after the settle: the ticker only drives the sideways
@@ -391,11 +441,22 @@ class _ZoomDismissGestureDetectorState
     if (widget.pan) {
       _panRecognizer.addPointer(event);
     }
+    if (widget.backSwipe &&
+        widget.backGestureRegion == BackGestureRegion.anywhere &&
+        event.pointer != _swipePointer) {
+      _swipePointer = event.pointer;
+      _swipeRegion = BackGestureRegion.anywhere;
+      _swipeRecognizer.addPointer(event);
+    }
   }
 
+  /// The strip is hit before the layer around the page, so a touch on it
+  /// is the edge swipe by the time the layer sees it.
   void _handleEdgePointerDown(PointerDownEvent event) {
-    if (widget.edgeSwipe) {
-      _edgeRecognizer.addPointer(event);
+    if (widget.backSwipe) {
+      _swipePointer = event.pointer;
+      _swipeRegion = BackGestureRegion.leadingEdge;
+      _swipeRecognizer.addPointer(event);
     }
   }
 
@@ -428,7 +489,7 @@ class _ZoomDismissGestureDetectorState
     if (controller == null) {
       return;
     }
-    if (controller.gesture == ZoomGesture.edgeSwipe) {
+    if (controller.gesture == ZoomGesture.backSwipe) {
       return;
     }
     controller.pointerMoved(position);
@@ -443,6 +504,9 @@ class _ZoomDismissGestureDetectorState
     _pointers.remove(event.pointer);
     if (event.pointer == _panPointer) {
       _panPointer = null;
+    }
+    if (event.pointer == _swipePointer) {
+      _swipePointer = null;
     }
     if (_pointers.isEmpty) {
       _letGo = false;
@@ -478,6 +542,7 @@ class _ZoomDismissGestureDetectorState
       final controller = widget.onStart(
         ZoomGesture.pinch,
         (first + second) / 2,
+        swipeRegion: _swipeRegion,
       );
       if (controller == null) {
         _pinchPointers = null;

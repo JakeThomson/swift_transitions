@@ -69,28 +69,30 @@ came from, the deviations that remain are in section 1.7, and the method is in
   background, and the landing carries 2 % past the source before easing back
   in over 200 ms.
 * `ZoomTransitionOptions`, mirroring `UIZoomTransitionOptions`: `dimmingColor`
-  and `dimmingBlurSigma`, `dismissGestures`, `interactiveDismissShouldBegin`,
-  `dismissPhysics`, `alignmentRect` (the counterpart of
-  `alignmentRectProvider`, asked on the push and again on each pop) and
-  `snapshotDuringTransition`, a Material-style snapshot of the page while it
-  flies.
+  and `dimmingBlurSigma`, `dismissGestures`, `backGestureRegion`,
+  `interactiveDismissShouldBegin`, `dismissPhysics`, `alignmentRect` (the
+  counterpart of `alignmentRectProvider`, asked on the push and again on each
+  pop) and `snapshotDuringTransition`, a Material-style snapshot of the page
+  while it flies.
 * `ZoomRouteTransitionMixin` for custom routes, and for pages that set the
   enclosing route's `sourceTag`.
 
 ### Interactive dismissal
 
-* A downward pan anywhere on the page, a swipe from the leading edge, or a
-  two-finger pinch shrinks the page into a card that tracks the fingers. A
+* A downward pan anywhere on the page, a back swipe from anywhere on it or
+  from the leading edge, or a two-finger pinch shrinks the page into a card
+  that tracks the fingers. A
   release past the threshold lands it on its source and an early release
   springs it back, both on the landing spring (ω 15, ζ 0.75), quickened by how
   fast the fingers were moving when they let go and carrying the release's
   momentum on both axes before it turns for the source.
 * The pan shrinks at 0.67 per screen height about the touch point to a knee at
   0.52, falls behind the finger by the cube of the travel, and follows it
-  sideways at 0.56 rubber-banded toward 0.9 of the width. The edge swipe
-  shrinks at 0.67 per screen width, follows the finger 1:1 sideways and at
-  0.43 vertically, and commits on where 120 ms of its velocity would carry the
-  card. The pinch holds until the fingers' distance has moved half the
+  sideways at 0.56 rubber-banded toward 0.9 of the width. The back swipe
+  shrinks at 0.67 per screen width about the touch, follows the finger 1:1
+  sideways and at 0.43 vertically, and commits on where 120 ms of its velocity
+  would carry the card — below 0.79 from anywhere on the page, 0.70 from the
+  edge. The pinch holds until the fingers' distance has moved half the
   platform's slop, then scales, turns and moves with them 1:1, and commits on
   where the fingers were headed rather than on the card's lagging scale.
 * Vertical scroll views take part through the `ZoomScrollController` the route
@@ -119,12 +121,15 @@ came from, the deviations that remain are in section 1.7, and the method is in
   `SwiftPageTransition.delegatedTransition`.
 * `SwiftPageTransitionMixin` for custom routes, and `SwiftPageTransition` for
   the transition widget on its own.
-* `BackGestureRegion` chooses where the back swipe may start: the SDK's
-  leading edge, or anywhere on the page as in iOS 26. The page waits out a
-  12 pt dead zone, a release commits when its position plus 120 ms of its
-  velocity passes 53 % of the width, and both outcomes land on one spring
-  (ω 22, ζ 0.85) that covers 98 % of its distance in about 210 ms whatever
-  the distance, instead of the SDK's 350 ms curve.
+* `BackGestureRegion` chooses where the back swipe may start: anywhere on
+  the page as in iOS 26 (the default, on the zoom route too), or the SDK's
+  leading edge. A horizontal scrollable on the page keeps its own drags, and
+  the leading edge still wins over it. From anywhere the page waits out a 27
+  pt dead zone and a release commits when
+  its position plus 120 ms of its velocity passes 42 % of the width; from the
+  edge, 12 pt and 53 %. Both outcomes land on one spring (ω 22, ζ 0.85) that
+  covers 98 % of its distance in about 210 ms whatever the distance, instead
+  of the SDK's 350 ms curve.
 
 ### Supporting API
 

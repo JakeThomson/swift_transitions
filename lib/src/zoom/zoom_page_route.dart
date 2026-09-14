@@ -6,6 +6,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../corners/display_corner_radii.dart';
+import '../page/back_gesture.dart';
 import 'zoom_frame.dart';
 import 'zoom_gestures.dart';
 import 'zoom_interaction.dart';
@@ -329,7 +330,11 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
 
   /// Begins an interactive dismissal at [grabPoint] (navigator
   /// coordinates), or returns null if it may not begin.
-  ZoomDismissController? _beginDismiss(ZoomGesture gesture, Offset grabPoint) {
+  ZoomDismissController? _beginDismiss(
+    ZoomGesture gesture,
+    Offset grabPoint, {
+    required BackGestureRegion swipeRegion,
+  }) {
     if (!_canBeginDismiss(gesture, grabPoint)) {
       return null;
     }
@@ -371,6 +376,7 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       controller: controller!,
       physics: options.dismissPhysics,
       gesture: gesture,
+      backGestureRegion: swipeRegion,
       restingFrame: resting,
       screen: screen,
       sourceRadii: _flightSource?.radii,
@@ -618,7 +624,8 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     final gestures = options.dismissGestures;
     final page = ZoomDismissGestureDetector(
       pan: gestures.pan,
-      edgeSwipe: gestures.edgeSwipe,
+      backSwipe: gestures.backSwipe,
+      backGestureRegion: options.backGestureRegion,
       pinch: gestures.pinch,
       onStart: _beginDismiss,
       scrollController: _scrollController,

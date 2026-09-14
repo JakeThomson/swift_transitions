@@ -32,7 +32,7 @@ mirrors `example/lib/main.dart` screen for screen and point for point:
 | `CupertinoApp` + `CupertinoNavigationBar` | `NavigationStack` with the default bar, `.navigationBarTitleDisplayMode(.inline)` |
 | Gallery list: two push rows, chevrons | `List` with two `NavigationLink` rows |
 | `SwiftPageRoute` (push) | `NavigationLink` push (UIKit's push transition) |
-| `BackGestureRegion.anywhere` | none — see the note below |
+| `BackGestureRegion.anywhere` | the same push: iOS 26 pops from anywhere by default — see the note below |
 | Poster row: 120×180 pt cards, 12 pt radius, 12 pt gaps, 16 pt insets | horizontal `ScrollView` + `LazyHStack`, the same numbers |
 | `ZoomTransitionSource(tag:, borderRadius:)` | `.matchedTransitionSource(id:in:) { $0.clipShape(.rect(cornerRadius: 12)) }` |
 | `ZoomPageRoute(sourceTag:, options:)` | destination with `.navigationTransition(.zoom(sourceID:in:))` |
@@ -58,10 +58,12 @@ Rules:
   transitions between releases; a number is only meaningful with its
   iOS version.
 
-The back-swipe-anywhere region has no native equivalent (iOS pops only
-from the edge; the "anywhere" variant is the package's own feature). It
-is compared against the edge swipe's response for the same finger travel
-and otherwise tested for consistency with itself.
+The back-swipe-anywhere region was written off here as having no native
+equivalent, which is wrong: since iOS 26 a `UINavigationController` pops
+from a horizontal drag anywhere in its content
+(`interactiveContentPopGestureRecognizer`, on by default), and so does a
+zoom-presented page. The native app does nothing to get it. Stage 10
+measures it.
 
 ### 0.2 Driving both apps identically
 
@@ -1048,6 +1050,49 @@ A/B across all gestures.
 
 ---
 
+## 10. The back swipe from anywhere
+
+**Owns**: `BackGestureRegion.anywhere` on both routes — the push page's
+dead zone and release threshold from a touch that is not at the edge,
+the zoom card's response and commit line for the same, and which of the
+page's own horizontal scrollables the swipe gives way to.
+
+**Recordings** (scripted, flat palette): the push page dragged at
+300 pt/s from a quarter, a half and three quarters of the way across, to
+a grid of travels, released at rest, plus two flings; the film page (a
+vertical scroll view and nothing horizontal) from the same three starts;
+the poster page on its first poster, whose pager has nowhere to scroll.
+
+**Measure**: page left edge vs finger for the push (the dead zone and
+the gain), card height for the zoom (its width is clipped by the screen
+edge from the moment the card follows the finger), and the outcome of
+every release.
+
+**Done when** the push page follows the finger as native does from any
+start, the zoom card's scale trace lies on the edge swipe's, and the
+release tables agree.
+
+*Measured 2026-09-14, thirty-eight native runs.* The push page waits 27 pt
+from the touch and then sits 27 pt behind the finger, whatever the
+start, where an edge swipe waits 12; at rest it sprang back from 41 % of
+the width and popped from 43 %, from x = 100 and x = 200 alike, so the
+line is 0.42 where the edge's is 0.53. Flings popped from 57 pt of
+travel. The zoom card, from any of the three starts, scaled at the edge
+swipe's 0.67 per width after 18 ± 4 pt, about the touch, and followed the
+finger; released at rest it sprang back at 0.796 and landed at 0.779 and
+0.762, so the line is 0.79 where the edge swipe's is 0.70. The poster
+pager on its first poster gave the drag to the pop; stage 5 had already
+seen it keep a drag it could scroll. The package now has the 27 pt dead
+zone and the 0.42 line on the push page, the 18 pt dead zone and the
+0.79 line on the zoom card, and its recognizer around the page rather
+than over it, so a `PageView` keeps its drags — including, unlike native,
+one at its first page — while the edge strip stays over the page and a
+swipe begun there is the edge swipe, winning over the pager as before
+(a first cut without the strip let the pager take edge swipes on the
+poster page). Both routes default to `anywhere`. The example's
+"anywhere" row had never passed the region to its route, which is why
+none of this had been seen on the rig.
+
 ## Order and estimates
 
 | Stage | Depends on | Estimate |
@@ -1062,6 +1107,7 @@ A/B across all gestures.
 | 7 Interruptions | 4–6 | 1 day |
 | 8 Everything else | 3 | half a day |
 | 9 Sign-off | all | half a day |
+| 10 Back swipe from anywhere | 2, 5 | half a day |
 
 Stages 1–2 and 3 are independent and can be interleaved. Stage 4 is the
 one most likely to change code rather than constants; if the scale trace

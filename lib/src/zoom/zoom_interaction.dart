@@ -4,6 +4,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../page/back_gesture.dart';
 import 'zoom_dismiss_physics.dart';
 import 'zoom_frame.dart';
 
@@ -12,8 +13,10 @@ enum ZoomGesture {
   /// A downward drag on the page.
   pan,
 
-  /// A drag from the leading edge.
-  edgeSwipe,
+  /// A horizontal drag toward the trailing edge: the back swipe, from the
+  /// leading edge or from anywhere on the page
+  /// ([ZoomTransitionOptions.backGestureRegion]).
+  backSwipe,
 
   /// A two-finger pinch.
   pinch,
@@ -139,6 +142,7 @@ class ZoomDismissController {
     required this.controller,
     required this.physics,
     required this.gesture,
+    required this.backGestureRegion,
     required this.restingFrame,
     required this.screen,
     required this.sourceRadii,
@@ -182,6 +186,10 @@ class ZoomDismissController {
   /// Which gesture is driving. A pan or swipe becomes a pinch when a second
   /// finger lands ([beginPinch]).
   ZoomGesture gesture;
+
+  /// Where a back swipe began — the leading edge, or anywhere else — which
+  /// decides its commit line.
+  final BackGestureRegion backGestureRegion;
 
   /// The card as it was when grabbed, or when the pinch began.
   ZoomFrame restingFrame;
@@ -258,7 +266,7 @@ class ZoomDismissController {
   /// The card's current scale relative to [restingFrame].
   double get scale => switch (gesture) {
     ZoomGesture.pan => physics.scaleFor(_travel),
-    ZoomGesture.edgeSwipe => physics.edgeSwipeScaleFor(_travel),
+    ZoomGesture.backSwipe => physics.backSwipeScaleFor(_travel),
     ZoomGesture.pinch => _pinchScale.value,
   };
 
@@ -269,7 +277,7 @@ class ZoomDismissController {
   double get _travel => switch (gesture) {
     ZoomGesture.pan ||
     ZoomGesture.pinch => _travelPixels / restingFrame.rect.height,
-    ZoomGesture.edgeSwipe => _travelPixels / restingFrame.rect.width,
+    ZoomGesture.backSwipe => _travelPixels / restingFrame.rect.width,
   };
 
   /// Feeds the gesture's primary-axis movement: downward pixels for a pan,
@@ -396,14 +404,19 @@ class ZoomDismissController {
                         restingFrame.rect.height,
               ) <
               physics.panDismissThreshold,
-        ZoomGesture.edgeSwipe =>
-          physics.edgeSwipeScaleFor(
+        ZoomGesture.backSwipe =>
+          physics.backSwipeScaleFor(
                 _travel +
                     velocity *
                         physics.releaseProjection /
                         restingFrame.rect.width,
               ) <
-              physics.dismissThreshold,
+              switch (backGestureRegion) {
+                BackGestureRegion.leadingEdge =>
+                  physics.edgeSwipeDismissThreshold,
+                BackGestureRegion.anywhere =>
+                  physics.anywhereSwipeDismissThreshold,
+              },
         // Read where the fingers are, not where the card has caught up to.
         ZoomGesture.pinch => _pinchFingersScale < physics.pinchDismissThreshold,
       };
@@ -426,7 +439,7 @@ class ZoomDismissController {
       // travelling.
       velocity: switch (gesture) {
         ZoomGesture.pan => Offset(_horizontal.velocity, velocity),
-        ZoomGesture.edgeSwipe => Offset(
+        ZoomGesture.backSwipe => Offset(
           _horizontal.velocity,
           physics.crossAxisFollowFor(
                 (_pointer - _anchor).dy,
@@ -450,7 +463,7 @@ class ZoomDismissController {
         commit
             ? 0.0
             : physics.scaleGain * towardTarget / restingFrame.rect.height,
-      ZoomGesture.edgeSwipe =>
+      ZoomGesture.backSwipe =>
         physics.scaleGain * towardTarget / restingFrame.rect.width,
       ZoomGesture.pinch => towardTarget / _pinchDistance0,
     };
@@ -460,7 +473,7 @@ class ZoomDismissController {
     // closing, so a finger is going half of it.
     final speed = switch (gesture) {
       ZoomGesture.pan => 0.0,
-      ZoomGesture.edgeSwipe =>
+      ZoomGesture.backSwipe =>
         math.max(0.0, towardTarget) / restingFrame.rect.width,
       ZoomGesture.pinch =>
         math.max(0.0, towardTarget) / 2 / restingFrame.rect.width,
@@ -533,7 +546,7 @@ class ZoomDismissController {
           horizontalOffset: _horizontal.value,
           anchor: _anchor,
         );
-      case ZoomGesture.edgeSwipe:
+      case ZoomGesture.backSwipe:
         // The edge swipe shrinks the card about the grabbed point and then
         // follows the finger: sideways as far as it goes, off the screen
         // included, and up or down at a fraction of the finger's movement.
@@ -584,7 +597,7 @@ class ZoomDismissController {
   void _trackHorizontal() {
     final open = switch (gesture) {
       ZoomGesture.pan => _travelPixels > 0,
-      ZoomGesture.edgeSwipe => true,
+      ZoomGesture.backSwipe => true,
       ZoomGesture.pinch => false,
     };
     if (!open) {

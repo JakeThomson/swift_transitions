@@ -14,9 +14,9 @@ mixin SwiftPageTransitionMixin<T> on PageRoute<T> {
   /// Cupertino routes take 500 ms on a different curve.
   static const Duration kTransitionDuration = Duration(milliseconds: 400);
 
-  /// Where the interactive back swipe may start. Defaults to the SDK's own
-  /// leading-edge region.
-  BackGestureRegion get backGestureRegion => BackGestureRegion.leadingEdge;
+  /// Where the interactive back swipe may start. Defaults to anywhere on
+  /// the page, as on iOS 26.
+  BackGestureRegion get backGestureRegion => BackGestureRegion.anywhere;
 
   @override
   Duration get transitionDuration => kTransitionDuration;
@@ -55,7 +55,7 @@ mixin SwiftPageTransitionMixin<T> on PageRoute<T> {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
     Widget child, {
-    BackGestureRegion region = BackGestureRegion.leadingEdge,
+    BackGestureRegion region = BackGestureRegion.anywhere,
     BorderRadius? cornerRadii,
   }) {
     final linearTransition = route.popGestureInProgress;
@@ -114,7 +114,7 @@ class SwiftPageRoute<T> extends PageRoute<T>
     this.maintainState = true,
     super.fullscreenDialog,
     this.title,
-    this.backGestureRegion = BackGestureRegion.leadingEdge,
+    this.backGestureRegion = BackGestureRegion.anywhere,
     this.cornerRadii,
   }) {
     assert(opaque, 'SwiftPageRoute must be opaque');
@@ -154,7 +154,7 @@ class SwiftPage<T> extends Page<T> {
     this.maintainState = true,
     this.title,
     this.fullscreenDialog = false,
-    this.backGestureRegion = BackGestureRegion.leadingEdge,
+    this.backGestureRegion = BackGestureRegion.anywhere,
     this.cornerRadii,
     super.canPop,
     super.onPopInvoked,

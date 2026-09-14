@@ -141,6 +141,11 @@ Future<void> pushAndSettle(
 
 void main() {
   const physics = ZoomDismissPhysics.ios26;
+  // The edge swipe's own region: these gestures are measured from x = 5
+  // against its 12 pt dead zone (parity stage 5).
+  const edgeOptions = ZoomTransitionOptions(
+    backGestureRegion: BackGestureRegion.leadingEdge,
+  );
 
   testWidgets(
     'a pan shrinks the card and pops when released past the threshold',
@@ -736,16 +741,16 @@ void main() {
   testWidgets('an edge swipe commits on where a flick would carry the card', (
     tester,
   ) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     // 163px past the dead zone leaves the card well above the threshold;
     // 120 ms at 2000 px/s is another 240px, which takes it below.
     expect(
-      physics.edgeSwipeScaleFor(163 / 800),
-      greaterThan(physics.dismissThreshold),
+      physics.backSwipeScaleFor(163 / 800),
+      greaterThan(physics.edgeSwipeDismissThreshold),
     );
     expect(
-      physics.edgeSwipeScaleFor((163 + 240) / 800),
-      lessThan(physics.dismissThreshold),
+      physics.backSwipeScaleFor((163 + 240) / 800),
+      lessThan(physics.edgeSwipeDismissThreshold),
     );
     final gesture = await tester.startGesture(const Offset(5, 300));
     for (var i = 1; i <= 5; i++) {
@@ -763,7 +768,7 @@ void main() {
   testWidgets('an edge swipe follows a finger moving down at a fraction', (
     tester,
   ) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     final gesture = await tester.startGesture(const Offset(5, 300));
     await gesture.moveBy(const Offset(112, 0));
     await tester.pump();
@@ -786,7 +791,7 @@ void main() {
   testWidgets('a release across a stalled frame keeps its momentum', (
     tester,
   ) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     final gesture = await tester.startGesture(const Offset(5, 300));
     await gesture.moveBy(const Offset(10, 0));
     // Short of the threshold on travel alone — 330 px leaves the card at
@@ -807,7 +812,7 @@ void main() {
   });
 
   testWidgets('a carried card is home before the route goes', (tester) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     final gesture = await tester.startGesture(const Offset(5, 200));
     await gesture.moveBy(const Offset(10, 0));
     // Down and to the right, which carries the card furthest from the
@@ -836,7 +841,7 @@ void main() {
   testWidgets('an edge swipe let go on the move carries downward too', (
     tester,
   ) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     final gesture = await tester.startGesture(const Offset(5, 200));
     await gesture.moveBy(const Offset(10, 0));
     for (var i = 1; i <= 6; i++) {
@@ -861,7 +866,7 @@ void main() {
   testWidgets('an edge swipe flung away carries past its flight line', (
     tester,
   ) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     final gesture = await tester.startGesture(const Offset(5, 300));
     await gesture.moveBy(const Offset(10, 0));
     for (var i = 1; i <= 6; i++) {
@@ -885,7 +890,7 @@ void main() {
   testWidgets('an edge swipe shrinks the card by horizontal travel', (
     tester,
   ) async {
-    await pushAndSettle(tester, staticDetail);
+    await pushAndSettle(tester, staticDetail, options: edgeOptions);
     final gesture = await tester.startGesture(const Offset(5, 300));
     // The first 12px are the dead zone: the card stays put.
     await gesture.moveBy(const Offset(10, 0));
@@ -897,22 +902,144 @@ void main() {
     // 188px past the dead zone across an 800px card, with no knee.
     expect(
       cardRect(tester).width,
-      closeTo(800 * physics.edgeSwipeScaleFor(188 / 800), 0.5),
+      closeTo(800 * physics.backSwipeScaleFor(188 / 800), 0.5),
     );
     // The card's left edge follows the finger less the dead zone (the
     // grab point at 5 shrinks toward itself), off the right of the screen.
     // The sideways chase settles on the tracking spring.
     await tester.pump(const Duration(milliseconds: 300));
-    final scale = physics.edgeSwipeScaleFor(188 / 800);
+    final scale = physics.backSwipeScaleFor(188 / 800);
     expect(cardRect(tester).left, closeTo(5 * (1 - scale) + 188, 0.5));
     expect(cardRect(tester).right, greaterThan(800));
 
     await gesture.moveBy(const Offset(300, 0));
     await tester.pump();
     expect(
-      physics.edgeSwipeScaleFor(488 / 800),
-      lessThan(physics.dismissThreshold),
+      physics.backSwipeScaleFor(488 / 800),
+      lessThan(physics.edgeSwipeDismissThreshold),
     );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
+  testWidgets('a back swipe from anywhere shrinks the card about the touch', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(300, 300));
+    // The first 18px are the dead zone (parity stage 10): the card stays put.
+    await gesture.moveBy(const Offset(16, 0));
+    await tester.pump();
+    expect(cardRect(tester).width, 800);
+
+    await gesture.moveBy(const Offset(202, 0));
+    await tester.pump();
+    // 200px past the dead zone across an 800px card, the edge swipe's rate.
+    final scale = physics.backSwipeScaleFor(200 / 800);
+    expect(cardRect(tester).width, closeTo(800 * scale, 0.5));
+    // Shrunk about the touch and carried with it, as the film page's card
+    // was natively.
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(cardRect(tester).left, closeTo(300 * (1 - scale) + 200, 0.5));
+
+    // Released at rest under the anywhere line but above the edge's, it
+    // lands.
+    await gesture.moveBy(const Offset(60, 0));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      physics.backSwipeScaleFor(260 / 800),
+      inExclusiveRange(
+        physics.edgeSwipeDismissThreshold,
+        physics.anywhereSwipeDismissThreshold,
+      ),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+  });
+
+  testWidgets('a back swipe from anywhere let go early springs back', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(300, 300));
+    // 220px past the dead zone leaves the card at 0.816, above the line.
+    await gesture.moveBy(const Offset(18 + 220, 0));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      physics.backSwipeScaleFor(220 / 800),
+      greaterThan(physics.anywhereSwipeDismissThreshold),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
+
+  testWidgets('a drag opening toward the leading edge is not a back swipe', (
+    tester,
+  ) async {
+    await pushAndSettle(tester, staticDetail);
+    final gesture = await tester.startGesture(const Offset(500, 300));
+    await gesture.moveBy(const Offset(-100, 0));
+    await tester.pump();
+    // Nor does turning round make it one.
+    await gesture.moveBy(const Offset(400, 0));
+    await tester.pump();
+    expect(cardRect(tester).width, 800);
+    expect(navigatorOf(tester).userGestureInProgress, isFalse);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
+
+  testWidgets('a horizontal scrollable on the page wins over the swipe', (
+    tester,
+  ) async {
+    final pageController = PageController(initialPage: 1);
+    addTearDown(pageController.dispose);
+    await pushAndSettle(
+      tester,
+      PageView(
+        controller: pageController,
+        children: const <Widget>[Text('first'), Text('detail')],
+      ),
+    );
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(500, 0));
+    await tester.pump();
+    expect(cardRect(tester).width, 800);
+    expect(pageController.page, lessThan(1));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(pageController.page, 0);
+    expect(find.text('first'), findsOneWidget);
+  });
+
+  testWidgets('from the leading edge the swipe wins over the scrollable', (
+    tester,
+  ) async {
+    final pageController = PageController(initialPage: 1);
+    addTearDown(pageController.dispose);
+    await pushAndSettle(
+      tester,
+      PageView(
+        controller: pageController,
+        children: const <Widget>[Text('first'), Text('detail')],
+      ),
+    );
+    // The edge swipe, with its 12px dead zone; the pager stays put.
+    final gesture = await tester.startGesture(const Offset(5, 300));
+    await gesture.moveBy(const Offset(200, 0));
+    await tester.pump();
+    expect(
+      cardRect(tester).width,
+      closeTo(800 * physics.backSwipeScaleFor(188 / 800), 0.5),
+    );
+    expect(pageController.page, 1);
+    await gesture.moveBy(const Offset(300, 0));
     await gesture.up();
     await tester.pumpAndSettle();
     expect(find.text('detail'), findsNothing);

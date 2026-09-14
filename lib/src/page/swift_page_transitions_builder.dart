@@ -20,7 +20,7 @@ import 'swift_page_transition.dart';
 class SwiftPageTransitionsBuilder extends PageTransitionsBuilder {
   /// Creates a page transition builder for the iOS push transition.
   const SwiftPageTransitionsBuilder({
-    this.backGestureRegion = BackGestureRegion.leadingEdge,
+    this.backGestureRegion = BackGestureRegion.anywhere,
     this.cornerRadii,
   });
 

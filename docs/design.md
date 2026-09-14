@@ -207,8 +207,8 @@ reasoning behind each is on the constant itself.
 | Covered page dim | 0.10 × progress | stage 1 |
 | Leading-edge shadow | α 0.03, 6 pt down, 12 pt blur | stage 1 |
 | Back gesture width | 20 pt | the SDK's; stage 2 |
-| Back swipe dead zone | 12 pt | stage 2, `native_testSwipe*` |
-| Back swipe release threshold | 0.53 of the width | stage 2, `native_testSwipe52/54/56/58Rest` |
+| Back swipe dead zone | 12 pt from the edge; 27 pt from anywhere | stage 2, `native_testSwipe*`; stage 10, `native_testAnywhereS100/200/300T*Rest` |
+| Back swipe release threshold | 0.53 of the width from the edge; 0.42 from anywhere | stage 2, `native_testSwipe52/54/56/58Rest`; stage 10, `native_testAnywhereS100T190/200Rest`, `S200T190Rest` |
 | `BackGestureController.releaseSpring` | ω 22, ζ 0.85 | stage 2, seven release positions |
 | `kZoomPushSpring` | ω 19, ζ 1 | stage 3, `native_zoom_a`–`f` |
 | Zoom vertical lead | −0.05 pushing, +0.03 popping | stage 3, the same runs |
@@ -230,7 +230,9 @@ reasoning behind each is on the constant itself.
 | `landingQuickening` | 0.3 of the frequency per card width per second | stage 9, `native_ZoomPinch45Medium/Fast`, `native_ZoomEdge40Fling*` |
 | `maxCommitVelocity` | 20 progress per second | stages 8 and 9, `native_ZoomPinch45Fast` |
 | `panDismissThreshold` | 0.905 | stage 4, `native_ZoomPan17Rest`, `native_ZoomPan19Rest` |
-| `dismissThreshold` | 0.70 | stage 5, `native_ZoomEdge44/48/52Rest` |
+| `edgeSwipeDismissThreshold` | 0.70 | stage 5, `native_ZoomEdge44/48/52Rest` |
+| Zoom back swipe from anywhere | the edge swipe's `scaleGain` after an 18 pt dead zone, from a quarter, a half and three quarters of the way across | stage 10, `native_testFilmAnywhere*` |
+| `anywhereSwipeDismissThreshold` | 0.79 | stage 10, `native_testFilmAnywhereT140/160Rest`, `S100T150Rest` |
 | `pinchDismissThreshold` | 0.5 | stage 6, `native_ZoomPinch45Rest`, `native_ZoomPinch48Rest` |
 | `releaseProjection` | 0.12 s | stages 2, 5 and 6, the commit tables |
 | `kZoomReduceMotionDuration` | 140 ms | stage 8, `native_ReduceMotion` |
@@ -392,6 +394,7 @@ class ZoomTransitionSource extends StatefulWidget {
 class ZoomTransitionOptions {
   const ZoomTransitionOptions({
     this.dismissGestures = ZoomDismissGestures.all,
+    this.backGestureRegion = BackGestureRegion.anywhere,
     this.interactiveDismissShouldBegin,   // bool Function(ZoomInteractionContext)
     this.dimmingColor = const Color(0x33000000),
     this.dimmingBlurSigma = 0.0,          // UIKit dimmingVisualEffect
@@ -419,7 +422,8 @@ class ZoomDismissPhysics {
     this.trackingSpring = const SpringDescription(mass: 1, stiffness: 2000, damping: 89),
     this.returnSpring = const SpringDescription(mass: 1, stiffness: 484, damping: 39.6), // ω 22, ζ 0.9
     this.panDismissThreshold = 0.905, // card scale below which a pan's release dismisses (0.914 sprang back, 0.900 landed)
-    this.dismissThreshold = 0.70, // card scale below which an edge swipe's release dismisses (0.715 sprang back, 0.678 landed)
+    this.edgeSwipeDismissThreshold = 0.70, // card scale below which an edge swipe's release dismisses (0.715 sprang back, 0.678 landed)
+    this.anywhereSwipeDismissThreshold = 0.79, // and a swipe begun anywhere else (0.796 sprang back, 0.779 landed)
     this.pinchDismissThreshold = 0.5, // the same for a pinch, read without projection (0.515 sprang back, 0.494 landed)
     this.releaseProjection = 0.12, // seconds of release velocity a release is projected by
     this.maxCommitVelocity = 10.0, // progress units/s the commit spring may be seeded with
@@ -428,9 +432,9 @@ class ZoomDismissPhysics {
 }
 
 class ZoomDismissGestures {
-  const ZoomDismissGestures({this.pan = true, this.edgeSwipe = true, this.pinch = true});
+  const ZoomDismissGestures({this.pan = true, this.backSwipe = true, this.pinch = true});
   static const all = ZoomDismissGestures();
-  static const none = ZoomDismissGestures(pan: false, edgeSwipe: false, pinch: false);
+  static const none = ZoomDismissGestures(pan: false, backSwipe: false, pinch: false);
 }
 
 /// What `interactiveDismissShouldBegin` and `alignmentRect` receive.
@@ -638,10 +642,14 @@ The back gesture reuses the SDK controller semantics (they are private, so
 they are copied with attribution as go_router and swiftuikit do): drag
 updates scrub `controller.value` by `dx / width`, a fling of one screen width
 per second commits, otherwise the midpoint decides, and the drop animation is
-350 ms `fastEaseInToSlowEaseOut`. `BackGestureRegion.anywhere` replaces the
-20 pt edge `Listener` with a horizontal drag recognizer over the whole page
-that only claims drags starting in the trailing direction, so horizontal
-scrollables and page views still win their arena.
+350 ms `fastEaseInToSlowEaseOut`. `BackGestureRegion.anywhere` (the default)
+adds to the 20 pt edge `Listener` over the page one around it, whose
+horizontal drag recognizer only claims drags starting in the trailing
+direction and enters the arena after the page's own, so horizontal
+scrollables and page views still win theirs — while the edge strip, hit
+first, still wins over them. A swipe begun on the page waits out 27 pt
+rather than 12 and pops from 42 % of the width rather than 53 % (parity
+stage 10); one begun on the strip is the edge swipe.
 
 Curves: the SDK's `fastEaseInToSlowEaseOut` over 500 ms by default. An
 optional `transitionSpring` switches the primary animation to
@@ -912,7 +920,9 @@ Details that matter:
 - **Release rules.** A pan or edge swipe is projected `releaseProjection`
   (120 ms) ahead on its release velocity, and dismisses if the card's scale
   there is below its threshold: `panDismissThreshold` (0.905, a sixth of the
-  height) for the pan and `dismissThreshold` (0.70) for the edge swipe. So
+  height) for the pan, `edgeSwipeDismissThreshold` (0.70) for the edge
+  swipe and `anywhereSwipeDismissThreshold` (0.79) for a swipe begun
+  anywhere else. So
   a short flick lands, a pull back up past the boundary springs back, and
   a card released moving up from well past it still lands, as natively. A
   pinch is read where the fingers are, without projection: it dismisses
@@ -1324,6 +1334,14 @@ Total: roughly three to four weeks of focused work.
    `ZoomTransitionRoute` for the zoom.
 2. Default `BackGestureRegion`. `leadingEdge` matches the SDK; `anywhere`
    matches iOS 26. The SDK default is safer for horizontal scrollables.
+   *Decided (2026-09-14): `anywhere`, for the push and the zoom.* iOS 26
+   pops from anywhere by default (`interactiveContentPopGestureRecognizer`),
+   and the worry about horizontal scrollables is answered by where the
+   recognizer sits: as an ancestor of the page it enters the arena after
+   the page's own, so a `PageView` keeps its drags, while the edge strip
+   stays over the page and wins there. What is not matched is
+   a pager on its first page, which natively yields the drag to the pop and
+   here over-scrolls (parity stage 10).
 3. Whether the zoom route mixes in `CupertinoRouteTransitionMixin` (for
    automatic back titles in `CupertinoNavigationBar`) or stays a plain
    `PageRoute`. *Decided (2026-09-07): the mixin.* Its `previousTitle` only

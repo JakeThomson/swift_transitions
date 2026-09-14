@@ -48,6 +48,7 @@ class GalleryPage extends StatelessWidget {
               trailing: const CupertinoListTileChevron(),
               onTap: () => Navigator.of(context).push(
                 SwiftPageRoute<void>(
+                  backGestureRegion: BackGestureRegion.leadingEdge,
                   builder: (_) =>
                       const PushDemoPage(region: BackGestureRegion.leadingEdge),
                 ),
@@ -616,6 +617,7 @@ class PushDemoPage extends StatelessWidget {
               CupertinoButton.filled(
                 onPressed: () => Navigator.of(context).push(
                   SwiftPageRoute<void>(
+                    backGestureRegion: region,
                     builder: (_) => PushDemoPage(region: region),
                   ),
                 ),

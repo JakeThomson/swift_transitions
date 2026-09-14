@@ -45,7 +45,8 @@ class ZoomDismissPhysics {
     this.landingQuickening = 0.3,
     this.maxLandingSpeed = 3,
     this.panDismissThreshold = 0.905,
-    this.dismissThreshold = 0.70,
+    this.edgeSwipeDismissThreshold = 0.70,
+    this.anywhereSwipeDismissThreshold = 0.79,
     this.pinchDismissThreshold = 0.5,
     this.releaseProjection = 0.12,
     this.maxCommitVelocity = 20,
@@ -150,7 +151,14 @@ class ZoomDismissPhysics {
   /// The card scale below which an edge swipe's release dismisses. Native
   /// edge swipes released at rest at 0.715 sprang back and at 0.678 landed
   /// (parity stage 5).
-  final double dismissThreshold;
+  final double edgeSwipeDismissThreshold;
+
+  /// The card scale below which a back swipe begun anywhere on the page
+  /// dismisses — sooner than an edge swipe's. Native swipes from the middle
+  /// of a page released at rest at 0.796 sprang back and at 0.779 and 0.762
+  /// landed, from a quarter and a half of the way across alike (parity
+  /// stage 10).
+  final double anywhereSwipeDismissThreshold;
 
   /// The card scale below which a pinch's release dismisses: half its size,
   /// with no projection — native pinches released at rest at 0.515 sprang
@@ -248,7 +256,7 @@ class ZoomDismissPhysics {
   /// linear in the travel with no knee — native drags shrink at one rate to
   /// at least 0.56 of the width, and a finger cannot travel far enough to
   /// reach [minimumScale] — measured past the recognizer's dead zone.
-  double edgeSwipeScaleFor(double travel) =>
+  double backSwipeScaleFor(double travel) =>
       math.max(minimumScale, 1 - scaleGain * math.max(0, travel));
 
   /// The card's frame after [travel] card heights of drag: [restingRect]
@@ -331,7 +339,8 @@ class ZoomDismissPhysics {
       other.landingSpring == landingSpring &&
       other.landingQuickening == landingQuickening &&
       other.panDismissThreshold == panDismissThreshold &&
-      other.dismissThreshold == dismissThreshold &&
+      other.edgeSwipeDismissThreshold == edgeSwipeDismissThreshold &&
+      other.anywhereSwipeDismissThreshold == anywhereSwipeDismissThreshold &&
       other.pinchDismissThreshold == pinchDismissThreshold &&
       other.releaseProjection == releaseProjection &&
       other.maxCommitVelocity == maxCommitVelocity &&
@@ -350,7 +359,8 @@ class ZoomDismissPhysics {
     landingSpring,
     landingQuickening,
     panDismissThreshold,
-    dismissThreshold,
+    edgeSwipeDismissThreshold,
+    anywhereSwipeDismissThreshold,
     pinchDismissThreshold,
     releaseProjection,
     maxCommitVelocity,

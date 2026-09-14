@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../page/back_gesture.dart';
 import 'zoom_dismiss_physics.dart';
 import 'zoom_interaction.dart';
 
@@ -9,6 +10,7 @@ class ZoomTransitionOptions {
   /// Creates zoom transition options.
   const ZoomTransitionOptions({
     this.dismissGestures = ZoomDismissGestures.all,
+    this.backGestureRegion = BackGestureRegion.anywhere,
     this.interactiveDismissShouldBegin,
     this.dismissPhysics = ZoomDismissPhysics.ios26,
     this.dimmingColor = const Color(0x26000000),
@@ -20,6 +22,10 @@ class ZoomTransitionOptions {
 
   /// Which gestures may dismiss the route interactively.
   final ZoomDismissGestures dismissGestures;
+
+  /// Where the back swipe may start, when [ZoomDismissGestures.backSwipe]
+  /// allows it: the leading edge, or anywhere on the page as on iOS 26.
+  final BackGestureRegion backGestureRegion;
 
   /// Asked before an interactive dismissal begins, the counterpart of
   /// `UIZoomTransitionOptions.interactiveDismissShouldBegin`. Returning
@@ -71,6 +77,7 @@ class ZoomTransitionOptions {
   bool operator ==(Object other) =>
       other is ZoomTransitionOptions &&
       other.dismissGestures == dismissGestures &&
+      other.backGestureRegion == backGestureRegion &&
       other.interactiveDismissShouldBegin == interactiveDismissShouldBegin &&
       other.dismissPhysics == dismissPhysics &&
       other.dimmingColor == dimmingColor &&
@@ -82,6 +89,7 @@ class ZoomTransitionOptions {
   @override
   int get hashCode => Object.hash(
     dismissGestures,
+    backGestureRegion,
     interactiveDismissShouldBegin,
     dismissPhysics,
     dimmingColor,
@@ -169,7 +177,7 @@ class ZoomDismissGestures {
   /// Creates a set of dismissal gestures.
   const ZoomDismissGestures({
     this.pan = true,
-    this.edgeSwipe = true,
+    this.backSwipe = true,
     this.pinch = true,
   });
 
@@ -179,7 +187,7 @@ class ZoomDismissGestures {
   /// No interactive dismissal; the route pops only programmatically.
   static const ZoomDismissGestures none = ZoomDismissGestures(
     pan: false,
-    edgeSwipe: false,
+    backSwipe: false,
     pinch: false,
   );
 
@@ -187,8 +195,10 @@ class ZoomDismissGestures {
   /// once it reaches its top edge.
   final bool pan;
 
-  /// A drag from the leading edge, as the push transition's back swipe.
-  final bool edgeSwipe;
+  /// The back swipe, as the push transition's: a drag from the leading
+  /// edge, or from anywhere on the page
+  /// ([ZoomTransitionOptions.backGestureRegion]).
+  final bool backSwipe;
 
   /// A two-finger pinch, which scales the card with the fingers' distance,
   /// rotates it with their angle and moves it with their focal point.
@@ -198,9 +208,9 @@ class ZoomDismissGestures {
   bool operator ==(Object other) =>
       other is ZoomDismissGestures &&
       other.pan == pan &&
-      other.edgeSwipe == edgeSwipe &&
+      other.backSwipe == backSwipe &&
       other.pinch == pinch;
 
   @override
-  int get hashCode => Object.hash(pan, edgeSwipe, pinch);
+  int get hashCode => Object.hash(pan, backSwipe, pinch);
 }
