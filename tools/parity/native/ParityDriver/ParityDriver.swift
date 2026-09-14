@@ -190,6 +190,87 @@ final class ParityDriver: XCTestCase {
     func testSwipe35Medium() { edgeSwipe(to: 0.35, speed: 400, rest: false) }
     func testSwipe65Slow() { edgeSwipe(to: 0.65, speed: 150, rest: false) }
 
+    /// A drag started in the middle of the second row's page, not at its
+    /// edge: the example's `BackGestureRegion.anywhere` page against a plain
+    /// native push, which pops from anywhere on this runtime.
+    func anywhereSwipe(from x: CGFloat, travel: CGFloat, speed: CGFloat, rest: Bool) {
+        secondRow.tap()
+        hold(1.2)
+        var finger = Finger(at: CGPoint(x: x, y: 437))
+        finger.line(to: CGPoint(x: x + travel, y: 437), speed: speed)
+        if rest { finger.hold(0.6) }
+        finger.lift()
+        hold(1.5)
+    }
+
+    // Released at rest over a grid of start × travel, for the commit rule
+    // from a touch that is not at the edge; two flings.
+    func testAnywhereS100T120Rest() { anywhereSwipe(from: 100, travel: 120, speed: 300, rest: true) }
+    func testAnywhereS100T150Rest() { anywhereSwipe(from: 100, travel: 150, speed: 300, rest: true) }
+    func testAnywhereS100T180Rest() { anywhereSwipe(from: 100, travel: 180, speed: 300, rest: true) }
+    func testAnywhereS100T210Rest() { anywhereSwipe(from: 100, travel: 210, speed: 300, rest: true) }
+    func testAnywhereS200T80Rest() { anywhereSwipe(from: 200, travel: 80, speed: 300, rest: true) }
+    func testAnywhereS200T100Rest() { anywhereSwipe(from: 200, travel: 100, speed: 300, rest: true) }
+    func testAnywhereS200T120Rest() { anywhereSwipe(from: 200, travel: 120, speed: 300, rest: true) }
+    func testAnywhereS200T140Rest() { anywhereSwipe(from: 200, travel: 140, speed: 300, rest: true) }
+    func testAnywhereS200T160Rest() { anywhereSwipe(from: 200, travel: 160, speed: 300, rest: true) }
+    func testAnywhereS300T40Rest() { anywhereSwipe(from: 300, travel: 40, speed: 300, rest: true) }
+    func testAnywhereS300T50Rest() { anywhereSwipe(from: 300, travel: 50, speed: 300, rest: true) }
+    func testAnywhereS300T60Rest() { anywhereSwipe(from: 300, travel: 60, speed: 300, rest: true) }
+    func testAnywhereS300T70Rest() { anywhereSwipe(from: 300, travel: 70, speed: 300, rest: true) }
+    func testAnywhereS300T80Rest() { anywhereSwipe(from: 300, travel: 80, speed: 300, rest: true) }
+    func testAnywhereS100T190Rest() { anywhereSwipe(from: 100, travel: 190, speed: 300, rest: true) }
+    func testAnywhereS100T200Rest() { anywhereSwipe(from: 100, travel: 200, speed: 300, rest: true) }
+    func testAnywhereS200T170Rest() { anywhereSwipe(from: 200, travel: 170, speed: 300, rest: true) }
+    func testAnywhereS200T180Rest() { anywhereSwipe(from: 200, travel: 180, speed: 300, rest: true) }
+    func testAnywhereS200T190Rest() { anywhereSwipe(from: 200, travel: 190, speed: 300, rest: true) }
+    func testAnywhereS200T200Rest() { anywhereSwipe(from: 200, travel: 200, speed: 300, rest: true) }
+    func testAnywhereS200T160RestB() { anywhereSwipe(from: 200, travel: 160, speed: 300, rest: true) }
+    func testAnywhereS200T160RestC() { anywhereSwipe(from: 200, travel: 160, speed: 300, rest: true) }
+    func testAnywhereS100T80Fling() { anywhereSwipe(from: 100, travel: 80, speed: 1200, rest: false) }
+    func testAnywhereS300T40Fling() { anywhereSwipe(from: 300, travel: 40, speed: 1200, rest: false) }
+
+    /// The same mid-page drag on a zoom page: the film page, whose only
+    /// scroll view is vertical, and the poster pager on its first poster.
+    func filmAnywhere(from x: CGFloat = 200, travel: CGFloat) {
+        dunesFilm.tap()
+        hold(1.5)
+        var finger = Finger(at: CGPoint(x: x, y: 437))
+        finger.line(to: CGPoint(x: x + travel, y: 437), speed: 300)
+        finger.hold(0.6)
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testFilmAnywhere200Rest() { filmAnywhere(travel: 200) }
+    func testFilmAnywhereT120Rest() { filmAnywhere(travel: 120) }
+    func testFilmAnywhereT140Rest() { filmAnywhere(travel: 140) }
+    func testFilmAnywhereT160Rest() { filmAnywhere(travel: 160) }
+    func testFilmAnywhereT180Rest() { filmAnywhere(travel: 180) }
+    func testFilmAnywhereS100T150Rest() { filmAnywhere(from: 100, travel: 150) }
+    func testFilmAnywhereS100T200Rest() { filmAnywhere(from: 100, travel: 200) }
+    func testFilmAnywhereS300T60Rest() { filmAnywhere(from: 300, travel: 60) }
+    func testFilmAnywhereS300T80Rest() { filmAnywhere(from: 300, travel: 80) }
+
+    func testFilmAnywhere100Fling() {
+        dunesFilm.tap()
+        hold(1.5)
+        var finger = Finger(at: CGPoint(x: 100, y: 437))
+        finger.line(to: CGPoint(x: 180, y: 437), speed: 1200)
+        finger.lift()
+        hold(1.5)
+    }
+
+    func testAuroraAnywhere200Rest() {
+        at(88, 340).tap()
+        hold(1.5)
+        var finger = Finger(at: CGPoint(x: 200, y: 437))
+        finger.line(to: CGPoint(x: 400, y: 437), speed: 300)
+        finger.hold(0.6)
+        finger.lift()
+        hold(1.5)
+    }
+
     /// Dragged to 70 %, then pulled back 60 pt and lifted while moving.
     func testSwipe70PullBack() {
         pushFirstRow()
