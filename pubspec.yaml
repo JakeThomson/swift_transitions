@@ -3,7 +3,7 @@ description: >-
   iOS's navigation transitions for Flutter: the iOS 18 zoom transition with
   its interactive dismissal, and the push, both fitted frame by frame against
   the real thing.
-version: 0.1.2
+version: 0.2.0
 repository: https://github.com/JakeThomson/swift_transitions
 issue_tracker: https://github.com/JakeThomson/swift_transitions/issues
 
