@@ -644,10 +644,15 @@ updates scrub `controller.value` by `dx / width`, a fling of one screen width
 per second commits, otherwise the midpoint decides, and the drop animation is
 350 ms `fastEaseInToSlowEaseOut`. `BackGestureRegion.anywhere` (the default)
 adds to the 20 pt edge `Listener` over the page one around it, whose
-horizontal drag recognizer only claims drags starting in the trailing
-direction and enters the arena after the page's own, so horizontal
-scrollables and page views still win theirs — while the edge strip, hit
-first, still wins over them. A swipe begun on the page waits out 27 pt
+recognizer (`BackSwipeGestureRecognizer`) claims a drag only past the pan
+slop and only if it opened toward the trailing edge, refusing one that
+opened the other way. That is what lets the page keep its own drags — a
+horizontal scrollable's, a swipe deck's pan — not the layer's place in
+the tree: the arena goes to the first recognizer to *accept*, and a
+horizontal drag accepts at 18 pt where a pan waits for 36, so an eager
+swipe took a card's drag before the card had a say, and a wrong-way drag
+it then ignored had already won the finger. The edge strip, hit first,
+still wins over the page. A swipe begun on the page waits out 27 pt
 rather than 12 and pops from 42 % of the width rather than 53 % (parity
 stage 10); one begun on the strip is the edge swipe.
 
@@ -1336,12 +1341,14 @@ Total: roughly three to four weeks of focused work.
    matches iOS 26. The SDK default is safer for horizontal scrollables.
    *Decided (2026-09-14): `anywhere`, for the push and the zoom.* iOS 26
    pops from anywhere by default (`interactiveContentPopGestureRecognizer`),
-   and the worry about horizontal scrollables is answered by where the
-   recognizer sits: as an ancestor of the page it enters the arena after
-   the page's own, so a `PageView` keeps its drags, while the edge strip
-   stays over the page and wins there. What is not matched is
-   a pager on its first page, which natively yields the drag to the pop and
-   here over-scrolls (parity stage 10).
+   and the worry about horizontal scrollables is answered by the
+   recognizer yielding: it accepts only past the pan slop and only a drag
+   that opened toward the trailing edge, so a `PageView` — and a card
+   that pans, which a `HorizontalDragGestureRecognizer`'s shorter slop
+   had been beating (0.2.1) — keeps its drags, while the edge strip stays
+   over the page and wins there. What is not matched is a pager on its
+   first page, which natively yields the drag to the pop and here
+   over-scrolls (parity stage 10).
 3. Whether the zoom route mixes in `CupertinoRouteTransitionMixin` (for
    automatic back titles in `CupertinoNavigationBar`) or stays a plain
    `PageRoute`. *Decided (2026-09-07): the mixin.* Its `previousTitle` only

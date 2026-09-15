@@ -412,6 +412,68 @@ void main() {
     expect(find.text('second'), findsNothing);
   });
 
+  testWidgets('a pan on the page wins over the swipe from anywhere', (
+    tester,
+  ) async {
+    // A pan recognizer waits for the pan slop, twice a horizontal drag's,
+    // so an eager swipe would take the finger from a card that pans — a
+    // swipe deck — before the card had a say.
+    var panned = Offset.zero;
+    await tester.pumpWidget(
+      testApp(
+        secondPage: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanUpdate: (details) => panned += details.delta,
+          child: const Center(child: Text('second')),
+        ),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final route = ModalRoute.of(tester.element(find.text('second')))!;
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(500, 0));
+    await tester.pump();
+    expect(route.animation!.value, 1);
+    expect(panned.dx, 600);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('second'), findsOneWidget);
+  });
+
+  testWidgets('a drag opening the wrong way is left to a pan on the page', (
+    tester,
+  ) async {
+    // Refused, not merely ignored: a swipe that won the arena and then
+    // did nothing would still have taken the finger from the card.
+    var panned = Offset.zero;
+    await tester.pumpWidget(
+      testApp(
+        secondPage: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanUpdate: (details) => panned += details.delta,
+          child: const Center(child: Text('second')),
+        ),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(-100, 0));
+    await tester.pump();
+    // Nor does turning round make it a swipe.
+    await gesture.moveBy(const Offset(400, 0));
+    await tester.pump();
+    expect(panned.dx, 300);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('second'), findsOneWidget);
+  });
+
   testWidgets('the covered page keeps pace at 0.30 of the width and dims', (
     tester,
   ) async {

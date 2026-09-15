@@ -6,6 +6,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 import '../gestures/release_velocity.dart';
+import 'back_swipe_recognizer.dart';
 
 /// Where a [SwiftBackGestureDetector] starts its interactive back swipe.
 enum BackGestureRegion {
@@ -17,16 +18,16 @@ enum BackGestureRegion {
   /// `interactiveContentPopGestureRecognizer` allows by default — and still
   /// from the leading edge, which keeps its own recognizer.
   ///
-  /// Only a drag whose first movement runs toward the trailing edge starts
-  /// the swipe; a drag that opens the other way is left unclaimed after
-  /// that first frame. A horizontal scrollable on the page (a `PageView`,
-  /// say) wins a drag begun over it, as it would natively, since the
-  /// swipe's recognizer sits above the page in the tree and so enters the
-  /// arena after the page's own; a drag begun on the leading edge is the
-  /// edge swipe, with its own dead zone and commit line, and wins over the
-  /// scrollable as the SDK's does. Natively the scroll view also yields a
-  /// drag it cannot scroll — a pager on its first page — to the pop; here
-  /// it over-scrolls instead.
+  /// Only a drag that opens toward the trailing edge is the swipe; one that
+  /// opens the other way is refused as soon as its direction is known and
+  /// left to the page. Whatever the page puts under the finger — a
+  /// horizontal scrollable, a card that pans — wins a drag begun over it,
+  /// as it would natively, because the swipe's recognizer waits out the
+  /// pan slop before claiming anything ([BackSwipeGestureRecognizer]); a
+  /// drag begun on the leading edge is the edge swipe, with its own dead
+  /// zone and commit line, and wins over the scrollable as the SDK's does.
+  /// Natively the scroll view also yields a drag it cannot scroll — a pager
+  /// on its first page — to the pop; here it over-scrolls instead.
   anywhere,
 }
 
@@ -203,10 +204,12 @@ class _SwiftBackGestureDetectorState<T>
     extends State<SwiftBackGestureDetector<T>> {
   BackGestureController<T>? _backGestureController;
 
-  // In BackGestureRegion.anywhere, the pop only starts once the first drag
-  // delta is known to run toward the trailing edge, so a drag that opens
-  // the wrong way never touches the navigator's user-gesture state at all.
-  bool _awaitingDirection = false;
+  // In BackGestureRegion.anywhere, the pop only starts on the first drag
+  // delta: the recognizer has already refused a drag that opened the wrong
+  // way, but a touch it is handed at the arena's sweep — a tap on a page
+  // with nothing else under the finger — starts and ends without one, and
+  // must never touch the navigator's user-gesture state.
+  bool _awaitingFirstDelta = false;
 
   // Travel since the touch went down, in pixels toward the pop; the page
   // follows only the part beyond the dead zone.
@@ -219,27 +222,32 @@ class _SwiftBackGestureDetectorState<T>
   BackGestureRegion _touched = BackGestureRegion.leadingEdge;
   int? _pointer;
 
-  late HorizontalDragGestureRecognizer _recognizer;
+  late BackSwipeGestureRecognizer _recognizer;
   final ReleaseVelocity _release = ReleaseVelocity();
   Offset _released = Offset.zero;
 
   @override
   void initState() {
     super.initState();
-    _recognizer = HorizontalDragGestureRecognizer(debugOwner: this)
-      // Deltas from the touch point itself, so the dead zone is measured
-      // from there rather than from wherever the drag was recognised.
-      ..dragStartBehavior = DragStartBehavior.down
-      // iOS's own estimate of the speed a finger left at, which a
-      // Scrollable on iOS uses for the same reason: the default
-      // least-squares tracker reads a flick at a third to a half of the
-      // speed the finger was really moving (parity stage 2).
-      ..velocityTrackerBuilder = ((event) =>
-          IOSScrollViewFlingVelocityTracker(event.kind))
-      ..onStart = _handleDragStart
-      ..onUpdate = _handleDragUpdate
-      ..onEnd = _handleDragEnd
-      ..onCancel = _handleDragCancel;
+    _recognizer =
+        BackSwipeGestureRecognizer(
+            region: () => _touched,
+            textDirection: () => Directionality.of(context),
+            debugOwner: this,
+          )
+          // Deltas from the touch point itself, so the dead zone is measured
+          // from there rather than from wherever the drag was recognised.
+          ..dragStartBehavior = DragStartBehavior.down
+          // iOS's own estimate of the speed a finger left at, which a
+          // Scrollable on iOS uses for the same reason: the default
+          // least-squares tracker reads a flick at a third to a half of the
+          // speed the finger was really moving (parity stage 2).
+          ..velocityTrackerBuilder = ((event) =>
+              IOSScrollViewFlingVelocityTracker(event.kind))
+          ..onStart = _handleDragStart
+          ..onUpdate = _handleDragUpdate
+          ..onEnd = _handleDragEnd
+          ..onCancel = _handleDragCancel;
   }
 
   @override
@@ -259,7 +267,7 @@ class _SwiftBackGestureDetectorState<T>
   void _handleDragStart(DragStartDetails details) {
     _dragged = 0;
     if (_touched == BackGestureRegion.anywhere) {
-      _awaitingDirection = true;
+      _awaitingFirstDelta = true;
     } else {
       _backGestureController = widget.onStartPopGesture();
     }
@@ -267,11 +275,8 @@ class _SwiftBackGestureDetectorState<T>
 
   void _handleDragUpdate(DragUpdateDetails details) {
     final delta = _convertToLogical(details.primaryDelta!);
-    if (_awaitingDirection) {
-      _awaitingDirection = false;
-      if (delta <= 0) {
-        return;
-      }
+    if (_awaitingFirstDelta) {
+      _awaitingFirstDelta = false;
       _backGestureController = widget.onStartPopGesture();
     }
     final deadZone = _touched.deadZone;
@@ -282,7 +287,7 @@ class _SwiftBackGestureDetectorState<T>
   }
 
   void _handleDragEnd(DragEndDetails details) {
-    _awaitingDirection = false;
+    _awaitingFirstDelta = false;
     final controller = _backGestureController;
     _backGestureController = null;
     controller?.dragEnd(
@@ -295,7 +300,7 @@ class _SwiftBackGestureDetectorState<T>
   }
 
   void _handleDragCancel() {
-    _awaitingDirection = false;
+    _awaitingFirstDelta = false;
     final controller = _backGestureController;
     _backGestureController = null;
     controller?.dragEnd(0, threshold: _touched.releaseThreshold);
@@ -349,9 +354,9 @@ class _SwiftBackGestureDetectorState<T>
     );
     // The edge strip lies over the page, as the SDK's does, so it wins
     // over whatever the page puts under it; the layer around the page,
-    // which takes the rest of the page in the anywhere region, enters the
-    // arena after the page's own recognizers, so a horizontal scrollable
-    // on the page takes its drags first.
+    // which takes the rest of the page in the anywhere region, yields to
+    // whatever the page puts under the finger — the recognizer, not the
+    // layer's place in the tree, is what decides that.
     return Listener(
       onPointerDown: switch (widget.region) {
         BackGestureRegion.leadingEdge => null,

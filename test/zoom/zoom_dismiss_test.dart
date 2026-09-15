@@ -1045,6 +1045,56 @@ void main() {
     expect(find.text('detail'), findsNothing);
   });
 
+  testWidgets('a pan on the page wins over the swipe from anywhere', (
+    tester,
+  ) async {
+    // A pan recognizer waits for the pan slop, twice a horizontal drag's;
+    // the swipe waits it out too, so the page's own claims the drag first.
+    var panned = Offset.zero;
+    await pushAndSettle(
+      tester,
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanUpdate: (details) => panned += details.delta,
+        child: staticDetail,
+      ),
+    );
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(500, 0));
+    await tester.pump();
+    expect(cardRect(tester).width, 800);
+    expect(panned.dx, 600);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
+
+  testWidgets('a drag opening the wrong way is left to a pan on the page', (
+    tester,
+  ) async {
+    var panned = Offset.zero;
+    await pushAndSettle(
+      tester,
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanUpdate: (details) => panned += details.delta,
+        child: staticDetail,
+      ),
+    );
+    final gesture = await tester.startGesture(const Offset(500, 300));
+    await gesture.moveBy(const Offset(-100, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(400, 0));
+    await tester.pump();
+    expect(cardRect(tester).width, 800);
+    expect(panned.dx, 300);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
+
   testWidgets('a touch during the push does not stop it', (tester) async {
     await tester.pumpWidget(testApp(detail: staticDetail));
     await tester.tap(find.text('push'));

@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../gestures/release_velocity.dart';
 import '../page/back_gesture.dart';
+import '../page/back_swipe_recognizer.dart';
 import 'zoom_interaction.dart';
 
 /// Called when a gesture wants to begin a dismissal at [grabPoint] (in
@@ -56,11 +57,13 @@ const double _kPinchDeadZone = kTouchSlop / 2;
 /// pointers for the pivot and the sideways chase, grabs a page that is
 /// still being pushed, and drives the pinch.
 ///
-/// The page is the [Listener]'s child, so the page's own recognizers enter
-/// the arena first: a horizontal scrollable on the page takes the drags it
-/// wants ahead of a back swipe from anywhere, as it does natively. The
-/// leading-edge strip lies over the page instead, and a swipe begun there
-/// is the edge swipe, which wins over the scrollable as the SDK's does.
+/// A back swipe from anywhere yields to whatever the page puts under the
+/// finger — a horizontal scrollable, a card that pans — as it does
+/// natively; [BackSwipeGestureRecognizer] waits out the pan slop and
+/// refuses a drag that opened toward the leading edge, and where the layer
+/// sits in the tree decides nothing. The leading-edge strip lies over the
+/// page instead, and a swipe begun there is the edge swipe, which wins
+/// over the scrollable as the SDK's does.
 ///
 /// The pinch is read from the raw pointers rather than from a
 /// [ScaleGestureRecognizer], because a scroll view accepts a finger as soon
@@ -113,17 +116,18 @@ class _ZoomDismissGestureDetectorState
     extends State<ZoomDismissGestureDetector> {
   ZoomDismissController? _controller;
   late final VerticalDragGestureRecognizer _panRecognizer;
-  late final HorizontalDragGestureRecognizer _swipeRecognizer;
+  late final BackSwipeGestureRecognizer _swipeRecognizer;
 
   /// How far the live back swipe has travelled, for the dead zone, and
   /// where it went down.
   double _swipeDragged = 0;
   Offset _swipeDown = Offset.zero;
 
-  /// A back swipe from anywhere begins only once its first move is known
-  /// to run toward the trailing edge; one that opens the other way is left
-  /// alone for the rest of the touch.
-  bool _swipeAwaitingDirection = false;
+  /// A back swipe from anywhere begins on its first move. The recognizer
+  /// has already refused one that opened toward the leading edge; what is
+  /// left to guard is a touch handed over at the arena's sweep, which
+  /// starts and ends without a move and is no gesture.
+  bool _swipeAwaitingFirstMove = false;
 
   /// Where the swipe's touch went down — the edge strip, or the page — and
   /// which pointer the swipe recognizer was given, so the layer around
@@ -174,13 +178,18 @@ class _ZoomDismissGestureDetectorState
       ..onUpdate = _handlePanUpdate
       ..onEnd = _handlePanEnd
       ..onCancel = _handleCancel;
-    _swipeRecognizer = HorizontalDragGestureRecognizer(debugOwner: this)
-      ..dragStartBehavior = DragStartBehavior.down
-      ..velocityTrackerBuilder = _iosVelocityTracker
-      ..onStart = _handleSwipeStart
-      ..onUpdate = _handleSwipeUpdate
-      ..onEnd = _handleSwipeEnd
-      ..onCancel = _handleCancel;
+    _swipeRecognizer =
+        BackSwipeGestureRecognizer(
+            region: () => _swipeRegion,
+            textDirection: () => Directionality.of(context),
+            debugOwner: this,
+          )
+          ..dragStartBehavior = DragStartBehavior.down
+          ..velocityTrackerBuilder = _iosVelocityTracker
+          ..onStart = _handleSwipeStart
+          ..onUpdate = _handleSwipeUpdate
+          ..onEnd = _handleSwipeEnd
+          ..onCancel = _handleCancel;
     _attachScrollController(widget.scrollController);
   }
 
@@ -236,11 +245,9 @@ class _ZoomDismissGestureDetectorState
     }
     final before = _swipeDragged;
     _swipeDragged = _toLogical(details.globalPosition.dx - _swipeDown.dx);
-    if (_swipeAwaitingDirection) {
-      _swipeAwaitingDirection = false;
-      if (_swipeDragged > 0) {
-        _begin(ZoomGesture.backSwipe, _swipeDown);
-      }
+    if (_swipeAwaitingFirstMove) {
+      _swipeAwaitingFirstMove = false;
+      _begin(ZoomGesture.backSwipe, _swipeDown);
     }
     final deadZone = _swipeDeadZone(_swipeRegion);
     if (_swipeDragged <= deadZone) {
@@ -402,7 +409,7 @@ class _ZoomDismissGestureDetectorState
       case BackGestureRegion.leadingEdge:
         _begin(ZoomGesture.backSwipe, details.globalPosition);
       case BackGestureRegion.anywhere:
-        _swipeAwaitingDirection = true;
+        _swipeAwaitingFirstMove = true;
     }
   }
 
@@ -411,7 +418,7 @@ class _ZoomDismissGestureDetectorState
     _controller = null;
     _pinchPointers = null;
     _pinchBegun = false;
-    _swipeAwaitingDirection = false;
+    _swipeAwaitingFirstMove = false;
     controller?.dragEnd(velocity, crossVelocity: cross);
     if (controller != null) {
       // Disposed after the settle: the ticker only drives the sideways
