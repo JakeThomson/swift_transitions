@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-15
+
+### Fixed
+
+- A back swipe from anywhere yields to a pan on the page — a swipe deck's
+  card — not only to a horizontal scrollable, and a drag that opens toward
+  the leading edge is left to the page rather than claimed and dropped.
+
 ## [0.2.0] - 2026-09-14
 
 ### Added
