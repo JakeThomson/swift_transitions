@@ -282,7 +282,9 @@ class ZoomPageTransition extends StatelessWidget {
               );
             }
             return Opacity(
-              opacity: source == null && held == null ? t : 1,
+              // The fallback fades with the flight; a landing overshoots
+              // below zero, where the card is gone.
+              opacity: source == null && held == null ? t.clamp(0.0, 1.0) : 1,
               child: ZoomTransitionLayer(
                 frame: frame,
                 pageSize: pageSize,

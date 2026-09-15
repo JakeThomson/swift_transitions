@@ -337,6 +337,29 @@ void main() {
     expect(sourceHidden(tester), isFalse);
   });
 
+  testWidgets('a committed release without a source lands faultlessly', (
+    tester,
+  ) async {
+    // The fallback card fades with the flight, and the landing spring
+    // carries it past zero.
+    await tester.pumpWidget(
+      testApp(detail: staticDetail, options: const ZoomTransitionOptions()),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    final route = ModalRoute.of(tester.element(find.text('detail')))!;
+    (route as ZoomPageRoute<void>).sourceTag = 'none';
+
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 300));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('detail'), findsNothing);
+  });
+
   testWidgets('a committed release lands on the landing spring', (
     tester,
   ) async {

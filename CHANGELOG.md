@@ -11,6 +11,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A committed dismissal pops while the navigator still reports the gesture,
   so a hero flight the grab began — a `CupertinoNavigationBar`'s — carries on
   into the landing rather than being started again, which asserted in debug.
+- A committed dismissal of a route without a source no longer asserts as its
+  landing overshoots.
 
 ## [0.2.1] - 2026-09-15
 
