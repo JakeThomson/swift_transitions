@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A zoom route is opaque, as a `CupertinoPageRoute` is: once the flight has
+  landed the routes beneath it are neither painted nor ticked, where before
+  every one of them was rasterised on every frame the page drew. A covered
+  route with `maintainState` false loses its source while obscured.
+
 ### Fixed
 
 - A committed dismissal pops while the navigator still reports the gesture,

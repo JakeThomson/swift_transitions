@@ -449,8 +449,9 @@ class _CoveredPageState extends State<_CoveredPage>
           // The scale uncovers a strip at the screen's edges, 0.086 of the
           // width across at full progress. Natively that strip is the window
           // behind the page and carries the system background, which is why
-          // it cannot be seen; a zoom route is not opaque, so without a
-          // backdrop of its own the window's black shows through instead.
+          // it cannot be seen; a zoom route is opaque only once landed, so
+          // without a backdrop of its own the window's black shows through
+          // instead.
           page = ColoredBox(
             color: CupertinoTheme.of(context).scaffoldBackgroundColor,
             child: page,

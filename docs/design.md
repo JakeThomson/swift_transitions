@@ -466,7 +466,7 @@ class ZoomPageRoute<T> extends PageRoute<T> with CupertinoRouteTransitionMixin<T
   /// vertical scroll views on iOS pick it up without configuration.
   ScrollController get scrollController;
 
-  @override bool get opaque => false;      // the source page stays visible
+  @override bool get opaque => true;       // the source page shows while the card is short of the screen
   @override Color? get barrierColor => options.dimmingColor; // the dim is the modal barrier, see 3.1
   @override Curve get barrierCurve => Curves.easeIn;
   @override ImageFilter? get filter => /* blur of dimmingBlurSigma */;
@@ -552,8 +552,16 @@ and with anything that reads route animations (navigation shells, observers):
 - **`maintainState` defaults to true.** Hero-style gesture transitions
   require the route underneath to keep its layout, and the zoom needs the
   source's current position at any moment.
-- **The zoom route is non-opaque, and its dim is its modal barrier.** The
-  source page stays visible and interactive-looking underneath. The dim uses
+- **The zoom route is opaque, and its dim is its modal barrier.** The
+  source page stays visible underneath while the card is short of full
+  screen — the flight, a held dismissal, the landing — and is taken off
+  stage once the flight has landed, as under a `CupertinoPageRoute`:
+  `TransitionRoute` marks the entry opaque at `completed` and clears it at
+  `forward` and `reverse`, so a grab or a pop has it back before the card
+  moves. Left non-opaque, every route beneath was rasterised on every frame
+  the zoom page drew: 10 ms of raster a frame at rest on a glass-heavy page
+  against 2.3 under an opaque route, and 15 with three zoom pages stacked
+  (measured 2026-09-15 on an iPhone). The dim uses
   the stock `ModalRoute` hooks — `barrierColor`, `barrierCurve` (an ease-in)
   and `filter` for the blur — which already track the route animation, and
   so the interactive progress once the gesture scrubs the controller. The
@@ -1127,8 +1135,9 @@ Flutter terms:
   `CupertinoTheme.scaffoldBackgroundColor`, which Material's own `Theme`
   defers to `ThemeData.scaffoldBackgroundColor`. Natively that strip is
   the window behind the scaled view controller and carries the system
-  background, so it cannot be seen; a zoom route is not opaque, so without
-  a backdrop the window's black shows through instead. Measured against
+  background, so it cannot be seen; a zoom route is opaque only once it
+  has landed, so without a backdrop the window's black shows through
+  instead while the card is short of the screen. Measured against
   `native_ZoomPinch45Rest`, where the poster row's edges move 48 -> 96 and
   1199 -> 1149 of 1206 (a scale of 0.915) while every pixel out to the
   screen's edge stays the page's own dimmed grey.
@@ -1393,11 +1402,9 @@ the route.
   instead, sliding the new title in over the whole flight and switching
   on the pop rather than the drag; a bar above the navigator is the
   native shape.
-- The zoom route is non-opaque. An app that decides whether native chrome
-  under a route must hide by reading `route.opaque` needs a subclass of
-  `ZoomPageRoute` implementing its own "obscures chrome" interface, the same
-  way that app already subclasses go_router's page for its shell. This is a
-  five-line app-side adapter and is out of scope for the package.
+- The zoom route is opaque once it has landed, so an app that decides
+  whether native chrome under a route must hide by reading `route.opaque`
+  reads it as a push.
 - Pinned chrome is correct for both transitions here, so the zoom
   destination can keep a pinned bar.
 

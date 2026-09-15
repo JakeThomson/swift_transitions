@@ -100,10 +100,15 @@ ModalRoute<Object?> detailRoute(WidgetTester tester) =>
 bool sourceHidden(WidgetTester tester, String tag) {
   final source = find.byWidgetPredicate(
     (widget) => widget is ZoomTransitionSource && widget.tag == tag,
+    skipOffstage: false,
   );
   return !tester
       .widget<Visibility>(
-        find.descendant(of: source, matching: find.byType(Visibility)),
+        find.descendant(
+          of: source,
+          matching: find.byType(Visibility, skipOffstage: false),
+          skipOffstage: false,
+        ),
       )
       .visible;
 }
@@ -111,6 +116,7 @@ bool sourceHidden(WidgetTester tester, String tag) {
 Rect sourceRect(WidgetTester tester, String tag) => tester.getRect(
   find.byWidgetPredicate(
     (widget) => widget is ZoomTransitionSource && widget.tag == tag,
+    skipOffstage: false,
   ),
 );
 
@@ -192,12 +198,15 @@ void main() {
 
   testWidgets('the covered page is scaled down and dimmed', (tester) async {
     await tester.pumpWidget(testApp());
-    final homeBefore = tester.getRect(find.text('home'));
+    final homeBefore = tester.getRect(find.text('home', skipOffstage: false));
     await tester.tap(find.text('push'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(tester.getRect(find.text('home')).width, lessThan(homeBefore.width));
+    expect(
+      tester.getRect(find.text('home', skipOffstage: false)).width,
+      lessThan(homeBefore.width),
+    );
     // The home CupertinoPageRoute has a barrier of its own; the zoom
     // route's is the topmost.
     Color barrierColor() => tester
@@ -209,12 +218,12 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(
-      tester.getRect(find.text('home')).width,
+      tester.getRect(find.text('home', skipOffstage: false)).width,
       closeTo(homeBefore.width * zoomCoveredPageScale(1), 0.5),
     );
     // Scaled about the screen's centre, so the page keeps its middle.
     expect(
-      tester.getRect(find.text('home')).center.dx,
+      tester.getRect(find.text('home', skipOffstage: false)).center.dx,
       closeTo(
         400 + (homeBefore.center.dx - 400) * zoomCoveredPageScale(1),
         0.5,
@@ -223,11 +232,50 @@ void main() {
     expect(barrierColor().a, closeTo(0x26 / 0xFF, 0.01));
   });
 
+  testWidgets('the page beneath is offstage once the flight has landed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(testApp());
+    bool homeTicking() => TickerMode.valuesOf(
+      tester.element(find.text('home', skipOffstage: false)),
+    ).enabled;
+    await tester.tap(find.text('push'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    // In flight the page beneath is on stage, scaled under the card.
+    expect(homeTicking(), isTrue);
+
+    await tester.pumpAndSettle();
+    // Landed, the route is opaque: the overlay takes the routes beneath
+    // it off stage, so they are neither painted nor ticked.
+    expect(homeTicking(), isFalse);
+    expect(find.text('home', skipOffstage: false), findsOneWidget);
+
+    // A dismissal has it back before the card moves.
+    final gesture = await tester.startGesture(const Offset(400, 300));
+    await gesture.moveBy(const Offset(0, 18));
+    await gesture.moveBy(const Offset(0, 10));
+    await tester.pump();
+    expect(homeTicking(), isTrue);
+    await gesture.moveBy(const Offset(0, -10));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(homeTicking(), isFalse);
+
+    // And so does a pop.
+    Navigator.of(tester.element(find.text('detail'))).pop();
+    await tester.pump();
+    expect(homeTicking(), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsNothing);
+    expect(homeTicking(), isTrue);
+  });
+
   testWidgets('the strip the covered page uncovers is painted', (tester) async {
     await tester.pumpWidget(testApp());
     final backdrop = find.ancestor(
-      of: find.text('home'),
-      matching: find.byType(ColoredBox),
+      of: find.text('home', skipOffstage: false),
+      matching: find.byType(ColoredBox, skipOffstage: false),
     );
 
     // Nothing to cover while the page is still full screen.
@@ -367,10 +415,10 @@ void main() {
         ),
       ),
     );
-    final homeBefore = tester.getRect(find.text('home'));
+    final homeBefore = tester.getRect(find.text('home', skipOffstage: false));
     await tester.tap(find.text('poster'));
     await tester.pumpAndSettle();
-    expect(tester.getRect(find.text('home')), homeBefore);
+    expect(tester.getRect(find.text('home', skipOffstage: false)), homeBefore);
 
     Navigator.of(tester.element(find.text('detail'))).pop();
     await tester.pump();
@@ -549,7 +597,7 @@ void main() {
     SnapshotWidget snapshot() => tester.widget<SnapshotWidget>(
       find.descendant(
         of: find.byType(ZoomTransitionLayer),
-        matching: find.byType(SnapshotWidget),
+        matching: find.byType(SnapshotWidget, skipOffstage: false),
       ),
     );
     expect(snapshot().controller.allowSnapshotting, isTrue);

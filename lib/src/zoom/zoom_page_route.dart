@@ -15,9 +15,9 @@ import 'zoom_transition_options.dart';
 import 'zoom_transition_source.dart';
 
 /// Turns any [PageRoute] it is mixed into after [CupertinoRouteTransitionMixin]
-/// into a zoom route: non-opaque, dimming the page underneath through its
-/// modal barrier, and flown between the matching [ZoomTransitionSource] and
-/// the full screen by [ZoomPageTransition].
+/// into a zoom route: dimming the page underneath through its modal
+/// barrier, opaque once it has landed, and flown between the matching
+/// [ZoomTransitionSource] and the full screen by [ZoomPageTransition].
 ///
 /// The source is looked up in the route underneath when a flight starts —
 /// on the push and again on each pop, because [sourceTag] may have changed
@@ -90,8 +90,20 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
     return route is ZoomRouteTransitionMixin<Object?> ? route : null;
   }
 
+  /// Opaque, as a [CupertinoPageRoute] is: once the flight has landed the
+  /// page fills the screen, and the overlay then neither lays out, paints
+  /// nor ticks the routes beneath it (`TransitionRoute` marks the entry
+  /// opaque at `completed` and clears it at `forward` and `reverse`, so a
+  /// dismissal or a pop has the page underneath back before its first
+  /// frame). Left non-opaque, every route beneath is rasterised on every
+  /// frame the zoom page draws — a scroll on it, say — and a stack of zoom
+  /// pages rasterises all of them: on a glass-heavy page that read 10 ms
+  /// of raster per frame at rest against 2.3 ms under an opaque route, and
+  /// 15 ms with three zoom pages stacked. A covered route with
+  /// `maintainState` false loses its subtree while obscured, and its
+  /// source with it; the pop then flies the centred fallback.
   @override
-  bool get opaque => false;
+  bool get opaque => true;
 
   @override
   Color? get barrierColor => options.dimmingColor;

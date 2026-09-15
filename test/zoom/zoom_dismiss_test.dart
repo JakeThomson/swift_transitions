@@ -94,8 +94,10 @@ bool sourceHidden(WidgetTester tester) => !tester
       find.descendant(
         of: find.byWidgetPredicate(
           (widget) => widget is ZoomTransitionSource && widget.tag == 'poster',
+          skipOffstage: false,
         ),
-        matching: find.byType(Visibility),
+        matching: find.byType(Visibility, skipOffstage: false),
+        skipOffstage: false,
       ),
     )
     .visible;
@@ -530,7 +532,8 @@ void main() {
     tester,
   ) async {
     await pushAndSettle(tester, staticDetail);
-    Rect home() => tester.getRect(find.byType(CupertinoButton));
+    Rect home() =>
+        tester.getRect(find.byType(CupertinoButton, skipOffstage: false));
     final scaled = home();
     final gesture = await tester.startGesture(const Offset(400, 300));
     await gesture.moveBy(const Offset(0, 18));
