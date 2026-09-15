@@ -388,13 +388,6 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
       onRelease: (departure) {
         _dismiss = null;
         _departure = departure;
-        if (departure.toSource) {
-          // A landing cannot be grabbed again, so the gesture is over now:
-          // every route's modal scope ignores pointers while the navigator
-          // reports one, and a touch on the landing card must reach the
-          // page underneath.
-          _stopUserGesture();
-        }
         changedInternalState();
       },
       onCommit: (rate, speed) {
@@ -407,7 +400,19 @@ mixin ZoomRouteTransitionMixin<T> on PageRoute<T> {
               (_departure!.frame.rect.width - source.width) / screen.width,
         );
         _landingSpeed = speed;
-        navigator.pop();
+        // Popped while the navigator still reports the gesture, as the
+        // SDK's back swipe pops: a hero flight the grab began — a
+        // [CupertinoNavigationBar]'s — then carries on into the landing,
+        // where a pop reported outside the gesture starts it a second
+        // time from the same hero ([HeroController.didChangeTop]).
+        if (isCurrent) {
+          navigator.pop();
+        }
+        // A landing cannot be grabbed again, so the gesture is over now:
+        // every route's modal scope ignores pointers while the navigator
+        // reports one, and a touch on the landing card must reach the
+        // page underneath.
+        _stopUserGesture();
       },
       onSettled: () {
         if (_dismiss != null) {

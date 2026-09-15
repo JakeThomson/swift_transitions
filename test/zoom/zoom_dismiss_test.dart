@@ -1183,6 +1183,56 @@ void main() {
     expect(navigatorOf(tester).userGestureInProgress, isFalse);
   });
 
+  testWidgets('a committed release carries a hero flight into the landing', (
+    tester,
+  ) async {
+    // A CupertinoNavigationBar on each page: the grab starts the bars'
+    // hero flight as a user gesture, and the pop must not start it again.
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => CupertinoPageScaffold(
+            navigationBar: const CupertinoNavigationBar(middle: Text('Home')),
+            child: ListView(
+              children: <Widget>[
+                const SizedBox(height: 100),
+                ZoomTransitionSource(
+                  tag: 'poster',
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      ZoomPageRoute<void>(
+                        sourceTag: 'poster',
+                        builder: (_) => CupertinoPageScaffold(
+                          navigationBar: const CupertinoNavigationBar(
+                            middle: Text('Detail'),
+                          ),
+                          child: listDetail(),
+                        ),
+                      ),
+                    ),
+                    child: const SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: Text('poster'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('poster'));
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+
+    await tester.fling(find.text('detail'), const Offset(0, 500), 2500);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('detail'), findsNothing);
+  });
+
   testWidgets('a drag while the card returns is the same gesture', (
     tester,
   ) async {
