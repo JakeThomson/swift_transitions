@@ -945,6 +945,22 @@ gesture, and finishes 233 ms after the card. A source measured while the
 page is scaled is read back to its resting rect, or a pop would fly to a
 poster 10 pt small.
 
+*Observed 2026-09-15, on a page over a photo (`PARITY_PHOTO=1`,
+`testPhotoPanHold`).* The strip the scale uncovers at the screen's edge
+is nothing the transition paints: native scales the page's layer as it
+is, so whatever the page draws past its bounds shows there — a
+`scaledToFill` image, which SwiftUI does not clip, runs on to the screen's
+edge sharp and unbroken, while the title and the poster row, clipped by
+their scroll views, stop at the page's edge — and a page that draws
+nothing past its bounds shows the window's system background. Ours does
+the same: the page is scaled from a snapshot taken as far past its bounds
+as the strip can reach, over the scaffold colour; the example's photo
+page covers itself with a `FittedBox` under `Clip.none`, and the
+gallery's rows and list are `Clip.none` so a poster cut off at the edge
+carries on. A cut tried first, a blurred continuation of the page's edges
+painted from a snapshot, was visibly softer than native's and was
+dropped.
+
 *Measured 2026-09-10, from the native edge flings against the line each
 takes from its release to the source.* A landing does not run the card
 straight home. Native carries the card the way it was going first: an

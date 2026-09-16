@@ -82,6 +82,13 @@ struct GalleryView: View {
                     FilmRow(namespace: zoom)
                         .background(Color.white)
                     Color(hex: 0xF2F2F7).frame(height: 8)
+                    NavigationLink {
+                        PhotoPage()
+                    } label: {
+                        GalleryRow(title: "Zoom — from a page over a photo")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("photo")
                 }
                 // The scroll view sits 10 pt lower under the bar than the
                 // example's list; measured, not derived.
@@ -349,6 +356,92 @@ struct FilmPage: View {
         .navigationTitle(poster.title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTransition(.zoom(sourceID: Film(poster: poster).id, in: namespace))
+    }
+}
+
+/// A poster on the photo page. Mirrors the Flutter example's `photo:` tags.
+struct PhotoPoster: Hashable {
+    let poster: Poster
+    var id: String { "photo:\(poster.id)" }
+}
+
+/// A page laid over a photo, with a title and a row of posters running off
+/// its edges, each a zoom source for its `PosterPage`. Mirrors the Flutter
+/// example's `PhotoPage`: the same photo, title and row, so what the two
+/// show around the covered page during a zoom can be compared.
+struct PhotoPage: View {
+    /// Whether the photo sits under the page in a `ZStack` rather than as
+    /// its `.background`.
+    var inStack = false
+    @Namespace private var zoom
+    private let height: CGFloat = 180
+
+    private var photo: some View {
+        AsyncImage(url: URL(string: "https://cataas.com/cat/1eGEsddyKNwtBJFP?width=900&height=1800")) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            Color(hex: 0x3B3B4F)
+        }
+        .ignoresSafeArea()
+    }
+
+    var body: some View {
+        ZStack {
+            if inStack { photo }
+            content
+        }
+        .navigationTitle("Over a photo")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: PhotoPoster.self) { photo in
+            PosterPage(poster: photo.poster)
+                .navigationTitle(photo.poster.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationTransition(.zoom(sourceID: photo.id, in: zoom))
+        }
+    }
+
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // A horizontal scroll view that cannot scroll: the title is
+                // laid out at its own width and clipped at the page's edge,
+                // as the example's `TextOverflow.clip` does.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text("A title that runs off the edge of the page")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 24)
+                }
+                .scrollDisabled(true)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(posters) { poster in
+                            let photo = PhotoPoster(poster: poster)
+                            NavigationLink(value: photo) {
+                                PosterArt(poster: poster)
+                                    .frame(width: 120, height: height)
+                                    .clipShape(.rect(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .matchedTransitionSource(id: photo.id, in: zoom) { source in
+                                source.clipShape(.rect(cornerRadius: 12))
+                            }
+                            .accessibilityIdentifier("photo_\(poster.title)")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .frame(height: height + 24)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background {
+            if !inStack { photo }
+        }
     }
 }
 

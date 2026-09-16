@@ -18,6 +18,20 @@ final class AlignedGalleryViewController: UIViewController {
         title = "swift_transitions"
         view.backgroundColor = .white
         navigationItem.backButtonDisplayMode = .minimal
+        if Parity.photo != "0" {
+            // The photo page's picture behind the gallery, a plain
+            // `UIImageView` filling the view, to see what a UIKit page's
+            // background does under the zoom.
+            let photo = UIImageView(frame: view.bounds)
+            photo.contentMode = .scaleAspectFill
+            photo.clipsToBounds = true
+            photo.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            view.addSubview(photo)
+            URLSession.shared.dataTask(with: URL(string: "https://cataas.com/cat/1eGEsddyKNwtBJFP?width=900&height=1800")!) { data, _, _ in
+                guard let data, let image = UIImage(data: data) else { return }
+                DispatchQueue.main.async { photo.image = image }
+            }.resume()
+        }
 
         var y: CGFloat = 107
         for text in ["Push — leading edge back swipe", "Push — back swipe anywhere"] {

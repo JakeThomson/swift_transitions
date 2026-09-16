@@ -19,6 +19,9 @@ abstract final class Parity {
   /// Whether to draw the posters and pages in flat colour.
   static bool flat = false;
 
+  /// Whether to open on the photo page rather than the gallery.
+  static bool photo = false;
+
   /// Reads the switches from the launch environment.
   static Future<void> load() async {
     var environment = Platform.environment;
@@ -36,6 +39,7 @@ abstract final class Parity {
     }
     showTouches = environment['PARITY_SHOW_TOUCHES'] == '1';
     flat = environment['PARITY_FLAT'] == '1';
+    photo = environment['PARITY_PHOTO'] == '1';
   }
 }
 

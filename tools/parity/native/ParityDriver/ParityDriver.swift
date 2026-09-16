@@ -20,6 +20,7 @@ final class ParityDriver: XCTestCase {
         app.launchEnvironment["PARITY_FLAT"] = ProcessInfo.processInfo.environment["PARITY_FLAT"] ?? "0"
         app.launchEnvironment["PARITY_UIKIT"] = ProcessInfo.processInfo.environment["PARITY_UIKIT"] ?? "0"
         app.launchEnvironment["PARITY_ART_4_3"] = ProcessInfo.processInfo.environment["PARITY_ART_4_3"] ?? "0"
+        app.launchEnvironment["PARITY_PHOTO"] = ProcessInfo.processInfo.environment["PARITY_PHOTO"] ?? "0"
         app.launch()
         // Let the first frame and any launch animation settle before a recording starts.
         sleep(2)
@@ -43,6 +44,8 @@ final class ParityDriver: XCTestCase {
     /// The Dunes film, (148, 674)–(268, 854), in the row under the stills.
     var dunesFilm: XCUICoordinate { at(208, 764) }
     var backButton: XCUICoordinate { at(30, 81) }
+    /// The photo page's first poster (`PARITY_PHOTO=1`), (16, 180)–(136, 360).
+    var photoPoster: XCUICoordinate { at(76, 270) }
     var pageCentre: XCUICoordinate { at(201, 437) }
 
     /// Holds still for a while, for the recording.
@@ -243,6 +246,28 @@ final class ParityDriver: XCTestCase {
     }
 
     func testFilmAnywhere200Rest() { filmAnywhere(travel: 200) }
+
+    /// The covered page's strip: a poster zoomed from the photo page
+    /// (`PARITY_PHOTO=1`) and held part way down a pan, the page behind it
+    /// scaled down and the strip at the screen's edge in view.
+    func testPhotoPanHold() { panHold(from: photoPoster) }
+
+    /// The same on the UIKit gallery over a photo (`PARITY_UIKIT=1
+    /// PARITY_PHOTO=1`), zooming the Aurora still.
+    func testUIKitPhotoPanHold() { panHold(from: auroraStill) }
+
+    func panHold(from source: XCUICoordinate) {
+        // The photo is fetched over the network; give it time to land before
+        // the frame that stands for the page at rest.
+        hold(5)
+        source.tap()
+        hold(2.5)
+        var finger = Finger(at: CGPoint(x: 201, y: 437))
+        finger.line(to: CGPoint(x: 221, y: 637), speed: 300)
+        finger.hold(2)
+        finger.lift(after: 0.3)
+        hold(1.5)
+    }
     func testFilmAnywhereT120Rest() { filmAnywhere(travel: 120) }
     func testFilmAnywhereT140Rest() { filmAnywhere(travel: 140) }
     func testFilmAnywhereT160Rest() { filmAnywhere(travel: 160) }

@@ -13,15 +13,15 @@ Future<void> main() async {
 ///
 /// A gallery of source views that open destination pages: the push
 /// transition from list tiles, and the zoom transition from a row of
-/// posters, and from a row of stills whose pages keep the art below a
-/// title and align the flight to it.
+/// posters, from a row of stills whose pages keep the art below a title
+/// and align the flight to it, and from a page laid over a photo.
 class ExampleApp extends StatelessWidget {
   const ExampleApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
-      home: const GalleryPage(),
+      home: Parity.photo ? const PhotoPage() : const GalleryPage(),
       debugShowCheckedModeBanner: false,
       builder: (context, child) =>
           Parity.showTouches ? TouchRings(child: child!) : child!,
@@ -77,6 +77,13 @@ class GalleryPage extends StatelessWidget {
                 'Zoom — tap a film, its page leads with a backdrop',
               ),
               children: const <Widget>[FilmRow()],
+            ),
+            CupertinoListTile(
+              title: const Text('Zoom — from a page over a photo'),
+              trailing: const CupertinoListTileChevron(),
+              onTap: () => Navigator.of(
+                context,
+              ).push(SwiftPageRoute<void>(builder: (_) => const PhotoPage())),
             ),
           ],
         ),
@@ -409,29 +416,36 @@ class _PosterPagerState extends State<PosterPager> {
 /// The page a poster zooms open into.
 class PosterPage extends StatelessWidget {
   /// Creates the detail page for [poster].
-  const PosterPage({super.key, required this.poster});
+  const PosterPage({super.key, required this.poster, this.bar = true});
 
   /// The poster shown.
   final Poster poster;
+
+  /// Whether the page has a navigation bar. The photo page's posters open
+  /// without one, so the page under a dismissal is in plain view.
+  final bool bar;
 
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: Parity.flat ? const Color(0xFFE0F0FF) : null,
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(poster.title),
-        // Parity: SwiftUI's bar is opaque white over this page, scrolled
-        // to the top or not. A hair short of opaque, so the scaffold still
-        // lays the page out under the bar, where SwiftUI's scroll view
-        // starts.
-        backgroundColor: Parity.flat ? const Color(0xFEFFFFFF) : null,
-        automaticBackgroundVisibility: false,
-        border: Parity.flat
-            ? null
-            : const Border(
-                bottom: BorderSide(color: Color(0x4D000000), width: 0),
-              ),
-      ),
+      navigationBar: !bar
+          ? null
+          : CupertinoNavigationBar(
+              middle: Text(poster.title),
+              // Parity: SwiftUI's bar is opaque white over this page, scrolled
+              // to the top or not. A hair short of opaque, so the scaffold still
+              // lays the page out under the bar, where SwiftUI's scroll view
+              // starts.
+              // Otherwise clear, as iOS 26's floating bar is, so the page under
+              // a dismissal can be seen right to the screen's top.
+              backgroundColor: Parity.flat
+                  ? const Color(0xFEFFFFFF)
+                  : const Color(0x00000000),
+              enableBackgroundFilterBlur: Parity.flat,
+              automaticBackgroundVisibility: false,
+              border: null,
+            ),
       child: ListView(
         // Where SwiftUI's scroll view puts the art: 40 pt below the status
         // bar, the first 17 pt of it under the bar. This context is above
@@ -578,6 +592,112 @@ class FilmPage extends StatelessWidget {
               'in from the leading edge, or pinch to dismiss; tap back to '
               'zoom home.',
               style: textTheme.textStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A page laid over a photo, with a title and a row of posters running off
+/// its edges. A zoom from one of its posters scales the page down behind
+/// the card, and the strip that uncovers at the screen's edge shows what
+/// the page paints past its bounds: the photo, which covers the page
+/// unclipped the way SwiftUI's `scaledToFill` does, so it runs on to the
+/// screen's edge as it does natively. The title and the row are clipped
+/// to the page and stop at its edge.
+class PhotoPage extends StatelessWidget {
+  /// Creates the photo page.
+  const PhotoPage({super.key});
+
+  static const double _height = 180;
+  static const BorderRadius _radius = BorderRadius.all(Radius.circular(12));
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Over a photo'),
+        backgroundColor: Color(0x00000000),
+        enableBackgroundFilterBlur: false,
+        automaticBackgroundVisibility: false,
+        border: null,
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          const Positioned.fill(child: ColoredBox(color: Color(0xFF3B3B4F))),
+          // Covers the page and overflows it, unclipped, as SwiftUI's
+          // `scaledToFill` does.
+          Positioned.fill(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.none,
+              child: Image.network(
+                'https://cataas.com/cat/1eGEsddyKNwtBJFP?width=900&height=1800',
+              ),
+            ),
+          ),
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 24),
+              children: <Widget>[
+                const Padding(
+                  padding: EdgeInsets.only(left: 16),
+                  child: Text(
+                    'A title that runs off the edge of the page',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.clip,
+                    style: TextStyle(
+                      color: Color(0xFFFFFFFF),
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: _height + 24,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    itemCount: posters.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final poster = posters[index];
+                      final tag = 'photo:${poster.title}';
+                      return ZoomTransitionSource(
+                        tag: tag,
+                        borderRadius: _radius,
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              ZoomPageRoute<void>(
+                                sourceTag: tag,
+                                title: poster.title,
+                                builder: (_) =>
+                                    PosterPage(poster: poster, bar: false),
+                              ),
+                            );
+                          },
+                          child: ClipRRect(
+                            borderRadius: _radius,
+                            child: PosterArt(
+                              poster: poster,
+                              width: 120,
+                              height: _height,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ],

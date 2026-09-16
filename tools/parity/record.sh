@@ -21,6 +21,7 @@ TEST_RUNNER_PARITY_APP=$which TEST_RUNNER_PARITY_FLAT=$flat \
   TEST_RUNNER_PARITY_SHOW_TOUCHES=${PARITY_SHOW_TOUCHES:-1} \
   TEST_RUNNER_PARITY_UIKIT=${PARITY_UIKIT:-0} \
   TEST_RUNNER_PARITY_ART_4_3=${PARITY_ART_4_3:-0} \
+  TEST_RUNNER_PARITY_PHOTO=${PARITY_PHOTO:-0} \
   xcodebuild test-without-building \
     -xctestrun "$(ls -t "$NATIVE_DERIVED"/Build/Products/*.xctestrun | head -1)" \
     -destination "id=$PARITY_SIM" \

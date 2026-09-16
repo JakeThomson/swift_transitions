@@ -8,6 +8,10 @@ enum Parity {
     static let flat = ProcessInfo.processInfo.environment["PARITY_FLAT"] == "1"
     /// The UIKit scene (`Aligned.swift`) in place of the SwiftUI gallery.
     static let uikit = ProcessInfo.processInfo.environment["PARITY_UIKIT"] == "1"
+    /// The photo page as the root, in place of the gallery: "1" with the photo
+    /// as the page's `.background`, "2" with it under the page in a `ZStack`.
+    /// With `PARITY_UIKIT` the UIKit gallery gets a `UIImageView` behind it.
+    static let photo = ProcessInfo.processInfo.environment["PARITY_PHOTO"] ?? "0"
 }
 
 @main
@@ -33,7 +37,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let window = TouchWindow(windowScene: scene)
         window.rootViewController = Parity.uikit
             ? UINavigationController(rootViewController: AlignedGalleryViewController())
-            : UIHostingController(rootView: GalleryView())
+            : Parity.photo != "0"
+                ? UIHostingController(rootView: NavigationStack { PhotoPage(inStack: Parity.photo == "2") })
+                : UIHostingController(rootView: GalleryView())
         self.window = window
         window.makeKeyAndVisible()
     }
