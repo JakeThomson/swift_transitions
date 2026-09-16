@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 
 import '../corners/display_corner_radii.dart';
+import 'zoom_covered_snapshot.dart';
 import 'zoom_frame.dart';
 import 'zoom_interaction.dart';
 import 'zoom_transition_layer.dart';
@@ -153,6 +154,20 @@ class ZoomPageTransition extends StatelessWidget {
   /// over it ([kZoomCoveredPageScale]), and takes no touches for as long as
   /// the route is on screen, the landing included.
   ///
+  /// While it is covered the page is painted from a snapshot taken on the
+  /// first frame the route covers it, as UIKit paints the view controller
+  /// it zooms from, and is not painted again until the route has gone:
+  /// whatever the page does in response to being covered a frame on stays
+  /// out of the picture, and the page costs nothing to draw under the
+  /// flight. The strip the scale uncovers at the screen's edge shows
+  /// whatever that frame paints past the page's bounds, as it does
+  /// natively (parity stage 9): the snapshot is taken that much wider than
+  /// the page ([ZoomCoveredSnapshot]), so a background that overflows the
+  /// page, or a row its scroll view lets overflow, runs on to the screen's
+  /// edge, and a page that paints nothing there shows the scaffold colour.
+  /// A covered route whose [TransitionRoute.allowSnapshotting] is false, or
+  /// a page with a platform view, is painted live instead.
+  ///
   /// A gesture dragging the card does not move it: natively the page holds
   /// wherever the flight left it until the dismissal commits or is given
   /// up (parity stage 9). The dim the page receives is the zoom route's
@@ -166,7 +181,11 @@ class ZoomPageTransition extends StatelessWidget {
     Animation<double> secondaryAnimation,
     bool allowSnapshotting,
     Widget? child,
-  ) => _CoveredPage(progress: secondaryAnimation, child: child);
+  ) => _CoveredPage(
+    progress: secondaryAnimation,
+    allowSnapshotting: allowSnapshotting,
+    child: child,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -351,9 +370,17 @@ class _FlightSnapshotState extends State<_FlightSnapshot> {
 /// The page under a zoom route, scaled down with the flight's [progress]
 /// and held where it is while a gesture drags the card.
 class _CoveredPage extends StatefulWidget {
-  const _CoveredPage({required this.progress, required this.child});
+  const _CoveredPage({
+    required this.progress,
+    required this.allowSnapshotting,
+    required this.child,
+  });
 
   final Animation<double> progress;
+
+  /// Whether the page may be painted from a snapshot while it is scaled.
+  final bool allowSnapshotting;
+
   final Widget? child;
 
   @override
@@ -443,20 +470,31 @@ class _CoveredPageState extends State<_CoveredPage>
         Widget page = Transform.scale(
           scale: scale,
           filterQuality: FilterQuality.medium,
-          child: child,
+          // The page is painted from a snapshot taken on the first frame
+          // the route covers it, for as long as it is covered — that frame
+          // included, at full size, so the page is never painted live
+          // under the route — and the snapshot reaches as far past the
+          // page as the screen's edge can at the page's smallest.
+          child: ZoomCoveredSnapshot(
+            enabled: widget.allowSnapshotting,
+            bleed: (1 / zoomCoveredPageScale(1) - 1) / 2,
+            child: child!,
+          ),
         );
-        if (scale < 1) {
-          // The scale uncovers a strip at the screen's edges, 0.086 of the
-          // width across at full progress. Natively that strip is the window
-          // behind the page and carries the system background, which is why
-          // it cannot be seen; a zoom route is opaque only once landed, so
-          // without a backdrop of its own the window's black shows through
-          // instead.
-          page = ColoredBox(
-            color: CupertinoTheme.of(context).scaffoldBackgroundColor,
-            child: page,
-          );
-        }
+        // The scale uncovers a strip at the screen's edges, 0.086 of the
+        // width across at full progress. Natively that strip is the window
+        // behind the page and carries the system background, which is why
+        // it cannot be seen unless the page paints into it; a zoom route
+        // is opaque only once landed, so without a backdrop of its own
+        // the window's black shows through instead. The box is there at
+        // full size too, clear, so the tree keeps one shape and the
+        // snapshot under it survives the first scaled frame.
+        page = ColoredBox(
+          color: scale < 1
+              ? CupertinoTheme.of(context).scaffoldBackgroundColor
+              : const Color(0x00000000),
+          child: page,
+        );
         return IgnorePointer(
           // A popping route passes its pointers by so that a landing card
           // does not eat them, which would otherwise leave the page behind

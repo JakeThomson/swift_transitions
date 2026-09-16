@@ -2,6 +2,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swift_transitions/src/zoom/zoom_covered_snapshot.dart';
 import 'package:swift_transitions/src/zoom/zoom_frame.dart';
 import 'package:swift_transitions/src/zoom/zoom_transition_layer.dart';
 import 'package:swift_transitions/swift_transitions.dart';
@@ -128,6 +129,37 @@ Matcher rectCloseTo(Rect expected, {double distance = 0.5}) => predicate<Rect>(
       (rect.bottom - expected.bottom).abs() < distance,
   'a rect within $distance of $expected',
 );
+
+/// The screen as painted, read back by point: the image is at the device's
+/// pixel ratio, and x and y are in points.
+Future<Color Function(int x, int y)> screenPixels(WidgetTester tester) async {
+  final image = await captureImage(find.byType(CupertinoApp).evaluate().single);
+  final pixels = (await tester.runAsync(image.toByteData))!;
+  final ratio = image.width ~/ 800;
+  return (int x, int y) {
+    final i = (y * ratio * image.width + x * ratio) * 4;
+    return Color.fromARGB(
+      pixels.getUint8(i + 3),
+      pixels.getUint8(i),
+      pixels.getUint8(i + 1),
+      pixels.getUint8(i + 2),
+    );
+  };
+}
+
+/// Pushes a zoom route from the source tagged [tag] and holds its card
+/// part way down a pan, which leaves the covered page's edges clear: a
+/// landed route is opaque and the page under it is not painted at all.
+Future<void> pushAndHold(WidgetTester tester, String tag) async {
+  await tester.tap(find.text('push'));
+  await tester.pumpAndSettle();
+  final finger = await tester.startGesture(const Offset(400, 300));
+  for (var i = 0; i < 12; i++) {
+    await finger.moveBy(const Offset(0, 20));
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await tester.pump(const Duration(milliseconds: 400));
+}
 
 void main() {
   const screen = Rect.fromLTWH(0, 0, 800, 600);
@@ -294,6 +326,186 @@ void main() {
       tester.widget<ColoredBox>(backdrop).color,
       isSameColorAs(CupertinoColors.systemBackground.color),
     );
+  });
+
+  testWidgets('the uncovered strip shows what the page paints past its edge', (
+    tester,
+  ) async {
+    // A page that paints past its right edge and nothing past its left,
+    // the way a card row its scroll view lets overflow does: the strip the
+    // scale uncovers shows the overflow on the right and the scaffold
+    // colour on the left, from a snapshot taken wider than the page.
+    const green = Color(0xFF00FF00);
+    final page = GlobalKey();
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => Stack(
+            key: page,
+            clipBehavior: Clip.none,
+            children: [
+              const Positioned(
+                top: 0,
+                bottom: 0,
+                right: -100,
+                width: 200,
+                child: ColoredBox(color: green),
+              ),
+              Center(
+                // A source in the middle, so the card in flight leaves the
+                // page's edges clear.
+                child: ZoomTransitionSource(
+                  tag: 'centre',
+                  child: CupertinoButton(
+                    onPressed: () => Navigator.of(context).push(
+                      ZoomPageRoute<void>(
+                        sourceTag: 'centre',
+                        builder: (_) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    child: const Text('push'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+    // A landed route is opaque and the page under it is not painted at
+    // all, so the strip is read with the card held part way down a pan,
+    // which leaves the page's edges clear.
+    final finger = await tester.startGesture(const Offset(400, 300));
+    for (var i = 0; i < 12; i++) {
+      await finger.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    final snapshot = tester.widget<ZoomCoveredSnapshot>(
+      find.byType(ZoomCoveredSnapshot, skipOffstage: false),
+    );
+    expect(snapshot.enabled, isTrue);
+    final edge = tester.getRect(find.byKey(page, skipOffstage: false)).right;
+    expect(edge, lessThan(792));
+
+    final pixel = await screenPixels(tester);
+
+    // The overflow runs on to the screen's right edge, dimmed as the page
+    // is; the left strip is the scaffold's white, dimmed.
+    final inside = pixel(edge.round() - 4, 300);
+    final strip = pixel(798, 300);
+    final left = pixel(1, 300);
+    expect(inside.g, greaterThan(inside.r + 0.5));
+    expect(strip.g, closeTo(inside.g, 0.02));
+    expect(strip.r, closeTo(inside.r, 0.02));
+    expect(left.g, closeTo(left.r, 0.02));
+    expect(left.r, greaterThan(0.8));
+  });
+
+  testWidgets('the covered page is not painted again while covered', (
+    tester,
+  ) async {
+    // A page that turns blue while it is covered — as a page does that
+    // lets go of its glass, or hides chrome, once a route is over it —
+    // keeps showing the red it was painted in on the first covered frame.
+    const red = Color(0xFFFF0000);
+    const blue = Color(0xFF0000FF);
+    final color = ValueNotifier<Color>(red);
+    addTearDown(color.dispose);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: ValueListenableBuilder<Color>(
+          valueListenable: color,
+          builder: (context, value, child) => ColoredBox(
+            color: value,
+            child: Center(
+              child: ZoomTransitionSource(
+                tag: 'centre',
+                child: CupertinoButton(
+                  onPressed: () => Navigator.of(context).push(
+                    ZoomPageRoute<void>(
+                      sourceTag: 'centre',
+                      builder: (_) => const SizedBox.shrink(),
+                    ),
+                  ),
+                  child: const Text('push'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await pushAndHold(tester, 'centre');
+    color.value = blue;
+    await tester.pump();
+    expect(
+      tester
+          .widget<ColoredBox>(
+            find.byWidgetPredicate(
+              (w) => w is ColoredBox && (w.color == red || w.color == blue),
+              skipOffstage: false,
+            ),
+          )
+          .color,
+      blue,
+    );
+
+    final pixel = await screenPixels(tester);
+    final corner = pixel(60, 40);
+    expect(corner.r, greaterThan(corner.b + 0.5));
+  });
+
+  testWidgets('a hidden source is left out of the covered page', (
+    tester,
+  ) async {
+    // The frame the covered page is painted from was drawn with the
+    // source still showing; its layer is lifted out of the capture, and
+    // the page's own background shows in its place, as UIKit leaves the
+    // zoomed-from view's place empty.
+    const red = Color(0xFFFF0000);
+    const green = Color(0xFF00FF00);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => ColoredBox(
+            color: red,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ZoomTransitionSource(
+                tag: 'corner',
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    ZoomPageRoute<void>(
+                      sourceTag: 'corner',
+                      builder: (_) => const SizedBox.shrink(),
+                    ),
+                  ),
+                  child: const SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: ColoredBox(color: green, child: Text('push')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await pushAndHold(tester, 'corner');
+    // The card, dragged down the screen, leaves the page's top corner
+    // clear, where the source sat.
+    final source = tester.getRect(
+      find.byType(ZoomTransitionSource, skipOffstage: false),
+    );
+    expect(source.top, lessThan(100));
+
+    final pixel = await screenPixels(tester);
+    final inSource = pixel(source.center.dx.round(), source.center.dy.round());
+    expect(inSource.r, greaterThan(inSource.g + 0.5));
   });
 
   testWidgets('the source is hidden while the route is up and shown after', (
@@ -821,6 +1033,74 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(find.text('third'), findsOneWidget);
+  });
+
+  testWidgets('a source hidden a frame after the capture is left out too', (
+    tester,
+  ) async {
+    // A pages navigator pushes during a build, so the route hides its
+    // source at the end of the frame that covered the page — after the
+    // page was captured, with the source still showing. The capture is
+    // read again without it. The source sits under a layout builder, as a
+    // card in a sliver row does: the hide is then applied during the
+    // builder's layout, where nothing outside it may be laid out again.
+    const red = Color(0xFFFF0000);
+    const green = Color(0xFF00FF00);
+    var showDetail = false;
+    late StateSetter setState;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: StatefulBuilder(
+          builder: (context, setter) {
+            setState = setter;
+            return Navigator(
+              onDidRemovePage: (page) => showDetail = false,
+              pages: <Page<void>>[
+                CupertinoPage<void>(
+                  child: ColoredBox(
+                    color: red,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => const Align(
+                        alignment: Alignment.topLeft,
+                        child: ZoomTransitionSource(
+                          tag: 'corner',
+                          child: SizedBox(
+                            width: 80,
+                            height: 80,
+                            child: ColoredBox(color: green),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (showDetail)
+                  const ZoomPage<void>(
+                    sourceTag: 'corner',
+                    child: SizedBox.shrink(),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+    setState(() => showDetail = true);
+    await tester.pumpAndSettle();
+    final finger = await tester.startGesture(const Offset(400, 300));
+    for (var i = 0; i < 12; i++) {
+      await finger.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    final source = tester.getRect(
+      find.byType(ZoomTransitionSource, skipOffstage: false),
+    );
+    expect(source.top, lessThan(100));
+
+    final pixel = await screenPixels(tester);
+    final inSource = pixel(source.center.dx.round(), source.center.dy.round());
+    expect(inSource.r, greaterThan(inSource.g + 0.5));
   });
 
   testWidgets('ZoomPage builds the same transition for a pages navigator', (

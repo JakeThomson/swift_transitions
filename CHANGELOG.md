@@ -12,6 +12,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   landed the routes beneath it are neither painted nor ticked, where before
   every one of them was rasterised on every frame the page drew. A covered
   route with `maintainState` false loses its source while obscured.
+- The page under a zoom route is painted from a snapshot taken on the first
+  frame the route covers it, as UIKit paints the view controller it zooms
+  from, and not again until the route has gone; what the page paints past
+  its bounds runs on into the strip the scale uncovers, as it does natively.
+  A hidden source and any platform view are left out of the snapshot.
 
 ### Fixed
 

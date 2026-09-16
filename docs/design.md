@@ -165,6 +165,7 @@ grab the card at any time during any animation.
 | Release velocity of a flick | the default tracker reads 497 and 121 pt/s where the finger moved at 1200 and 400, and a zoom edge swipe's 800 as 301; `IOSScrollViewFlingVelocityTracker` reads the first two at 1312 and 288 | parity stage 2, `testSwipe20Fling`, `testSwipe35Medium`, `testZoomEdge40Fling` |
 | Card shadow during a zoom flight | 10 % darker 4 pt out, 3 % at 20, gone by 40; none at all within a twentieth of the source | parity stages 3 and 9, the page beside a landing card |
 | Covered page luminance during dismissal | −4 % to −7 % | Y average of a thumbnail region: 71.5 at rest vs 66.8 mid-drag |
+| Strip uncovered by the covered page's scale | Whatever the page paints past its bounds — an unclipped `scaledToFill` image runs on to the screen's edge, sharp — else the system background; nothing of the transition's own | parity stage 9, `native_PhotoPanHold` |
 | Covered page scale under a zoom | 0.914 at full screen, straight with the flight (0.989 at 0.12 of it, 0.968 at 0.36, 0.944 at 0.65), about the screen's centre; held still under a gesture; home on a critically damped ω 15 that finishes 270 ms after the card lands | parity stage 9, the poster row's outer edges in `native_ZoomPinch45Rest`, `native_ZoomPan30Rest` |
 | Landing from a release | ω 15, ζ 0.75; 98 % in 230–270 ms from rest, 170–217 ms at 400 pt/s a finger, 100–133 at 800, 103–108 at 1200 | parity stages 8 and 9, `native_ZoomPan*`, `native_ZoomPinch*`, `native_ZoomEdge*Fling*` |
 | Landing carry | an edge swipe flung at 800 pt/s takes the card 28–30 pt past the line from the release to the source, at 800 pt/s peaking 48–63 ms in and at 1200 38 pt at 92 ms | parity stage 9, `native_ZoomEdge40/60Fling`, `native2_ZoomEdge40Fling1200` |
@@ -1131,13 +1132,52 @@ Flutter terms:
   does not stretch), and a route that declines the transition is not
   scaled at all.
   The strip the scale uncovers at the screen's edges — 0.086 of the width
-  across at full progress — is painted with the ambient
-  `CupertinoTheme.scaffoldBackgroundColor`, which Material's own `Theme`
-  defers to `ThemeData.scaffoldBackgroundColor`. Natively that strip is
-  the window behind the scaled view controller and carries the system
-  background, so it cannot be seen; a zoom route is opaque only once it
-  has landed, so without a backdrop the window's black shows through
-  instead while the card is short of the screen. Measured against
+  across at full progress — shows whatever the page paints past its
+  bounds, over the ambient `CupertinoTheme.scaffoldBackgroundColor`,
+  which Material's own `Theme` defers to
+  `ThemeData.scaffoldBackgroundColor`. While it is covered the page is
+  painted from a snapshot taken on the first frame the route covers it,
+  the way `SnapshotWidget` takes one — the page painted into a layer of
+  its own, which is then kept — and it is not painted again until the
+  route has gone (`ZoomCoveredSnapshot`). That is what UIKit shows: a
+  snapshot of the zoomed-from view controller, so nothing the page does
+  in response to being covered a frame on reaches the picture. The
+  source, still showing in that frame, has a repaint boundary of its own
+  (`RenderZoomSourceBoundary`) whose layer is lifted out of the kept
+  paint before it is rasterised — again, at the next paint, if it is
+  hidden only after the capture, as a pages navigator's push hides it at
+  the end of the covering frame: the hide comes from a build, which under
+  a layout builder runs during layout, where the snapshot may not be
+  marked for layout — and so is any platform view's, which cannot be
+  rasterised and is hidden under a route anyway. Reading the frame the
+  page's own repaint boundary retains instead (tried 2026-09-15) gains
+  nothing: the fresh paint reuses every boundary's retained layer below
+  it anyway, and the two rasterised byte for byte the same.
+  The snapshot is taken as far past the page as the strip can reach (the
+  SDK's `SnapshotWidget` captures the page's size exactly and would cut
+  the overflow off), so an unclipped background or a card row a scroll
+  view lets overflow runs on to the screen's edge. It is rasterised
+  twice — the whole, margin included, and over it the page from its own
+  origin at its own size — because a backdrop filter with a runtime
+  shader (`ImageFilter.shader`) sees the fragment coordinate as the
+  position in the target it filters: Sortd's liquid glass places its
+  shapes by the screen offset it recorded, and in one image starting a
+  margin above and left of the page every glass shape sat that margin
+  (19.9 by 42.1 points on an iPhone 17) up and left of its control,
+  reproduced on the simulator and gone with the page piece (2026-09-16).
+  A plain runtime shader placed the same way is not affected — Impeller
+  compensates its fragment coordinate for the transform — so a probe of
+  that kind proves nothing here; only the backdrop filter shows it. The
+  four strips must not be rendered as pieces of their own: the engine
+  leaves out of a render every picture whose recorded bounds miss it, and
+  a picture's bounds are cut to its repaint boundary's whatever it draws
+  past them, so strips rendered alone lost the row labels and chips the
+  page draws into them (2026-09-16, the "overflow lost" report), which
+  the whole image keeps. Natively that strip is the window behind the
+  scaled view controller and carries the system background, so it cannot
+  be seen; a zoom route is opaque only once it has landed, so without a
+  backdrop the window's black shows through instead while the card is
+  short of the screen. Measured against
   `native_ZoomPinch45Rest`, where the poster row's edges move 48 -> 96 and
   1199 -> 1149 of 1206 (a scale of 0.915) while every pixel out to the
   screen's edge stays the page's own dimmed grey.

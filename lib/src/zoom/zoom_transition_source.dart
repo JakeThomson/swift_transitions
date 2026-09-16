@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 /// Marks the widget a zoom route grows out of and shrinks back into.
@@ -180,9 +181,73 @@ class ZoomTransitionSourceState extends State<ZoomTransitionSource> {
         maintainInteractivity: true,
         child: TickerMode(
           enabled: !hidden,
-          child: KeyedSubtree(key: _key, child: widget.child),
+          child: _SourceBoundary(
+            hidden: hidden,
+            child: KeyedSubtree(key: _key, child: widget.child),
+          ),
         ),
       ),
     );
   }
+}
+
+/// The source's own repaint boundary, so that its picture is a layer of
+/// its own in the page's layer tree: the covered page is painted once, on
+/// the first frame a route covers it, and a source that is hidden only
+/// after that frame — a pages navigator's push hides it a frame late — is
+/// still showing in that paint, and [RenderZoomSourceBoundary] is how the
+/// snapshot lifts it out. A boundary on every source is the cost of it:
+/// a card row is one layer per card.
+class _SourceBoundary extends SingleChildRenderObjectWidget {
+  const _SourceBoundary({required this.hidden, required super.child});
+
+  final bool hidden;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      RenderZoomSourceBoundary()..hidden = hidden;
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
+    (renderObject as RenderZoomSourceBoundary).hidden = hidden;
+  }
+}
+
+/// A [RenderRepaintBoundary] around a [ZoomTransitionSource]'s child, with
+/// whether the source is hidden for a flight, for the covered page's
+/// capture to find.
+class RenderZoomSourceBoundary extends RenderRepaintBoundary {
+  /// Whether the source is hidden for a route's flight.
+  ///
+  /// A source hidden after the page it is on has been captured tells the
+  /// capture, so the frame can be read again without it: a route pushed
+  /// by a pages-based [Navigator] hides its source at the end of the
+  /// frame that covered the page, a frame after the capture.
+  bool get hidden => _hidden;
+  bool _hidden = false;
+  set hidden(bool value) {
+    if (value == _hidden) {
+      return;
+    }
+    _hidden = value;
+    if (value) {
+      var node = parent;
+      while (node != null) {
+        if (node is ZoomSourceHiddenListener) {
+          (node as ZoomSourceHiddenListener).sourceHidden();
+          return;
+        }
+        node = node.parent;
+      }
+    }
+  }
+}
+
+/// A render object above sources that wants to know when one is hidden.
+abstract interface class ZoomSourceHiddenListener {
+  /// A source under this has been hidden for a flight.
+  void sourceHidden();
 }

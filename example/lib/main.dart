@@ -42,6 +42,10 @@ class GalleryPage extends StatelessWidget {
       ),
       child: SafeArea(
         child: ListView(
+          // Unclipped, as the rows are, so that a poster cut off at the
+          // screen's edge carries on into the strip a zoom uncovers when
+          // it scales this page down; the overlay clips it at rest.
+          clipBehavior: Clip.none,
           children: <Widget>[
             CupertinoListTile(
               title: const Text('Push — leading edge back swipe'),
@@ -129,6 +133,7 @@ class PosterRow extends StatelessWidget {
       height: _height + 24,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: posters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 12),
@@ -182,6 +187,7 @@ class StillRow extends StatelessWidget {
       height: _height + 24,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: posters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 12),
@@ -244,6 +250,7 @@ class FilmRow extends StatelessWidget {
       height: _height + 24,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: posters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 12),

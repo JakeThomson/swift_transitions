@@ -165,6 +165,14 @@ All three take a `backGestureRegion`:
 > dim through `SwiftPageTransition.delegatedTransition`, so pages half in and
 > out of the package still move in lockstep.
 
+The page under a zoom route is scaled down a little, and the strip that
+uncovers at the screen's edge shows whatever the page paints past its bounds,
+as it does natively: a background that overflows the page — a `FittedBox`
+covering it with `Clip.none`, as the example's photo page does — or a row of
+cards its scroll views let overflow (`clipBehavior: Clip.none` on the row and
+on the list it sits in, as the example's gallery does) runs on to the edge,
+and a page that paints nothing there shows the scaffold colour.
+
 ## Interactive dismissal
 
 Every zoom route can be dismissed three ways, all on by default:
@@ -322,8 +330,8 @@ native page does. Nothing to configure.
 
 ## Example
 
-The [`example/`](example) directory is a runnable gallery — a list that pushes
-and a row of posters that zoom.
+The [`example/`](example) directory is a runnable gallery — a list that pushes,
+rows of posters that zoom, and a page over a photo to zoom from.
 
 ```sh
 cd example
